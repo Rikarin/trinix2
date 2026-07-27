@@ -176,9 +176,12 @@ build_recipe() {
 
         BUILDDIR="$objroot/$name"
         DESTDIR="$destdir"
+        # Recipes that carry auxiliary files — a kernel config fragment, a unit
+        # file, a default configuration — need to find them.
+        RECIPE_DIR="$RECIPES_DIR/$name"
         rm -rf "$BUILDDIR"
         mkdir -p "$BUILDDIR"
-        export SRCDIR BUILDDIR DESTDIR
+        export SRCDIR BUILDDIR DESTDIR RECIPE_DIR
 
         cd "$BUILDDIR"
         trinix_build

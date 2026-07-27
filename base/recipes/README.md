@@ -40,7 +40,8 @@ Optional:
 | `KERNEL_ARCH` | `arm64` | Kernel `ARCH=`. |
 | `SYSROOT` | `/opt/trinix/sysroots/aarch64-trinix-linux-gnu` | Headers/libs of already-built dependencies. |
 | `DESTDIR` | `/build/dest/<name>` | Staging root — install here, **never** into `$SYSROOT` directly. |
-| `SRCDIR` | `/build/src/glibc-2.41` | Unpacked source. |
+| `SRCDIR` | `/build/src/glibc-2.41` | Unpacked source. Empty for a synthetic recipe (`RECIPE_SOURCE=""`), which assembles its output from the sysroot instead of a tarball. |
+| `RECIPE_DIR` | `base/recipes/linux` | This recipe's own directory — for config fragments, unit files and other auxiliary content it ships. |
 | `BUILDDIR` | `/build/obj/<name>` | Out-of-tree build directory, already `cd`'d into. |
 | `JOBS` | `10` | Parallelism for `make -j`. |
 | `CMAKE_TOOLCHAIN` | `/usr/local/share/trinix/cmake/<triple>.cmake` | For cmake-based components. |
