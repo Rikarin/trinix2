@@ -8,8 +8,10 @@ conventional package database.
 The full design, and the reasoning behind each decision, is in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Status: Phase 1 (toolchain).** The build container and source pinning are done;
-the LLVM toolchain and per-arch sysroots are being brought up.
+**Status: Phase 1 complete.** The build container, source pinning, the LLVM
+toolchain and both sysroots are done and gated by tests. `clang
+--target=<triple>` produces working static and dynamic C and C++ binaries for
+arm64 and x86_64. Phase 2 — the bootable base system — is next.
 
 ## Requirements
 
