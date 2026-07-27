@@ -36,6 +36,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       `# autotools/meson/cmake — the union of what the base recipes need` \
       autoconf automake libtool pkg-config cmake ninja-build meson \
       bison flex gawk gettext m4 gperf texinfo help2man \
+      `# gtk-doc.m4 only: some release tarballs (kmod) ship inconsistent` \
+      `# autotools output and must be regenerated, and aclocal then needs the` \
+      `# macros the project declares even though no documentation is built.` \
+      gtk-doc-tools \
       `# scripting used by kernel/systemd/llvm build systems` \
       python3 python3-setuptools python3-jinja2 python3-pyelftools perl \
       `# fetch + unpack pinned sources` \

@@ -29,6 +29,12 @@ Optional:
 | `RECIPE_HOST_ONLY` | var | `1` if this builds a tool for the *build* machine, not the target. |
 | `RECIPE_ARCH` | var | Restrict to `arm64` / `x86_64` when a component is genuinely arch-specific (rare — and a smell). |
 | `trinix_patch` | function | Replaces the default "apply `patches/*.patch` with `-p1`". |
+
+Helpers the driver provides, callable from `trinix_build`:
+
+| Helper | Use it when |
+|---|---|
+| `trinix_freeze_autotools [dir]` | `make` tries to re-run `aclocal`/`autoconf` on a release tarball. It then demands third-party m4 macros (kmod wants `gtk-doc.m4`) that have no business in a cross-build container. Touches the generated files so the rule never fires. |
 | `trinix_check` | function | Post-install assertions; run when the stage is built with `-Verify`. |
 
 ## Environment a recipe can rely on

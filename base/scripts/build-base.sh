@@ -114,6 +114,20 @@ export CMAKE_TOOLCHAIN="/usr/local/share/trinix/cmake/$TARGET_TRIPLE.cmake"
 export MESON_CROSS="/usr/local/share/trinix/meson/$TARGET_TRIPLE.ini"
 export TARGET_TRIPLE KERNEL_ARCH SYSROOT ROOTFS
 
+# trinix_freeze_autotools [dir] — stop make from regenerating configure.
+#
+# Release tarballs ship pre-generated autotools output. If those files end up
+# looking older than configure.ac, make helpfully re-runs aclocal/autoconf —
+# which then needs the full autotools *plus* whatever third-party m4 macros the
+# project uses. kmod wants gtk-doc.m4 that way, and carrying a documentation
+# toolchain in a cross-build container to satisfy a rule that should never fire
+# is the wrong trade. Touching the generated files to now settles it.
+trinix_freeze_autotools() {
+    local dir="${1:-$SRCDIR}"
+    find "$dir" \( -name 'aclocal.m4' -o -name 'configure' -o -name 'config.h.in' \
+                -o -name 'Makefile.in' -o -name '*.m4' \) -exec touch {} + 2>/dev/null || true
+}
+
 build_recipe() {
     local name="$1"
     local stamp="$stampdir/$name.stamp"
@@ -148,32 +162,34 @@ build_recipe() {
     rm -rf "$destdir"
     mkdir -p "$destdir"
 
-    (
+    # Source preparation happens outside the build subshell so that a failure
+    # can clean up after itself — see the trap below.
+    local srcdir=''
+    if [ -n "$source_name" ]; then
+        srcdir="$(trinix-extract "$source_name" "$srcroot")"
+
+        # Patches are applied to the shared source tree, so they must happen
+        # exactly once even though both architectures use that tree.
+        if [ -d "$RECIPES_DIR/$name/patches" ] && [ ! -e "$srcdir/.trinix-patched" ]; then
+            applied=0
+            for patchfile in "$RECIPES_DIR/$name/patches"/*.patch; do
+                [ -e "$patchfile" ] || continue
+                step "patch: ${patchfile##*/}"
+                patch -d "$srcdir" -p1 < "$patchfile"
+                applied=$((applied + 1))
+            done
+            [ "$applied" -gt 0 ] && touch "$srcdir/.trinix-patched"
+        fi
+    fi
+
+    if ! (
         set -euo pipefail
         # shellcheck disable=SC1090
         . "$RECIPES_DIR/$name/recipe.sh"
 
-        if [ -n "${RECIPE_SOURCE:-}" ]; then
-            SRCDIR="$(trinix-extract "$RECIPE_SOURCE" "$srcroot")"
-
-            # Patches are applied to the shared source tree, so they must happen
-            # exactly once even though both architectures use that tree.
-            if [ -d "$RECIPES_DIR/$name/patches" ] && [ ! -e "$SRCDIR/.trinix-patched" ]; then
-                applied=0
-                for patchfile in "$RECIPES_DIR/$name/patches"/*.patch; do
-                    [ -e "$patchfile" ] || continue
-                    step "patch: ${patchfile##*/}"
-                    patch -d "$SRCDIR" -p1 < "$patchfile"
-                    applied=$((applied + 1))
-                done
-                [ "$applied" -gt 0 ] && touch "$SRCDIR/.trinix-patched"
-            fi
-        else
-            # Synthetic recipe: assembles its output from what is already in the
-            # sysroot rather than from an upstream tarball.
-            SRCDIR=''
-        fi
-
+        # Empty for a synthetic recipe, which assembles its output from the
+        # sysroot rather than from an upstream tarball.
+        SRCDIR="$srcdir"
         BUILDDIR="$objroot/$name"
         DESTDIR="$destdir"
         # Recipes that carry auxiliary files — a kernel config fragment, a unit
@@ -190,7 +206,20 @@ build_recipe() {
             step 'running recipe checks'
             trinix_check
         fi
-    )
+    ); then
+        # A failed build can leave the *shared* source tree half-mutated —
+        # autotools rewriting ltmain.sh while aclocal.m4 still comes from the
+        # tarball is the case that motivated this, and it produces a libtool
+        # version-mismatch on every subsequent run. Since the tree is shared
+        # between architectures and reused across runs, discard it so the next
+        # attempt starts from the verified tarball instead of inheriting the
+        # wreckage of this one.
+        if [ -n "$srcdir" ]; then
+            step "discarding possibly-contaminated source tree ${srcdir##*/}"
+            rm -rf "$srcdir"
+        fi
+        die "recipe '$name' failed"
+    fi
 
     # Record what this recipe produced. Cheap, and the first question when two
     # recipes fight over a file is "who installed it".
