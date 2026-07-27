@@ -133,7 +133,18 @@ function Build-HostTools {
 
 # --- Stage: llvm (Phase 1, architecture-independent) ------------------------
 
+# base/sources.json is baked into the host-tools image, and every later stage
+# resolves its pins from that copy. Rebuilding host-tools first (a no-op when
+# nothing changed) is what makes a version bump actually reach the build instead
+# of silently compiling the previous pin.
+function Assert-HostToolsCurrent {
+    $dockerArgs = Get-CommonBuildArgs -Target 'host-tools'
+    $dockerArgs += @('--tag', "$ImagePrefix/host-tools:$Tag", '--load', $root)
+    Invoke-TrinixDocker @dockerArgs
+}
+
 function Build-Llvm {
+    Assert-HostToolsCurrent
     $image = "$ImagePrefix/llvm:$Tag"
 
     $dockerArgs = Get-CommonBuildArgs -Target 'llvm' -Dockerfile 'toolchain.Dockerfile'
@@ -152,6 +163,7 @@ function Build-Llvm {
 function Build-Toolchain {
     param([Parameter(Mandatory)][psobject]$Architecture)
 
+    Assert-HostToolsCurrent
     $image = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
     $target = if ($Verify) { 'toolchain-verify' } else { 'toolchain' }
 
@@ -159,7 +171,7 @@ function Build-Toolchain {
     $dockerArgs += Get-SourcesContextArg
     $dockerArgs += @(
         '--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag",
-        '--build-arg', "TARGET_ARCH=$($Architecture.Name)",
+        '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
         '--tag', $image, '--load', $root
     )
 

@@ -36,7 +36,7 @@ Optional:
 | Variable | Example | Notes |
 |---|---|---|
 | `TARGET_TRIPLE` | `aarch64-trinix-linux-gnu` | Pass to `clang --target=`. |
-| `TARGET_ARCH` | `arm64` | Trinix arch name. |
+| `TRINIX_ARCH` | `arm64` | Trinix arch name. |
 | `KERNEL_ARCH` | `arm64` | Kernel `ARCH=`. |
 | `SYSROOT` | `/opt/trinix/sysroots/aarch64-trinix-linux-gnu` | Headers/libs of already-built dependencies. |
 | `DESTDIR` | `/build/dest/<name>` | Staging root — install here, **never** into `$SYSROOT` directly. |
@@ -48,6 +48,16 @@ Optional:
 
 Recipes must not reach the network — `trinix-fetch` is the only sanctioned way in,
 and it verifies a pinned digest. Recipes must not write outside `$DESTDIR`.
+
+### Do not export a variable GNU make already means something by
+
+The arch variable is `TRINIX_ARCH`, not `TARGET_ARCH`, for a concrete reason:
+make's built-in link rule is `LINK.o = $(CC) $(LDFLAGS) $(TARGET_ARCH)`, and make
+imports the environment. An exported `TARGET_ARCH=arm64` silently appends a bare
+`arm64` to implicit link commands, and the build dies far away with
+`ld: cannot find arm64`. The same trap exists for `CFLAGS`, `LDFLAGS`, `ARCH`
+(the kernel's), and `MAKEFLAGS` — prefer a `TRINIX_`-prefixed name whenever the
+obvious one is something a build system might already own.
 
 ## Why so few knobs
 

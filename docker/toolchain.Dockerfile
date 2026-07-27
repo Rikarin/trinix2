@@ -7,7 +7,7 @@
 #   llvm      Architecture-independent. One Clang/LLD install that targets every
 #             Trinix architecture. Built once, shared by both sysroot builds.
 #
-#   toolchain Per architecture, selected with --build-arg TARGET_ARCH. Linux
+#   toolchain Per architecture, selected with --build-arg TRINIX_ARCH. Linux
 #             headers -> binutils -> mini-GCC -> glibc -> LLVM runtimes.
 #             BuildKit caches each (stage, build-arg) pair separately, so
 #             building arm64 does not invalidate x86_64.
@@ -59,21 +59,21 @@ ENV PATH=/opt/trinix/toolchain/bin:$PATH
 #
 #   ./scripts/build.ps1 -Stage toolchain -Arch x86_64
 #
-# The recipe is byte-identical for both architectures — TARGET_ARCH is the only
+# The recipe is byte-identical for both architectures — TRINIX_ARCH is the only
 # input. If a step ever needs an `if arm64` branch, that is a design smell worth
 # arguing about before writing it.
 # ---------------------------------------------------------------------------
 FROM llvm AS toolchain
 
-ARG TARGET_ARCH=arm64
-ENV TARGET_ARCH=${TARGET_ARCH}
+ARG TRINIX_ARCH=arm64
+ENV TRINIX_ARCH=${TRINIX_ARCH}
 
 COPY toolchain/scripts/build-sysroot.sh /usr/local/lib/trinix/scripts/
 RUN --mount=type=bind,from=sources,target=/sources-seed,ro \
     --mount=type=cache,target=/sources,sharing=locked \
     --mount=type=cache,target=/build,sharing=locked \
     chmod +x /usr/local/lib/trinix/scripts/build-sysroot.sh \
- && trinix-seed-sources && /usr/local/lib/trinix/scripts/build-sysroot.sh "${TARGET_ARCH}"
+ && trinix-seed-sources && /usr/local/lib/trinix/scripts/build-sysroot.sh "${TRINIX_ARCH}"
 
 # ---------------------------------------------------------------------------
 # Phase 1 acceptance gate.
@@ -83,4 +83,4 @@ FROM toolchain AS toolchain-verify
 COPY toolchain/scripts/toolchain-sanity.sh /usr/local/lib/trinix/scripts/
 RUN --mount=type=cache,target=/build,sharing=locked \
     chmod +x /usr/local/lib/trinix/scripts/toolchain-sanity.sh \
- && /usr/local/lib/trinix/scripts/toolchain-sanity.sh "${TARGET_ARCH}"
+ && /usr/local/lib/trinix/scripts/toolchain-sanity.sh "${TRINIX_ARCH}"

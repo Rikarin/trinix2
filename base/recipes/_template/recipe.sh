@@ -44,7 +44,7 @@ trinix_build() {
 # specific checks — "is it the right machine type", not "does the test suite pass".
 trinix_check() {
     llvm-readelf --file-header "$DESTDIR/usr/bin/example" | grep -q "$(
-        case "$TARGET_ARCH" in
+        case "$TRINIX_ARCH" in
             arm64)  echo 'AArch64' ;;
             x86_64) echo 'X86-64'  ;;
         esac

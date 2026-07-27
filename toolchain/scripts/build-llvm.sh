@@ -66,7 +66,8 @@ mkdir -p "$TRINIX_TOOLCHAIN/etc/clang"
 log 'LLVM install summary'
 "$TRINIX_TOOLCHAIN/bin/clang" --version
 "$TRINIX_TOOLCHAIN/bin/ld.lld" --version
-"$TRINIX_TOOLCHAIN/bin/clang" --print-targets | head -20
+# `| head` would SIGPIPE clang and, under pipefail, fail the build for no reason.
+"$TRINIX_TOOLCHAIN/bin/clang" --print-targets
 
 # The whole premise is one compiler for both machines — assert it rather than
 # discovering otherwise in Phase 2.

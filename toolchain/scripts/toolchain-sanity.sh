@@ -12,7 +12,7 @@
 
 trinix_set_arch "${1:?usage: toolchain-sanity.sh <arm64|x86_64>}"
 
-work="$TRINIX_BUILD/sanity/$TARGET_ARCH"
+work="$TRINIX_BUILD/sanity/$TRINIX_ARCH"
 rm -rf "$work"; mkdir -p "$work"
 cd "$work"
 
@@ -20,12 +20,12 @@ clang="$TRINIX_TOOLCHAIN/bin/clang"
 clangxx="$TRINIX_TOOLCHAIN/bin/clang++"
 failures=0
 
-case "$TARGET_ARCH" in
+case "$TRINIX_ARCH" in
     arm64)  expect_machine='AArch64' ;;
     x86_64) expect_machine='X86-64'  ;;
 esac
 
-log "Toolchain sanity suite — $TARGET_ARCH ($TARGET_TRIPLE)"
+log "Toolchain sanity suite — $TRINIX_ARCH ($TARGET_TRIPLE)"
 
 cat > hello.c <<'EOF'
 #include <stdio.h>
@@ -99,21 +99,36 @@ check 'C++, dynamic' cxx-dynamic 'thrown and caught'
 check 'C++, static'  cxx-static  'thrown and caught'
 
 # The all-LLVM runtime is a design decision, not an accident — assert the
-# dynamic C++ binary really did pick libc++ and libunwind rather than silently
-# falling back to the GCC compat libraries.
+# dynamic C++ binary really did pick libc++ rather than silently falling back to
+# the GCC compat libraries.
 log 'Runtime library selection'
 needed="$("$TRINIX_TOOLCHAIN/bin/llvm-readelf" --dynamic cxx-dynamic | awk '/NEEDED/ {print $NF}' | tr -d '[]')"
 step "NEEDED: $(echo "$needed" | tr '\n' ' ')"
-for lib in libc++.so libunwind.so; do
-    if ! grep -q "$lib" <<<"$needed"; then
-        printf '  \033[1;31mFAIL\033[0m expected %s in NEEDED\n' "$lib"
-        failures=$((failures + 1))
-    else
-        printf '  \033[1;32mok\033[0m   links against %s\n' "$lib"
-    fi
-done
+
+if grep -q 'libc++.so' <<<"$needed"; then
+    printf '  \033[1;32mok\033[0m   links against libc++.so\n'
+else
+    printf '  \033[1;31mFAIL\033[0m expected libc++.so in NEEDED\n'
+    failures=$((failures + 1))
+fi
+
 if grep -qE 'libstdc\+\+|libgcc_s' <<<"$needed"; then
     printf '  \033[1;31mFAIL\033[0m clang-built C++ fell back to the GCC runtime\n'
+    failures=$((failures + 1))
+fi
+
+# libunwind deliberately does *not* appear in NEEDED: LIBCXXABI_ENABLE_STATIC_UNWINDER
+# links it into libc++abi, so asserting a NEEDED entry would be asserting the
+# opposite of what this toolchain is configured to produce. Check the thing that
+# actually matters instead — that the LLVM unwinder is the one providing the
+# personality routine. (The "thrown and caught" cases above already prove
+# unwinding works at runtime; this pins down *whose* unwinder does it.)
+unwind_provider="$("$TRINIX_TOOLCHAIN/bin/llvm-nm" --dynamic --defined-only \
+    "$SYSROOT/usr/lib/libc++abi.so.1" 2>/dev/null | grep -c '_Unwind_RaiseException' || true)"
+if [ "$unwind_provider" -gt 0 ]; then
+    printf '  \033[1;32mok\033[0m   LLVM libunwind is linked into libc++abi\n'
+else
+    printf '  \033[1;31mFAIL\033[0m libc++abi does not provide _Unwind_RaiseException\n'
     failures=$((failures + 1))
 fi
 
@@ -131,6 +146,6 @@ done
 
 echo
 if [ "$failures" -ne 0 ]; then
-    die "$failures sanity check(s) failed for $TARGET_ARCH"
+    die "$failures sanity check(s) failed for $TRINIX_ARCH"
 fi
-log "Sanity suite passed for $TARGET_ARCH"
+log "Sanity suite passed for $TRINIX_ARCH"
