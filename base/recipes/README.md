@@ -59,6 +59,22 @@ imports the environment. An exported `TARGET_ARCH=arm64` silently appends a bare
 (the kernel's), and `MAKEFLAGS` — prefer a `TRINIX_`-prefixed name whenever the
 obvious one is something a build system might already own.
 
+## LLD is stricter than GNU ld
+
+Trinix links with LLD everywhere, and LLD rejects several things GNU ld accepts
+silently. When a package builds under a normal distro but not here, check this
+first — the symptom is usually not a link error but a *silently reduced* build:
+
+- **`--no-undefined-version` is LLD's default** (since v17). A version script
+  naming a symbol that isn't defined is an error, not a warning. zlib's
+  configure trips on exactly this and concludes the compiler cannot build shared
+  libraries at all, quietly shipping only `libz.a`. Fix per-recipe with
+  `-Wl,--undefined-version`; do not set it globally, because the diagnostic is
+  worth having.
+- **`$LD` is not exported** by the driver. Linking goes through the compiler
+  driver, and packages that consult `$LD` want a real linker — handing them
+  `clang` makes libtool in particular mis-detect.
+
 ## Why so few knobs
 
 The immutable A/B image model means the base set stays at ~40–60 components. That

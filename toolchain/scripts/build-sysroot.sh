@@ -353,4 +353,16 @@ cat > "$cfgdir/$TARGET_TRIPLE-clang++.cfg" <<EOF
 EOF
 
 step "wrote $cfgdir/$TARGET_TRIPLE.cfg"
+
+# Triple-prefixed driver names. Clang infers both the target and the config
+# file from argv[0], so `CC=aarch64-trinix-linux-gnu-clang` is fully configured
+# — which is what lets base recipes use the plain autotools/meson convention
+# instead of threading --target and --sysroot through every build system.
+ln -sfn clang   "$TRINIX_TOOLCHAIN/bin/$TARGET_TRIPLE-clang"
+ln -sfn clang++ "$TRINIX_TOOLCHAIN/bin/$TARGET_TRIPLE-clang++"
+printf 'int main(void){return 0;}\n' > "$TRINIX_BUILD/cfgprobe.c"
+"$TRINIX_TOOLCHAIN/bin/$TARGET_TRIPLE-clang" "$TRINIX_BUILD/cfgprobe.c" -o "$TRINIX_BUILD/cfgprobe" \
+    || die "$TARGET_TRIPLE-clang cannot build a program without explicit flags"
+rm -f "$TRINIX_BUILD/cfgprobe" "$TRINIX_BUILD/cfgprobe.c"
+step "$TARGET_TRIPLE-clang is self-configuring"
 log "Sysroot for $TRINIX_ARCH complete: $(du -sh "$SYSROOT" | cut -f1)"

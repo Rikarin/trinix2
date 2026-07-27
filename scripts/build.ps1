@@ -181,6 +181,29 @@ function Build-Toolchain {
     Write-Host "Sysroot ready: $image ($($Architecture.Triple))" -ForegroundColor Green
 }
 
+# --- Stage: base (Phase 2, per architecture) --------------------------------
+
+function Build-Base {
+    param([Parameter(Mandatory)][psobject]$Architecture)
+
+    $toolchainImage = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
+    $image = "$ImagePrefix/base-$($Architecture.Name):$Tag"
+    $target = if ($Verify) { 'base-verify' } else { 'base' }
+
+    $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'base.Dockerfile'
+    $dockerArgs += Get-SourcesContextArg
+    $dockerArgs += @(
+        '--build-arg', "TOOLCHAIN_IMAGE=$toolchainImage",
+        '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
+        '--tag', $image, '--load', $root
+    )
+
+    Invoke-TrinixDocker @dockerArgs
+
+    Write-Host ''
+    Write-Host "Base rootfs ready: $image ($($Architecture.Triple))" -ForegroundColor Green
+}
+
 # --- Stages not yet implemented -------------------------------------------
 
 function Assert-NotYetImplemented {
@@ -218,8 +241,10 @@ foreach ($stageName in $Stage) {
             }
         }
         'base' {
-            Assert-NotYetImplemented -StageName $stageName -Phase 2 `
-                -Blurb 'Cross-builds the base recipe set (kernel, systemd, dash, ...) into a clean rootfs.'
+            foreach ($a in $architectures) {
+                Build-Base -Architecture $a
+                $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = $a.Name; Result = 'built' })
+            }
         }
         'image' {
             Assert-NotYetImplemented -StageName $stageName -Phase 2 `
