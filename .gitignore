@@ -1,0 +1,26 @@
+# Build output and downloaded sources — everything here is reproducible from
+# base/sources.json plus the Dockerfiles.
+/out/
+/.cache/
+*.img
+*.img.*
+*.tdi
+*.qcow2
+
+# Signing material. The dev PKI *layout* is committed; keys never are.
+/signing/**/*.key
+/signing/**/*.pem
+/signing/**/*.p12
+/signing/**/*.pfx
+!/signing/**/*.pub.pem
+
+# .NET
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+artifacts/
+
+# macOS
+.DS_Store

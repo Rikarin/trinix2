@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# trinix-extract — fetch a pinned source archive and unpack it.
+#
+# Usage:
+#   trinix-extract <name> [<destdir>]
+#
+# Unpacks into <destdir> (default: $PWD) stripping nothing, and prints the
+# absolute path of the resulting top-level source directory so recipes can do:
+#
+#   srcdir="$(trinix-extract glibc /build)"
+set -euo pipefail
+
+name="${1:?usage: trinix-extract <name> [destdir]}"
+dest="${2:-$PWD}"
+
+archive="$(trinix-fetch "$name")"
+mkdir -p "$dest"
+
+# The first path component of the first member is the top-level directory.
+# `head` closes the pipe as soon as it has its line, which kills tar with
+# SIGPIPE — harmless, but fatal under `pipefail`, so scope pipefail off here.
+top="$(set +o pipefail; tar --list --file "$archive" | head -n 1 | cut -d/ -f1)"
+[ -n "$top" ] || { echo "trinix-extract: cannot determine top-level dir of $archive" >&2; exit 1; }
+
+if [ ! -d "$dest/$top" ]; then
+    tar --extract --file "$archive" --directory "$dest"
+fi
+
+printf '%s\n' "$dest/$top"

@@ -1,0 +1,115 @@
+name: build
+
+# Both target architectures are built on every change — the whole point of the
+# single-Clang-toolchain decision is that arm64 and x86_64 never drift apart,
+# and that only holds if CI proves it continuously.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Every upstream tarball must still hash to exactly what base/sources.json
+  # says. Catches a stale pin, a rewritten "release" tarball, or a mirror that
+  # started serving something else.
+  # ---------------------------------------------------------------------------
+  verify-pins:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache pinned sources
+        uses: actions/cache@v4
+        with:
+          path: .cache/sources
+          key: sources-${{ hashFiles('base/sources.json') }}
+          restore-keys: sources-
+
+      - name: Verify every pinned source checksum
+        shell: pwsh
+        run: ./scripts/update-sources.ps1 -Verify -Jobs 6
+
+  # ---------------------------------------------------------------------------
+  # Phase 0 gate: the build container builds and can cross-build for both
+  # arches. Run on both host architectures so no host-arch assumption creeps in.
+  # ---------------------------------------------------------------------------
+  host-tools:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            host: x86_64
+          - runner: ubuntu-24.04-arm
+            host: arm64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and verify host-tools container (host ${{ matrix.host }})
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/host-tools.Dockerfile
+          target: host-tools-verify
+          push: false
+          cache-from: type=gha,scope=host-tools-${{ matrix.host }}
+          cache-to: type=gha,mode=max,scope=host-tools-${{ matrix.host }}
+
+  # ---------------------------------------------------------------------------
+  # Phase 1+. Kept in the skeleton so the shape of the pipeline is fixed now:
+  # one native build container, both target triples, identical recipes.
+  # Enable each job as its stage lands.
+  # ---------------------------------------------------------------------------
+  toolchain:
+    if: false # Phase 1
+    needs: [verify-pins, host-tools]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/build.ps1 -Stage toolchain -Arch ${{ matrix.arch }} -Verify -Progress plain
+
+  base-and-image:
+    if: false # Phase 2
+    needs: [toolchain]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: ./scripts/build.ps1 -Stage base,image -Arch ${{ matrix.arch }} -Progress plain
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trinix-${{ matrix.arch }}.img
+          path: out/trinix-${{ matrix.arch }}.img
+
+  dotnet:
+    # src/ builds with the plain dotnet SDK — no toolchain dependency, so this
+    # runs independently and stays fast.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - run: dotnet build src/Trinix.slnx --configuration Release

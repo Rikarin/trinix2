@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# trinix-fetch — download a pinned source archive and verify its sha256.
+#
+# Every build stage fetches sources through this script, which is the mechanism
+# behind the "nothing unpinned ever enters a build" rule: the URL and the digest
+# both come from base/sources.json, and a mismatch is a hard failure.
+#
+# Usage:
+#   trinix-fetch <name> [<name>...]     # prints the verified archive path(s)
+#   trinix-fetch --url <name>           # prints the resolved URL instead
+#   trinix-fetch --version <name>       # prints the pinned version instead
+set -euo pipefail
+
+MANIFEST="${TRINIX_SOURCES_MANIFEST:-/usr/local/share/trinix/sources.json}"
+CACHE="${TRINIX_SOURCES:-/sources}"
+
+die() { printf 'trinix-fetch: %s\n' "$*" >&2; exit 1; }
+
+# Resolve one source to "<version> <url> <sha256> <filename>".
+resolve() {
+    python3 - "$MANIFEST" "$1" <<'PY'
+import json, sys, posixpath
+manifest_path, name = sys.argv[1], sys.argv[2]
+with open(manifest_path) as fh:
+    sources = json.load(fh)["sources"]
+if name not in sources:
+    sys.exit(f"'{name}' is not pinned in {manifest_path}")
+entry = sources[name]
+url = entry["url"].replace("${version}", entry["version"])
+if "versionMajor" in entry:
+    url = url.replace("${versionMajor}", entry["versionMajor"])
+sha = entry.get("sha256")
+if not sha:
+    sys.exit(f"'{name}' has no recorded sha256 — run scripts/update-sources.ps1 -Name {name}")
+print(entry["version"], url, sha, posixpath.basename(url))
+PY
+}
+
+mode=path
+case "${1:-}" in
+    --url)     mode=url;     shift ;;
+    --version) mode=version; shift ;;
+    -h|--help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+[ $# -gt 0 ] || die 'no source name given'
+mkdir -p "$CACHE"
+
+for name in "$@"; do
+    read -r version url sha filename < <(resolve "$name")
+
+    case "$mode" in
+        url)     printf '%s\n' "$url";     continue ;;
+        version) printf '%s\n' "$version"; continue ;;
+    esac
+
+    archive="$CACHE/$filename"
+
+    if [ ! -s "$archive" ]; then
+        printf 'trinix-fetch: downloading %s %s\n' "$name" "$version" >&2
+        # --speed-limit/--speed-time turn a stalled transfer into a failure that
+        # --retry can act on; without them a dead connection hangs the build.
+        curl --fail --location --silent --show-error \
+             --retry 3 --retry-delay 2 --retry-all-errors \
+             --connect-timeout 20 --speed-limit 2048 --speed-time 30 \
+             --output "$archive.partial" "$url" \
+            || { rm -f "$archive.partial"; die "failed to download $url"; }
+        mv "$archive.partial" "$archive"
+    fi
+
+    actual="$(sha256sum "$archive" | cut -d' ' -f1)"
+    if [ "$actual" != "$sha" ]; then
+        die "checksum mismatch for $name ($filename)
+  expected $sha
+  actual   $actual
+  The cached archive may be corrupt (delete it) or the pin is stale."
+    fi
+
+    printf '%s\n' "$archive"
+done

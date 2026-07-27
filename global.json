@@ -1,0 +1,8 @@
+{
+  "$comment": "Pinned so the Mac, the build container, and CI all use the same SDK. rollForward=latestFeature accepts newer patch/feature bands of 10.0 but never a new major.",
+  "sdk": {
+    "version": "10.0.301",
+    "rollForward": "latestFeature",
+    "allowPrerelease": false
+  }
+}

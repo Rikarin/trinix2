@@ -1,0 +1,45 @@
+<Project>
+
+  <!--
+    Defaults for every Trinix .NET project.
+
+    Two deployment shapes exist, per the Phase 3 decision:
+      * NativeAOT              — boot path, the compositor, anything latency- or
+                                 startup-sensitive. Set <PublishAot>true</PublishAot>.
+      * framework-dependent    — apps and tooling, which share the installed runtime.
+    The properties here are the ones that must hold either way.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <WarningsNotAsErrors></WarningsNotAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- The distro ships ICU, but system services must not depend on it: keeps
+         the boot path free of a large, locale-sensitive dependency. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- Trimming/AOT analysers on everywhere, so a component can be flipped to
+         NativeAOT later without discovering reflection landmines then. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+    <RuntimeIdentifiers>linux-arm64;linux-x64</RuntimeIdentifiers>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <Company>Trinix</Company>
+    <Product>Trinix</Product>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ArtifactsPath>$(MSBuildThisFileDirectory)../out/dotnet</ArtifactsPath>
+  </PropertyGroup>
+
+</Project>

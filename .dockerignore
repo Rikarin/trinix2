@@ -1,0 +1,17 @@
+# The build context is the repo root, but almost nothing from it belongs in the
+# container: sources are fetched by digest, not copied.
+.git
+.github
+.cache
+out
+docs
+*.md
+!IMPLEMENTATION_PLAN.md
+**/bin
+**/obj
+**/.DS_Store
+*.img
+*.tdi
+*.qcow2
+signing/**/*.key
+signing/**/*.pem

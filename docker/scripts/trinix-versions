@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# trinix-versions — print the build container's toolchain inventory.
+#
+# Doubles as the Phase 0 acceptance check: it fails if anything required to
+# cross-build both target architectures is missing from the image.
+set -uo pipefail
+
+fail=0
+
+show() {
+    local label="$1"; shift
+    local out
+    if out="$("$@" 2>&1 | head -n 1)"; then
+        printf '  %-22s %s\n' "$label" "$out"
+    else
+        printf '  %-22s MISSING\n' "$label"
+        fail=1
+    fi
+}
+
+require() {
+    if command -v "$1" >/dev/null 2>&1; then
+        printf '  %-22s %s\n' "$1" "$(command -v "$1")"
+    else
+        printf '  %-22s MISSING\n' "$1"
+        fail=1
+    fi
+}
+
+echo "Trinix build container — $(. /etc/os-release && echo "$PRETTY_NAME") on $(uname -m)"
+echo
+echo 'Host compilers (used to build the LLVM toolchain and mini-GCC only):'
+show gcc gcc --version
+show 'g++' g++ --version
+show make make --version
+echo
+echo 'Build systems:'
+show cmake cmake --version
+show ninja ninja --version
+show meson meson --version
+show python3 python3 --version
+echo
+echo '.NET / PowerShell:'
+show dotnet dotnet --version
+show pwsh pwsh --version
+echo
+echo 'Cross-target test runners (both arches must be present):'
+require qemu-aarch64-static
+require qemu-x86_64-static
+echo
+echo 'Image assembly tools:'
+for tool in sgdisk mkfs.vfat mkfs.ext4 mksquashfs mkfs.erofs veritysetup fakeroot; do require "$tool"; done
+echo
+echo 'Trinix helpers:'
+for tool in trinix-fetch trinix-extract; do require "$tool"; done
+
+echo
+if [ "$fail" -ne 0 ]; then
+    echo 'RESULT: FAIL — the build container is missing required tooling.' >&2
+    exit 1
+fi
+echo 'RESULT: OK — container can cross-build for aarch64 and x86_64.'
