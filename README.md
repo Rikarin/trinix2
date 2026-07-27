@@ -8,8 +8,8 @@ conventional package database.
 The full design, and the reasoning behind each decision, is in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Status: Phase 0 (scaffolding).** The build container and source pinning are in
-place; the toolchain (Phase 1) is next.
+**Status: Phase 1 (toolchain).** The build container and source pinning are done;
+the LLVM toolchain and per-arch sysroots are being brought up.
 
 ## Requirements
 
@@ -31,9 +31,30 @@ That builds the Phase 0 build container and asserts it can cross-build for both
 target architectures. `-Verify` runs the acceptance gate as part of the build, so a
 missing tool fails the build rather than surfacing three stages later.
 
-Other stages (`toolchain`, `base`, `image`) exist in the orchestrator and currently
-fail with the phase they belong to — see `./scripts/build.ps1 -?` for the full
-surface.
+Then the toolchain — one Clang/LLD install shared by every target, followed by a
+sysroot per architecture:
+
+```bash
+./scripts/build.ps1 -Stage llvm
+./scripts/build.ps1 -Stage toolchain -Verify
+```
+
+`-Verify` runs the Phase 1 exit criteria as a test: a static and dynamic hello
+world in C and C++, executed under `qemu-user` for **both** architectures, plus
+assertions that Clang-built C++ really uses libc++/libunwind and that the GCC
+compat libraries .NET needs are present anyway.
+
+The `base` and `image` stages exist in the orchestrator and currently fail with
+the phase they belong to — see `./scripts/build.ps1 -?` for the full surface.
+
+### Why GCC is still here
+
+Exactly one component forces it: **glibc cannot be built by Clang.** So a minimal
+cross-GCC is built solely to compile glibc, then rebuilt once against real glibc
+to harvest `libgcc_s.so.1` and `libstdc++.so.6` — which ship as compat libraries
+because Microsoft's official .NET binaries link against them. Nothing Trinix
+itself builds uses the GCC runtime; [toolchain-sanity.sh](toolchain/scripts/toolchain-sanity.sh)
+fails the build if a Clang-compiled C++ binary quietly falls back to it.
 
 Poke around inside the container:
 

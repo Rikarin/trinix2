@@ -14,7 +14,8 @@
 
         Stages:
           host-tools  Phase 0  the build container itself
-          toolchain   Phase 1  LLVM/Clang/LLD + mini-GCC + glibc sysroot per arch
+          llvm        Phase 1  the single Clang/LLD install, shared by all targets
+          toolchain   Phase 1  per-arch sysroot: headers, mini-GCC, glibc, LLVM runtimes
           base        Phase 2  cross-built base system into a clean rootfs
           image       Phase 2  bootable, signed A/B disk image
 
@@ -47,7 +48,7 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [ValidateSet('host-tools', 'toolchain', 'base', 'image', 'all')]
+    [ValidateSet('host-tools', 'llvm', 'toolchain', 'base', 'image', 'all')]
     [string[]]$Stage = @('host-tools'),
 
     [ValidateSet('arm64', 'x86_64', 'both')]
@@ -73,22 +74,33 @@ Import-Module (Join-Path $PSScriptRoot 'lib' 'Trinix.Build.psm1') -Force
 $root = Get-TrinixRoot
 $architectures = Get-TrinixArch -Name $Arch
 
-if ($Stage -contains 'all') { $Stage = @('host-tools', 'toolchain', 'base', 'image') }
+if ($Stage -contains 'all') { $Stage = @('host-tools', 'llvm', 'toolchain', 'base', 'image') }
 
 Assert-TrinixDocker
 
 $outputDir = if ([System.IO.Path]::IsPathRooted($Output)) { $Output } else { Join-Path $root $Output }
 
 function Get-CommonBuildArgs {
-    param([string]$Target)
+    param(
+        [Parameter(Mandatory)][string]$Target,
+        [string]$Dockerfile = 'host-tools.Dockerfile'
+    )
     $result = @(
         'buildx', 'build',
-        '--file', (Join-Path $root 'docker' 'host-tools.Dockerfile'),
+        '--file', (Join-Path $root 'docker' $Dockerfile),
         '--target', $Target,
         '--progress', $Progress
     )
     if ($NoCache) { $result += '--no-cache' }
     return $result
+}
+
+# Sources already downloaded on the host (or restored from CI's cache) are handed
+# to BuildKit as a named context, so a toolchain build does not refetch ~600 MB.
+# Everything is still digest-verified inside the container either way.
+function Get-SourcesContextArg {
+    $cache = Get-TrinixSourceCache
+    return @('--build-context', "sources=$cache")
 }
 
 # --- Stage: host-tools (Phase 0) -------------------------------------------
@@ -119,6 +131,44 @@ function Build-HostTools {
     Write-Host "  tool inventory:     docker run --rm $image"
 }
 
+# --- Stage: llvm (Phase 1, architecture-independent) ------------------------
+
+function Build-Llvm {
+    $image = "$ImagePrefix/llvm:$Tag"
+
+    $dockerArgs = Get-CommonBuildArgs -Target 'llvm' -Dockerfile 'toolchain.Dockerfile'
+    $dockerArgs += Get-SourcesContextArg
+    $dockerArgs += @('--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag")
+    $dockerArgs += @('--tag', $image, '--load', $root)
+
+    Invoke-TrinixDocker @dockerArgs
+
+    Write-Host ''
+    Write-Host "Clang/LLD ready: $image" -ForegroundColor Green
+}
+
+# --- Stage: toolchain (Phase 1, per architecture) ---------------------------
+
+function Build-Toolchain {
+    param([Parameter(Mandatory)][psobject]$Architecture)
+
+    $image = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
+    $target = if ($Verify) { 'toolchain-verify' } else { 'toolchain' }
+
+    $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'toolchain.Dockerfile'
+    $dockerArgs += Get-SourcesContextArg
+    $dockerArgs += @(
+        '--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag",
+        '--build-arg', "TARGET_ARCH=$($Architecture.Name)",
+        '--tag', $image, '--load', $root
+    )
+
+    Invoke-TrinixDocker @dockerArgs
+
+    Write-Host ''
+    Write-Host "Sysroot ready: $image ($($Architecture.Triple))" -ForegroundColor Green
+}
+
 # --- Stages not yet implemented -------------------------------------------
 
 function Assert-NotYetImplemented {
@@ -144,9 +194,16 @@ foreach ($stageName in $Stage) {
             Build-HostTools
             $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = 'native'; Result = 'built' })
         }
+        'llvm' {
+            # One Clang install serves every target — no per-arch variant exists.
+            Build-Llvm
+            $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = 'all targets'; Result = 'built' })
+        }
         'toolchain' {
-            Assert-NotYetImplemented -StageName $stageName -Phase 1 `
-                -Blurb 'Builds LLVM/Clang/LLD once, then per arch: linux headers -> mini-GCC -> glibc -> compiler-rt/libunwind/libc++.'
+            foreach ($a in $architectures) {
+                Build-Toolchain -Architecture $a
+                $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = $a.Name; Result = 'built' })
+            }
         }
         'base' {
             Assert-NotYetImplemented -StageName $stageName -Phase 2 `

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# trinix-seed-sources — populate the in-container source cache from the
+# read-only `sources` build context, so a build reuses whatever the host (or
+# CI's cache) already downloaded instead of refetching hundreds of megabytes.
+#
+# Anything missing is still fetched on demand by trinix-fetch, and everything is
+# digest-verified either way — this is purely a transfer optimisation.
+set -euo pipefail
+
+seed="${1:-/sources-seed}"
+cache="${TRINIX_SOURCES:-/sources}"
+
+mkdir -p "$cache"
+[ -d "$seed" ] || { echo "trinix-seed-sources: no seed at $seed, nothing to do"; exit 0; }
+
+count=0
+for archive in "$seed"/*; do
+    [ -f "$archive" ] || continue
+    name="$(basename "$archive")"
+    if [ ! -s "$cache/$name" ]; then
+        cp "$archive" "$cache/$name"
+        count=$((count + 1))
+    fi
+done
+
+echo "trinix-seed-sources: seeded $count archive(s) into $cache"
