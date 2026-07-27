@@ -23,11 +23,11 @@
       "notes": "Needed only by the mini-GCC/glibc path; llvm-ar/objcopy/strip are used everywhere else."
     },
     "gcc": {
-      "version": "15.1.0",
+      "version": "14.2.0",
       "phase": 1,
       "url": "https://ftpmirror.gnu.org/gnu/gcc/gcc-${version}/gcc-${version}.tar.xz",
-      "sha256": "e2b09ec21660f01fecffb715e0120265216943f038d0e48a9868713e54f06cea",
-      "notes": "Minimal cross-GCC, built solely to compile glibc + crt files, plus shippable libgcc_s/libstdc++ compat libraries."
+      "sha256": "a7b39bc69cbf9e25826c5a60ab26477001f7c08d85cec04bc0e29cabed6f3cc9",
+      "notes": "Minimal cross-GCC, built solely to compile glibc + crt files, plus shippable libgcc_s/libstdc++ compat libraries. Held at 14.x deliberately: GCC 15 defaults to C23 and postdates glibc 2.41, and GCC 14.2.0 + glibc 2.41 is the combination LFS 12.3 ships. Nothing here benefits from a newer GCC."
     },
     "gmp": {
       "version": "6.3.0",
