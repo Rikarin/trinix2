@@ -26,7 +26,7 @@ Optional:
 
 | Symbol | Kind | Meaning |
 |---|---|---|
-| `RECIPE_HOST_ONLY` | var | `1` if this builds a tool for the *build* machine, not the target. |
+| `RECIPE_HOST_ONLY` | var | `1` if this builds a tool for the *build* machine, not the target. `$CC` and friends are reset to the host compiler and the cross pkg-config variables are unset, so the recipe configures with `--prefix=/usr/local` and no `--host=`; the staging tree is installed into the container rather than into `$SYSROOT` or `$ROOTFS`. Reach for it when a host tool *generates code that ends up in target binaries* — `wayland-scanner` is the case it exists for — since taking that tool from Debian would make it an unpinned input to everything it touches. |
 | `RECIPE_EXTRA_SOURCES` | var | Space-separated `sources.json` keys the recipe fetches itself with `trinix-fetch`, for pins the driver cannot unpack: one tarball per architecture (`dotnet-sdk-$TRINIX_ARCH`), an archive with no top-level directory, or a single file. Naming them here is what puts their pinned versions in the rebuild stamp. |
 | `RECIPE_ROOTFS_ONLY` | var | `1` to install into `$ROOTFS` but not `$SYSROOT`. For configuration that ships and that nothing builds against — and specifically for a recipe whose layout contradicts the sysroot's, as `trinix-system` does by making `/var` a symlink. |
 | `RECIPE_ARCH` | var | Restrict to `arm64` / `x86_64` when a component is genuinely arch-specific (rare — and a smell). |
@@ -54,6 +54,8 @@ Helpers the driver provides, callable from `trinix_build`:
 | `BUILDDIR` | `/build/obj/<name>` | Out-of-tree build directory, already `cd`'d into. |
 | `JOBS` | `10` | Parallelism for `make -j`. |
 | `CMAKE_TOOLCHAIN` | `/usr/local/share/trinix/cmake/<triple>.cmake` | For cmake-based components. |
+| `MESON_CROSS` | `/usr/local/share/trinix/meson/<triple>.ini` | `meson setup --cross-file`. |
+| `MESON_NATIVE` | `/build/meson-native.ini` | `meson setup --native-file`, and only needed by a recipe with a `native: true` dependency — a build-machine tool found through pkg-config. Without it meson resolves those against the target sysroot, reports them as missing, and the project falls back to a path belonging to Debian. |
 | `CC` `CXX` `AR` `RANLIB` `NM` `OBJCOPY` `STRIP` `READELF` | preset | Already point at clang/LLVM with `--target` and `--sysroot` applied. |
 
 Recipes must not reach the network — `trinix-fetch` is the only sanctioned way in,

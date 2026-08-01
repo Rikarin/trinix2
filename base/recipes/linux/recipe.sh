@@ -20,6 +20,15 @@ RECIPE_DEPENDS=""
 trinix_build() {
     local fragment="$RECIPE_DIR/config/trinix.config"
 
+    # The kernel itself links against nothing, but its *host* tools do:
+    # certs/extract-cert wants libcrypto and asks pkg-config for it. The driver
+    # points pkg-config at the target sysroot, which on an arm64 build machine
+    # producing an arm64 target is almost right — the host tool links happily
+    # against Trinix's libcrypto and then dies on an absolute path inside the
+    # sysroot's libc.so linker script. Nothing in a kernel build wants the
+    # target's pkg-config, so it is removed rather than redirected.
+    unset PKG_CONFIG_SYSROOT_DIR PKG_CONFIG_LIBDIR
+
     # Out-of-tree (O=) because both architectures share one unpacked source.
     #
     # LLVM=1 selects clang plus the whole llvm-* binutils replacement set. The
@@ -89,6 +98,8 @@ trinix_check() {
                                                 # a module from
         CONFIG_INPUT_EVDEV                      # the Phase 4 compositor's only
                                                 # route to a keyboard
+        CONFIG_DRM_VIRTIO_GPU                   # and its only route to a screen
+        CONFIG_VT                               # no VTs, no seat0, no session
     )
     for option in "${required[@]}"; do
         grep -qx "$option=y" "$config" || missing="$missing $option"

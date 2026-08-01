@@ -280,6 +280,97 @@
       "sha256": "4471b5a36bfe86ec7af8525d36bb1cacba0128e7aac22d05cc064bc00e604721",
       "notes": "See powershell-arm64."
     },
+    "wayland": {
+      "version": "1.24.0",
+      "phase": 4,
+      "url": "https://gitlab.freedesktop.org/wayland/wayland/-/releases/${version}/downloads/wayland-${version}.tar.xz",
+      "sha256": "82892487a01ad67b334eca83b54317a7c86a03a89cfadacfef5211f11a5d0536",
+      "notes": "The protocol library, client and server halves. Built twice: once for the build machine, purely for wayland-scanner, and once for the target. The scanner generates C that is compiled into target binaries, which is exactly the kind of thing that must not come from the host distribution."
+    },
+    "wayland-protocols": {
+      "version": "1.45",
+      "phase": 4,
+      "url": "https://gitlab.freedesktop.org/wayland/wayland-protocols/-/releases/${version}/downloads/wayland-protocols-${version}.tar.xz",
+      "sha256": "4d2b2a9e3e099d017dc8107bf1c334d27bb87d9e4aff19a0c8d856d17cd41ef0",
+      "notes": "XML only — xdg-shell and friends. Architecture-independent, and the one recipe in the base set that installs no code at all."
+    },
+    "libdrm": {
+      "version": "2.4.125",
+      "phase": 4,
+      "url": "https://dri.freedesktop.org/libdrm/libdrm-${version}.tar.xz",
+      "sha256": "d4bae92797a50f81a93524762e0410a49cd84cfa0f997795bc0172ac8fb1d96a",
+      "notes": "Userspace half of the kernel's DRM/KMS interface: modesetting, and the dumb buffers Trinix's compositor draws into."
+    },
+    "pixman": {
+      "version": "0.46.0",
+      "phase": 4,
+      "url": "https://www.cairographics.org/releases/pixman-${version}.tar.gz",
+      "sha256": "02d9ff7b8458ef61731c3d355f854bbf461fd0a4d3563c51f1c1c7b00638050d",
+      "notes": "Software rasteriser. Not a fallback here but the actual renderer — see base/recipes/wlroots/recipe.sh for why there is no GL in the image yet."
+    },
+    "libevdev": {
+      "version": "1.13.6",
+      "phase": 4,
+      "url": "https://www.freedesktop.org/software/libevdev/libevdev-${version}.tar.xz",
+      "sha256": "73f215eccbd8233f414737ac06bca2687e67c44b97d2d7576091aa9718551110",
+      "notes": "Wrapper over the kernel's evdev protocol; libinput's substrate."
+    },
+    "mtdev": {
+      "version": "1.1.7",
+      "phase": 4,
+      "url": "https://bitmath.org/code/mtdev/mtdev-${version}.tar.bz2",
+      "sha256": "a107adad2101fecac54ac7f9f0e0a0dd155d954193da55c2340c97f2ff1d814e",
+      "notes": "Multitouch protocol translation. Here only because libinput declares it unconditionally; nothing else in Trinix links against it."
+    },
+    "libinput": {
+      "version": "1.28.1",
+      "phase": 4,
+      "url": "https://gitlab.freedesktop.org/libinput/libinput/-/archive/${version}/libinput-${version}.tar.gz",
+      "sha256": "a13f8c9a7d93df3c85c66afd135f0296701d8d32f911991b7aa4273fdd6a42a3",
+      "notes": "Pointer acceleration, tap-to-click, scroll — the input policy no compositor should reimplement. Pinned below 1.29, which introduces Lua plugins and with them an interpreter the base image has no other use for. NOTE: GitLab auto-generated archive; libinput stopped publishing release tarballs after 1.19."
+    },
+    "libxkbcommon": {
+      "version": "1.13.2",
+      "phase": 4,
+      "url": "https://github.com/xkbcommon/libxkbcommon/archive/refs/tags/xkbcommon-${version}.tar.gz",
+      "sha256": "acc4d5f7c3cbba5f9f8d08d8bdbeede84ecede46792f47929aa9321873385528",
+      "notes": "Keymap compilation and keysym lookup. NOTE: GitHub auto-generated archive; xkbcommon.org no longer serves release tarballs."
+    },
+    "xkeyboard-config": {
+      "version": "2.48",
+      "phase": 4,
+      "url": "https://www.x.org/archive/individual/data/xkeyboard-config/xkeyboard-config-${version}.tar.xz",
+      "sha256": "b77041324f0109f77161ee43743fe04baa485866af8460d31e476ad3f7648fd5",
+      "notes": "The keymap database libxkbcommon compiles at runtime. Data, not code — but without it every key is unmapped."
+    },
+    "hwdata": {
+      "version": "0.410",
+      "phase": 4,
+      "url": "https://github.com/vcrhonek/hwdata/archive/refs/tags/v${version}.tar.gz",
+      "sha256": "2864b061b179b8ad8cb6a7339ca07678240a183d9cedce8677a4950acaf798e0",
+      "notes": "Consulted on the *build* machine, not the target: wlroots compiles pnp.ids into a table so it can name a monitor from its EDID. NOTE: GitHub auto-generated archive."
+    },
+    "libdisplay-info": {
+      "version": "0.2.0",
+      "phase": 4,
+      "url": "https://gitlab.freedesktop.org/emersion/libdisplay-info/-/releases/${version}/downloads/libdisplay-info-${version}.tar.xz",
+      "sha256": "5a2f002a16f42dd3540c8846f80a90b8f4bdcd067a94b9d2087bc2feae974176",
+      "notes": "EDID and DisplayID parsing, required by wlroots' DRM backend. Held at 0.2.0, the version wlroots 0.19 declares and was tested against."
+    },
+    "seatd": {
+      "version": "0.9.1",
+      "phase": 4,
+      "url": "https://git.sr.ht/~kennylevinsen/seatd/archive/${version}.tar.gz",
+      "sha256": "819979c922a0be258aed133d93920bce6a3d3565a60588d6d372ce9db2712cd3",
+      "notes": "Seat management without PAM. Trinix has no PAM stack, so logind never opens a session and libseat's logind backend has nothing to talk to; seatd is the backend that was written for exactly that situation. NOTE: sr.ht auto-generated archive."
+    },
+    "wlroots": {
+      "version": "0.19.3",
+      "phase": 4,
+      "url": "https://gitlab.freedesktop.org/wlroots/wlroots/-/releases/${version}/downloads/wlroots-${version}.tar.gz",
+      "sha256": "5d02693175e5afd9af5f10e3e4976d6e9249dc39a90eb17d23fa5f54b125ccc5",
+      "notes": "Modesetting, buffer management and the protocol implementations the C# compositor drives. The 0.19 series rather than 0.20: it is what the binding layer in base/recipes/trinix-wlr is written against, and an ABI that moves under a hand-curated binding is a debugging session, not an upgrade."
+    },
     "tzdata": {
       "version": "2025a",
       "phase": 2,
