@@ -30,6 +30,12 @@
         module loaded, and that the C# system service is running. The Phase 3 exit
         criteria as a test.
 
+    .PARAMETER GraphicsCheck
+        Everything -Check does, and then start a Wayland client under the C#
+        compositor and read the verdict out of the journal: did the compositor
+        find a display, did a client that knows nothing about it get a window on
+        that display. The Phase 4 exit criterion as a test.
+
     .PARAMETER Timeout
         Seconds to wait in -Check mode before giving up. Default: the per-architecture
         value in image/scripts/run-qemu.sh.
@@ -57,6 +63,7 @@ param(
 
     [switch]$Check,
     [switch]$LoginCheck,
+    [switch]$GraphicsCheck,
     [int]$Timeout = 0,
 
     [string]$ImageDir = 'out',
@@ -114,7 +121,7 @@ Invoke-TrinixDocker @buildArgs
 
 # --- Boot ------------------------------------------------------------------
 
-$unattended = $Check -or $LoginCheck
+$unattended = $Check -or $LoginCheck -or $GraphicsCheck
 
 $dockerArgs = @('run', '--rm')
 
@@ -128,14 +135,18 @@ if ($unattended) {
 
 $dockerArgs += @('--volume', "${imageDirPath}:/images", $vmImage, $Arch)
 
-if ($LoginCheck) {
+if ($GraphicsCheck) {
+    $dockerArgs += '--graphics-check'
+} elseif ($LoginCheck) {
     $dockerArgs += '--login-check'
 } elseif ($Check) {
     $dockerArgs += '--check'
 }
 if ($unattended -and $Timeout -gt 0) { $dockerArgs += "$Timeout" }
 
-if ($LoginCheck) {
+if ($GraphicsCheck) {
+    Write-Host "Booting trinix-$Arch.img and running a Wayland client under the compositor..." -ForegroundColor Cyan
+} elseif ($LoginCheck) {
     Write-Host "Booting trinix-$Arch.img, logging in, and checking PowerShell and .NET..." -ForegroundColor Cyan
 } elseif ($Check) {
     Write-Host "Booting trinix-$Arch.img and waiting for a login prompt..." -ForegroundColor Cyan

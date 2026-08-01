@@ -1,0 +1,35 @@
+# The Phase 4 exit criterion, as a unit.
+#
+# Deliberately not enabled: shipping a demo window that opens at every boot
+# would be silly, and the check that needs it can start it. This is the same
+# arrangement trinix-selftest.service has, for the same reason — a test that
+# produces a verdict on demand is more useful than one that produces noise
+# continuously.
+#
+#   systemctl start trinix-wl-demo.service
+#   journalctl -u trinix-wl-demo -o cat --no-pager
+
+[Unit]
+Description=Trinix Wayland demo client
+Documentation=https://github.com/rikarin/trinix
+After=trinix-compositor.service
+Requires=trinix-compositor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+User=trinix
+Group=trinix
+
+# The same runtime directory and display name the compositor's unit names. A
+# client is not expected to guess either; on a system with a session manager
+# both would come from the session.
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WAYLAND_DISPLAY=wayland-0
+ExecStart=/usr/bin/trinix-wl-demo --frames 10
+
+# journal+console: during bring-up the serial line is the only way to see
+# anything at all, and the unattended graphics check reads exactly these lines.
+StandardOutput=journal+console
+StandardError=journal+console

@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
-# run-qemu <arm64|x86_64> [--check | --login-check [seconds]] [extra qemu args...]
+# run-qemu <arm64|x86_64> [--check | --login-check | --graphics-check [seconds]] [qemu args...]
 #
 # Boots a Trinix disk image. Runs inside the vm container (docker/vm.Dockerfile),
 # with the image directory bind-mounted at /images.
 #
-# Three modes:
-#   interactive    serial console on stdio — this is `run-vm.ps1 -Arch arm64`
-#   --check        boot unattended and assert that a login prompt appeared.
-#                  The Phase 2 exit criterion as a test.
-#   --login-check  everything --check does, then log in and drive the session:
-#                  does it land in PowerShell, does .NET work, did the C#
-#                  service start. The Phase 3 exit criteria as a test.
+# Four modes:
+#   interactive       serial console on stdio — this is `run-vm.ps1 -Arch arm64`
+#   --check           boot unattended and assert that a login prompt appeared.
+#                     The Phase 2 exit criterion as a test.
+#   --login-check     everything --check does, then log in and drive the
+#                     session: does it land in PowerShell, does .NET work, did
+#                     the C# service start. The Phase 3 exit criteria as a test.
+#   --graphics-check  run a Wayland client under the C# compositor and read the
+#                     verdict out of the journal. The Phase 4 exit criterion as
+#                     a test.
 
 set -euo pipefail
 
@@ -19,10 +22,12 @@ shift
 
 check=0
 login_check=0
+graphics_check=0
 timeout_s=0
 case "${1:-}" in
-    --check)       check=1; shift ;;
-    --login-check) check=1; login_check=1; shift ;;
+    --check)          check=1; shift ;;
+    --login-check)    check=1; login_check=1; shift ;;
+    --graphics-check) check=1; graphics_check=1; shift ;;
 esac
 if [ "$check" -eq 1 ]; then
     case "${1:-}" in
@@ -71,6 +76,9 @@ case "$arch" in
         # with -march=armv8.2-a and the a72 is an 8.0 core, so half the base
         # system would take an illegal instruction on the first boot.
         machine=(-machine virt -cpu cortex-a76)
+        # arm64's virt machine has no built-in display adapter, so there is
+        # nothing to suppress.
+        extra_display=()
         # Enough for the whole sequence, not just the boot: reaching a login
         # prompt is well under a minute, but -LoginCheck then waits for a
         # PowerShell session and a self-test that starts a second runtime, all
@@ -84,6 +92,7 @@ case "$arch" in
         # -cpu max for the same reason: -march=x86-64-v2 needs SSE4.2, and
         # QEMU's default qemu64 model does not have it.
         machine=(-machine q35 -cpu max)
+        extra_display=(-vga none)
         # Roughly double arm64's: emulating a different instruction set costs
         # more than emulating the host's own.
         default_timeout=1800
@@ -111,7 +120,23 @@ args=(
     -device virtio-rng-pci
     -netdev user,id=net0
     -device virtio-net-pci,netdev=net0
+    # A display device, even though nothing here looks at it. virtio-gpu is
+    # what gives the guest a DRM device to modeset, and the compositor has
+    # nothing to run on without one. No virgl: that would need the *host* to
+    # have a GL context, and the host is a container built on the promise that
+    # the Mac needs nothing installed — so the guest gets a KMS device with
+    # dumb buffers and composites in software. See base/recipes/wlroots.
+    -device virtio-gpu-pci
+    # A keyboard and a pointer, so libinput has something to enumerate. Without
+    # them the only input device in the machine is the ACPI power button, and
+    # the compositor's entire input path goes untested.
+    -device virtio-keyboard-pci
+    -device virtio-tablet-pci
+    # -display none keeps QEMU headless; the device above still exists, and
+    # -vga none stops x86_64's q35 adding a second, emulated adapter that the
+    # guest would have to choose between.
     -display none
+    "${extra_display[@]}"
 )
 
 if [ "$check" -eq 1 ]; then
@@ -191,6 +216,46 @@ if [ "$check" -eq 1 ]; then
 
     if await 'login:'; then
         reached=1
+    fi
+
+    if [ "$reached" -eq 1 ] && [ "$graphics_check" -eq 1 ]; then
+        # The compositor writes to the journal, not the console: it is a
+        # service, and a service that scribbled on the console would be writing
+        # over the login prompt. So the verdict is read the same way the
+        # platform self-test's is — from root's shell, over the serial line.
+        echo '==> logging in as root to run a Wayland client under the compositor'
+        type_line 'root'
+
+        if await 'Password' 120; then
+            type_line "${TRINIX_ROOT_PASSWORD:-trinix}"
+
+            if await 'root@trinix' 240; then
+                # Ordered, and each assertion is a different thing that can be
+                # wrong: the compositor found a display, then a client that
+                # knows nothing about it got a window on that display.
+                type_line 'journalctl -u trinix-compositor -o cat --no-pager'
+                if ! await 'trinix-compositor: output' 180; then
+                    verdict="$verdict compositor-output"
+                fi
+
+                type_line 'systemctl start trinix-wl-demo.service; journalctl -u trinix-wl-demo -o cat --no-pager'
+                if ! await 'TRINIX-WL-DEMO-OK' 300; then
+                    verdict="$verdict wayland-client"
+                fi
+
+                # And that the compositor saw the client from its own side,
+                # which is what distinguishes "a window was mapped" from "a
+                # client connected to something".
+                type_line 'journalctl -u trinix-compositor -o cat --no-pager'
+                if ! await 'window mapped' 120; then
+                    verdict="$verdict window-mapped"
+                fi
+            else
+                verdict="$verdict root-shell"
+            fi
+        else
+            verdict="$verdict root-password-prompt"
+        fi
     fi
 
     if [ "$reached" -eq 1 ] && [ "$login_check" -eq 1 ]; then
@@ -290,12 +355,14 @@ if [ "$check" -eq 1 ]; then
         exit 1
     fi
 
-    if [ "$login_check" -eq 1 ] && [ -n "$verdict" ]; then
+    if [ -n "$verdict" ]; then
         echo "FAIL: the session did not satisfy:$verdict" >&2
         exit 1
     fi
 
-    if [ "$login_check" -eq 1 ]; then
+    if [ "$graphics_check" -eq 1 ]; then
+        echo "PASS: trinix-$arch ran a Wayland client under the C# compositor in ${SECONDS}s."
+    elif [ "$login_check" -eq 1 ]; then
         echo "PASS: trinix-$arch logged in to PowerShell with a working .NET in ${SECONDS}s."
     else
         echo "PASS: trinix-$arch reached a login prompt in ${SECONDS}s."

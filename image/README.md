@@ -91,9 +91,18 @@ Docker Desktop's Linux VM does not pass virtualisation through — so this is TC
 emulation even when the guest architecture matches the host's.
 
 ```bash
-./scripts/run-vm.ps1 -Arch arm64          # interactive serial console
-./scripts/run-vm.ps1 -Arch arm64 -Check   # boot unattended, assert a login prompt
+./scripts/run-vm.ps1 -Arch arm64                 # interactive serial console
+./scripts/run-vm.ps1 -Arch arm64 -Check          # boot unattended, assert a login prompt
+./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # run a Wayland client under the compositor
 ```
 
-`-Check` is the Phase 2 exit criterion expressed as a test, and what CI runs.
-It writes the full console to `out/serial-<arch>.log`.
+`-Check` is the Phase 2 exit criterion expressed as a test, `-LoginCheck` is
+Phase 3's, and `-GraphicsCheck` is Phase 4's. All three write the full console
+to `out/serial-<arch>.log`, and CI runs all three.
+
+The VM gets a `virtio-gpu-pci` device even though QEMU runs with `-display
+none`: the guest needs a DRM device to modeset, and the host being headless
+does not change that. What the host *cannot* provide is a GL context, so there
+is no virgl and therefore no render node — which is the reason the compositor
+composites in software. See
+[`base/recipes/wlroots/recipe.sh`](../base/recipes/wlroots/recipe.sh).

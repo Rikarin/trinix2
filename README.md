@@ -8,11 +8,14 @@ conventional package database.
 The full design, and the reasoning behind each decision, is in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Status: Phase 3.** The base system cross-builds — kernel, glibc, systemd,
+**Status: Phase 4.** The base system cross-builds — kernel, glibc, systemd,
 shadow, coreutils and the rest — and assembles into a signed-later, A/B-capable
 GPT disk image. Booting it and logging in lands you in **PowerShell**, with
 .NET, Trinix's own `Trinix.Management` cmdlets, and a C# system service running
-under systemd. Phase 4, the graphics stack and the C# compositor, is next.
+under systemd. On top of that sits the graphics stack — libdrm, libinput,
+libxkbcommon, wlroots, seatd — and **a Wayland compositor written in C#**,
+which runs stock Wayland clients in windows. Phase 5, Vixen and the system
+shell, is next.
 
 ## Requirements
 
@@ -108,14 +111,51 @@ dotnet --version
 
 `Test-TrinixSystem` also runs at every boot as `trinix-selftest.service`, which
 is where Phase 7's A/B updater will get its answer to "did the slot I just
-wrote actually work". `trinixd` is the first C# system service — `Type=notify`,
-logging to the journal, hosted by systemd like any other.
+wrote actually work" — so the compositor is one of the things it checks.
+`trinixd` is the first C# system service — `Type=notify`, logging to the
+journal, hosted by systemd like any other.
 
-Two unattended checks, each a phase's exit criteria expressed as a test:
+## The compositor
+
+`trinix-compositor` is Trinix's window server, and it is C#. It starts with
+`graphical.target`, draws on `/dev/tty1`, and gets the display and the keyboard
+from **seatd** — so it runs as the `trinix` user, with membership of one group
+as its only privilege.
 
 ```bash
-./scripts/run-vm.ps1 -Arch arm64 -Check        # boots to a login prompt
-./scripts/run-vm.ps1 -Arch arm64 -LoginCheck   # logs in, lands in pwsh, runs .NET
+systemctl status trinix-compositor
+journalctl -u trinix-compositor -o cat     # outputs, input devices, windows
+systemctl start trinix-wl-demo             # a Wayland client, in a window
+```
+
+The split is worth knowing about before reading the code. wlroots does
+modesetting, buffer management and the protocol implementations; a small C
+library ([base/recipes/trinix-wlr/](base/recipes/trinix-wlr/)) owns those
+objects and the listener plumbing that C# cannot express; and
+[src/Trinix.Compositor/](src/Trinix.Compositor/) makes every decision — where a
+window opens, what has focus, what `Alt` does, what dragging means. If a rule
+about window behaviour is not in `WindowManager.cs`, Trinix does not have that
+rule yet.
+
+There is no OpenGL in the image, and that is a decision rather than an
+omission: wlroots' GL renderer needs a DRM render node, QEMU's virtio-gpu
+offers one only when the *host* can lend it a GL context, and the host here is
+a container. So the compositor composites in software through pixman into dumb
+buffers — correct, slow, and honestly the same thing every VM does. Mesa
+arrives when there is a GPU worth talking to; see
+[base/recipes/wlroots/recipe.sh](base/recipes/wlroots/recipe.sh) for the whole
+argument.
+
+The virtual-console login moved to `tty2` when the compositor took `tty1`. The
+serial console is unaffected, and `systemd.unit=multi-user.target` boots without
+a display at all.
+
+Three unattended checks, each a phase's exit criteria expressed as a test:
+
+```bash
+./scripts/run-vm.ps1 -Arch arm64 -Check          # boots to a login prompt
+./scripts/run-vm.ps1 -Arch arm64 -LoginCheck     # logs in, lands in pwsh, runs .NET
+./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # runs a Wayland client under the compositor
 ```
 
 There is no accelerator — Docker Desktop does not pass virtualisation through —

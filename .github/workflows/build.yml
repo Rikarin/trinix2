@@ -154,6 +154,13 @@ jobs:
         shell: pwsh
         run: ./scripts/run-vm.ps1 -Arch ${{ matrix.arch }} -LoginCheck
 
+      # A second boot rather than more work inside the first: the two exit
+      # criteria fail for unrelated reasons, and a single run that dies in the
+      # PowerShell half would say nothing about the graphics half.
+      - name: Run a Wayland client under the C# compositor
+        shell: pwsh
+        run: ./scripts/run-vm.ps1 -Arch ${{ matrix.arch }} -GraphicsCheck
+
       - uses: actions/upload-artifact@v4
         with:
           name: trinix-${{ matrix.arch }}.img
