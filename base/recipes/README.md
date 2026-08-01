@@ -27,15 +27,17 @@ Optional:
 | Symbol | Kind | Meaning |
 |---|---|---|
 | `RECIPE_HOST_ONLY` | var | `1` if this builds a tool for the *build* machine, not the target. |
+| `RECIPE_ROOTFS_ONLY` | var | `1` to install into `$ROOTFS` but not `$SYSROOT`. For configuration that ships and that nothing builds against — and specifically for a recipe whose layout contradicts the sysroot's, as `trinix-system` does by making `/var` a symlink. |
 | `RECIPE_ARCH` | var | Restrict to `arm64` / `x86_64` when a component is genuinely arch-specific (rare — and a smell). |
-| `trinix_patch` | function | Replaces the default "apply `patches/*.patch` with `-p1`". |
+| `trinix_patch` | function | Replaces the default "apply `patches/*.patch` with `-p1`". For source surgery a diff expresses badly — deleting a vendored header, regenerating a build system. Runs once for the shared source tree, before either architecture builds. |
+| `trinix_check` | function | Post-install assertions, run against `$DESTDIR`. Prefer cheap and specific: "is this the right machine type", not "does the test suite pass". |
 
 Helpers the driver provides, callable from `trinix_build`:
 
 | Helper | Use it when |
 |---|---|
 | `trinix_freeze_autotools [dir]` | `make` tries to re-run `aclocal`/`autoconf` on a release tarball. It then demands third-party m4 macros (kmod wants `gtk-doc.m4`) that have no business in a cross-build container. Touches the generated files so the rule never fires. |
-| `trinix_check` | function | Post-install assertions; run when the stage is built with `-Verify`. |
+| `trinix_merge_usr` | Upstream installs into `$DESTDIR/usr/sbin` or `$DESTDIR/sbin` whatever `--sbindir` says — shadow does it with the account tools, systemd with `init`. Folds them into `/usr/bin`, so the staging tree, the file list and `trinix_check` all describe the layout that ships. |
 
 ## Environment a recipe can rely on
 
@@ -81,6 +83,26 @@ first — the symptom is usually not a link error but a *silently reduced* build
 - **`$LD` is not exported** by the driver. Linking goes through the compiler
   driver, and packages that consult `$LD` want a real linker — handing them
   `clang` makes libtool in particular mis-detect.
+
+## The build container is not the target
+
+Two ways the container has leaked into a cross build so far. Both produced a
+build that *worked* and shipped something wrong, which is the expensive kind.
+
+- **`*-config` scripts on `$PATH`.** util-linux runs `ncursesw6-config` to
+  learn how to link ncurses and finds Debian's, which answers
+  `-lncursesw -ltinfo` because Debian splits terminfo into its own library.
+  Trinix's ncurses does not, so the link fails on a library that never
+  existed. Point the variable at the sysroot's copy
+  (`NCURSESW6_CONFIG=$SYSROOT/usr/bin/ncursesw6-config`); pkg-config is safe
+  because the driver scopes `PKG_CONFIG_LIBDIR` to the sysroot already.
+- **Auto-detected optional dependencies.** A recipe that lets `configure`
+  decide builds differently depending on which recipes happened to run before
+  it. util-linux linked ncurses or not depending on whether ncurses was already
+  in the sysroot — so the rootfs differed between a warm cache and a clean
+  build. Answer every optional dependency explicitly, the way the systemd
+  recipe does, and add it to `RECIPE_DEPENDS` so the ordering is a fact rather
+  than an accident.
 
 ## Why so few knobs
 

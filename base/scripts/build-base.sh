@@ -33,8 +33,14 @@ mkdir -p "$srcroot" "$objroot" "$destroot" "$stampdir"
 # ---------------------------------------------------------------------------
 # The rootfs uses the same merged-/usr layout as the sysroot.
 # ---------------------------------------------------------------------------
+#
+# Note what is *not* created here: /var, /home and /root. The root filesystem
+# is read-only, so those are symlinks onto the writable /data partition, and the
+# trinix-system recipe installs them as such. A directory of the same name
+# created here would be in the way when that recipe's staging tree is rsynced
+# across, and rsync would refuse to replace it.
 mkdir -p "$ROOTFS/usr/"{bin,lib,share,include} \
-         "$ROOTFS/"{etc,var,run,proc,sys,dev,tmp,root}
+         "$ROOTFS/"{etc,run,proc,sys,dev,tmp,data,boot}
 ln -sfn usr/bin "$ROOTFS/bin"
 ln -sfn usr/bin "$ROOTFS/sbin"
 ln -sfn usr/lib "$ROOTFS/lib"
@@ -128,6 +134,61 @@ trinix_freeze_autotools() {
                 -o -name 'Makefile.in' -o -name '*.m4' \) -exec touch {} + 2>/dev/null || true
 }
 
+# Source preparation. The default is "apply patches/*.patch in sorted order
+# with -p1", which covers almost everything; a recipe whose source needs
+# something a diff expresses badly — deleting a vendored header, regenerating a
+# build system — defines trinix_patch instead and gets that run in its place.
+patch_recipe() {
+    local name="$1" srcdir="$2"
+
+    set +e
+    (
+        set -euo pipefail
+        # shellcheck disable=SC1090
+        . "$RECIPES_DIR/$name/recipe.sh"
+
+        SRCDIR="$srcdir"
+        RECIPE_DIR="$RECIPES_DIR/$name"
+        export SRCDIR RECIPE_DIR
+
+        if declare -F trinix_patch >/dev/null; then
+            step 'patch: trinix_patch'
+            trinix_patch
+        else
+            for patchfile in "$RECIPE_DIR/patches"/*.patch; do
+                [ -e "$patchfile" ] || continue
+                step "patch: ${patchfile##*/}"
+                patch -d "$SRCDIR" -p1 < "$patchfile"
+            done
+        fi
+    )
+    local rc=$?
+    set -e
+
+    # A half-patched tree is worse than no tree: it is shared between both
+    # architectures and would be reused as-is on the next run.
+    [ "$rc" -eq 0 ] || { rm -rf "$srcdir"; die "patching recipe '$name' failed"; }
+}
+
+# trinix_merge_usr — fold sbin directories in the staging tree into /usr/bin.
+#
+# Trinix has one binary directory. Upstreams that still separate "system"
+# binaries install into $DESTDIR/usr/sbin or $DESTDIR/sbin regardless of
+# --sbindir — shadow puts useradd there, systemd puts `init` there — and while
+# install_recipe's rsync follows the rootfs symlink and puts them in the right
+# place anyway, the staging tree, the per-recipe file list and the recipe's own
+# trinix_check would all still describe a layout that does not ship. Calling
+# this at the end of trinix_build keeps all four in agreement.
+trinix_merge_usr() {
+    local dir
+    for dir in "$DESTDIR/sbin" "$DESTDIR/usr/sbin"; do
+        [ -d "$dir" ] || continue
+        install -d "$DESTDIR/usr/bin"
+        find "$dir" -mindepth 1 -maxdepth 1 -exec mv -t "$DESTDIR/usr/bin/" {} +
+        rmdir "$dir"
+    done
+}
+
 build_recipe() {
     local name="$1"
     local stamp="$stampdir/$name.stamp"
@@ -137,9 +198,13 @@ build_recipe() {
     source_name="$(recipe_field "$name" RECIPE_SOURCE)"
     depends="$(recipe_field "$name" RECIPE_DEPENDS)"
 
-    # A recipe is rebuilt when its recipe.sh changes or its pinned version does.
+    # A recipe is rebuilt when anything it owns changes, or its pinned version
+    # does. Everything it owns, not just recipe.sh: the kernel's config
+    # fragment and a package's patches are inputs to the build in exactly the
+    # same way, and hashing only the script means editing one of those changes
+    # nothing at all — which is a long afternoon of wondering why.
     local key
-    key="$(sha256sum "$RECIPES_DIR/$name/recipe.sh" | cut -d' ' -f1)"
+    key="$(find "$RECIPES_DIR/$name" -type f -exec sha256sum {} + | sort | sha256sum | cut -d' ' -f1)"
     if [ -n "$source_name" ]; then
         key="$key $(trinix-fetch --version "$source_name")"
     fi
@@ -170,19 +235,27 @@ build_recipe() {
 
         # Patches are applied to the shared source tree, so they must happen
         # exactly once even though both architectures use that tree.
-        if [ -d "$RECIPES_DIR/$name/patches" ] && [ ! -e "$srcdir/.trinix-patched" ]; then
-            applied=0
-            for patchfile in "$RECIPES_DIR/$name/patches"/*.patch; do
-                [ -e "$patchfile" ] || continue
-                step "patch: ${patchfile##*/}"
-                patch -d "$srcdir" -p1 < "$patchfile"
-                applied=$((applied + 1))
-            done
-            [ "$applied" -gt 0 ] && touch "$srcdir/.trinix-patched"
+        if [ ! -e "$srcdir/.trinix-patched" ]; then
+            patch_recipe "$name" "$srcdir"
+            touch "$srcdir/.trinix-patched"
         fi
     fi
 
-    if ! (
+    # Why the recipe subshell is not simply `if ! ( ... ); then`:
+    #
+    # bash ignores `set -e` for any command in a condition position, and that
+    # suppression propagates *into* a subshell placed there — its own `set -e`
+    # notwithstanding. A recipe whose `make` failed would therefore carry on to
+    # `make install` and `trinix_check`, and be recorded as successful as long
+    # as the last command happened to succeed. libxcrypt is what exposed this:
+    # its link failed, install re-ran the same failing link, and only the
+    # recipe's own check caught it.
+    #
+    # Running the subshell as a plain command with errexit temporarily off in
+    # the parent keeps the failure where it belongs — at the command that
+    # failed — while still letting this function handle it.
+    set +e
+    (
         set -euo pipefail
         # shellcheck disable=SC1090
         . "$RECIPES_DIR/$name/recipe.sh"
@@ -206,7 +279,11 @@ build_recipe() {
             step 'running recipe checks'
             trinix_check
         fi
-    ); then
+    )
+    local rc=$?
+    set -e
+
+    if [ "$rc" -ne 0 ]; then
         # A failed build can leave the *shared* source tree half-mutated —
         # autotools rewriting ltmain.sh while aclocal.m4 still comes from the
         # tarball is the case that motivated this, and it produces a libtool
@@ -233,10 +310,26 @@ build_recipe() {
 
 # Into the sysroot (so later recipes can link against it) and into the rootfs
 # (so it ships). rsync keeps symlinks and permissions intact.
+#
+# RECIPE_ROOTFS_ONLY exists for the one case where those two destinations
+# genuinely disagree: configuration that ships but that nothing builds against.
+# trinix-system installs /var as a symlink onto the writable partition, and the
+# sysroot has a real /var that later recipes install into — copying one over
+# the other would either fail or quietly break the rest of the build.
+#
+# --keep-dirlinks is what makes merged /usr work without every recipe having to
+# know about it. Plenty of upstreams install "system" binaries into /usr/sbin —
+# systemd puts `init` there, and the kernel's first exec depends on finding it —
+# while the rootfs has /usr/sbin as a symlink to bin. Without -K rsync would
+# replace that symlink with a real directory and quietly unmerge /usr; with it,
+# the install follows the symlink and lands in /usr/bin, which is where a
+# merged-/usr system wanted it in the first place.
 install_recipe() {
     local name="$1" destdir="$2"
-    rsync -a "$destdir/" "$SYSROOT/"
-    rsync -a "$destdir/" "$ROOTFS/"
+    if [ "$(recipe_field "$name" RECIPE_ROOTFS_ONLY)" != '1' ]; then
+        rsync -aK "$destdir/" "$SYSROOT/"
+    fi
+    rsync -aK "$destdir/" "$ROOTFS/"
 }
 
 # ---------------------------------------------------------------------------
@@ -255,6 +348,38 @@ step "rootfs: $ROOTFS"
 
 for name in "${_order[@]}"; do
     build_recipe "$name"
+done
+
+# ---------------------------------------------------------------------------
+# The mutable directories.
+#
+# /var, /home and friends end up as symlinks onto /data, the only writable
+# partition. But recipes install into /var perfectly legitimately — systemd
+# wants /var/lib/systemd, dbus wants /var/lib/dbus — and a directory that
+# arrives that way cannot simply be deleted: those files have to exist on the
+# running system.
+#
+# So they become *factory* content, stored under /usr/share/factory/data, which
+# is part of the immutable image and seeded into the data partition when the
+# image is assembled. That is systemd's own convention for this problem, and it
+# is the difference between a shipped file being present at first boot and
+# being silently shadowed the moment /data is mounted.
+#
+# This is the driver's job rather than a recipe's for the same reason the
+# merged-/usr skeleton above is: it is a property of the layout, and it has to
+# happen after every recipe has had its say.
+# ---------------------------------------------------------------------------
+log 'Finalising the rootfs layout'
+factory="$ROOTFS/usr/share/factory/data"
+mkdir -p "$factory"
+for dir in var home root srv opt Applications; do
+    if [ -d "$ROOTFS/$dir" ] && [ ! -L "$ROOTFS/$dir" ]; then
+        mkdir -p "$factory/$dir"
+        rsync -a "$ROOTFS/$dir/" "$factory/$dir/"
+        rm -rf "${ROOTFS:?}/$dir"
+        step "/$dir was installed into — relocated to the factory image ($(du -sh "$factory/$dir" | cut -f1))"
+    fi
+    ln -sfn "data/$dir" "$ROOTFS/$dir"
 done
 
 log "Base build complete for $TRINIX_ARCH: $(du -sh "$ROOTFS" | cut -f1) in $ROOTFS"
