@@ -108,22 +108,64 @@ jobs:
       - shell: pwsh
         run: ./scripts/build.ps1 -Stage host-tools,llvm,toolchain -Arch ${{ matrix.arch }} -Verify -Progress plain
 
+  # ---------------------------------------------------------------------------
+  # Phase 2. Depends on the toolchain job, so it inherits its nightly-only
+  # schedule: cross-building the kernel and systemd twice is not something to
+  # put in front of every pull request.
+  #
+  # The boot check is the phase's exit criterion, and it is deliberately part of
+  # this job rather than a separate one — a disk image that has not been booted
+  # is not evidence of anything.
+  # ---------------------------------------------------------------------------
   base-and-image:
-    if: false # Phase 2
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: [toolchain]
     runs-on: ubuntu-24.04
+    timeout-minutes: 360
     strategy:
       fail-fast: false
       matrix:
         arch: [arm64, x86_64]
     steps:
       - uses: actions/checkout@v4
-      - shell: pwsh
-        run: ./scripts/build.ps1 -Stage base,image -Arch ${{ matrix.arch }} -Progress plain
+
+      - name: Reclaim runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Cache pinned sources
+        uses: actions/cache@v4
+        with:
+          path: .cache/sources
+          key: sources-${{ hashFiles('base/sources.json') }}
+          restore-keys: sources-
+
+      - name: Build the base system and the disk image
+        shell: pwsh
+        run: ./scripts/build.ps1 -Stage base,image -Arch ${{ matrix.arch }} -Verify -Progress plain
+
+      - name: Boot it
+        shell: pwsh
+        run: ./scripts/run-vm.ps1 -Arch ${{ matrix.arch }} -Check
+
       - uses: actions/upload-artifact@v4
         with:
           name: trinix-${{ matrix.arch }}.img
-          path: out/trinix-${{ matrix.arch }}.img
+          path: |
+            out/trinix-${{ matrix.arch }}.img
+            out/trinix-${{ matrix.arch }}.img.sha256
+
+      # The console log is the only evidence of *why* a boot failed, so it is
+      # kept whether the step above passed or not.
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: serial-${{ matrix.arch }}.log
+          path: out/serial-${{ matrix.arch }}.log
+          if-no-files-found: ignore
 
   dotnet:
     # src/ builds with the plain dotnet SDK — no toolchain dependency, so this

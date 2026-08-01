@@ -204,15 +204,39 @@ function Build-Base {
     Write-Host "Base rootfs ready: $image ($($Architecture.Triple))" -ForegroundColor Green
 }
 
-# --- Stages not yet implemented -------------------------------------------
+# --- Stage: image (Phase 2, per architecture) -------------------------------
 
-function Assert-NotYetImplemented {
-    param([string]$StageName, [int]$Phase, [string]$Blurb)
-    throw @"
-Stage '$StageName' is not implemented yet — it is Phase $Phase work.
-  $Blurb
-See IMPLEMENTATION_PLAN.md, section 4.
-"@
+function Build-Image {
+    param([Parameter(Mandatory)][psobject]$Architecture)
+
+    $baseImage = "$ImagePrefix/base-$($Architecture.Name):$Tag"
+
+    # The gate runs as its own target, then the export target extracts the
+    # image. Two invocations rather than one because BuildKit exports from a
+    # single target only — the second is a cache hit apart from the copy.
+    if ($Verify) {
+        $verifyArgs = Get-CommonBuildArgs -Target 'image-verify' -Dockerfile 'image.Dockerfile'
+        $verifyArgs += @(
+            '--build-arg', "BASE_IMAGE=$baseImage",
+            '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
+            $root
+        )
+        Invoke-TrinixDocker @verifyArgs
+    }
+
+    $dockerArgs = Get-CommonBuildArgs -Target 'image-export' -Dockerfile 'image.Dockerfile'
+    $dockerArgs += @(
+        '--build-arg', "BASE_IMAGE=$baseImage",
+        '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
+        '--output', "type=local,dest=$outputDir",
+        $root
+    )
+    Invoke-TrinixDocker @dockerArgs
+
+    $image = Join-Path $outputDir "trinix-$($Architecture.Name).img"
+    Write-Host ''
+    Write-Host "Disk image ready: $image" -ForegroundColor Green
+    Write-Host "  boot it:  ./scripts/run-vm.ps1 -Arch $($Architecture.Name)"
 }
 
 # --- Dispatch -------------------------------------------------------------
@@ -247,8 +271,10 @@ foreach ($stageName in $Stage) {
             }
         }
         'image' {
-            Assert-NotYetImplemented -StageName $stageName -Phase 2 `
-                -Blurb 'Assembles GPT + ESP (systemd-boot) + root A/B + /data and signs the result.'
+            foreach ($a in $architectures) {
+                Build-Image -Architecture $a
+                $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = $a.Name; Result = 'built' })
+            }
         }
     }
 }

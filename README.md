@@ -8,10 +8,10 @@ conventional package database.
 The full design, and the reasoning behind each decision, is in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Status: Phase 1 complete.** The build container, source pinning, the LLVM
-toolchain and both sysroots are done and gated by tests. `clang
---target=<triple>` produces working static and dynamic C and C++ binaries for
-arm64 and x86_64. Phase 2 — the bootable base system — is next.
+**Status: Phase 2.** The base system cross-builds — kernel, glibc, systemd,
+shadow, coreutils and the rest — and assembles into a signed-later, A/B-capable
+GPT disk image that boots to a login prompt in QEMU. Phase 3, .NET and
+PowerShell as first-class citizens, is next.
 
 ## Requirements
 
@@ -20,8 +20,9 @@ installed on the host, and nothing is built outside a container. PowerShell 7.4+
 needed to run the orchestrator scripts, and ships with macOS via `brew install
 powershell`; the same scripts also run *inside* the build container.
 
-For booting the finished image you additionally want QEMU (runs from a container) or
-UTM (the one optional host tool, nicer for graphical testing) — Phase 2 onwards.
+Booting the finished image needs QEMU, which also runs from a container — see
+[Boot it](#boot-it). UTM stays the one optional host tool, and is nicer for
+graphical testing once Phase 4 has a compositor.
 
 ## Build
 
@@ -46,8 +47,19 @@ world in C and C++, executed under `qemu-user` for **both** architectures, plus
 assertions that Clang-built C++ really uses libc++/libunwind and that the GCC
 compat libraries .NET needs are present anyway.
 
-The `base` and `image` stages exist in the orchestrator and currently fail with
-the phase they belong to — see `./scripts/build.ps1 -?` for the full surface.
+Then the base system and a bootable image:
+
+```bash
+./scripts/build.ps1 -Stage base -Arch arm64 -Verify
+./scripts/build.ps1 -Stage image -Arch arm64 -Verify
+```
+
+`base` cross-builds every recipe under [base/recipes/](base/recipes/) into a
+clean rootfs; `image` turns that rootfs into `out/trinix-arm64.img` — GPT, an
+ESP with systemd-boot, two root slots and a writable `/data`. Their `-Verify`
+gates check what can be checked without booting: that every shipped binary is
+the right machine type with all its libraries present, and that the firmware
+will find a bootloader that names a root partition which actually exists.
 
 ### Why GCC is still here
 
@@ -63,6 +75,26 @@ Poke around inside the container:
 ```bash
 docker run --rm -it -v "$PWD:/work" trinix/host-tools:dev bash
 ```
+
+## Boot it
+
+```bash
+./scripts/run-vm.ps1 -Arch arm64
+```
+
+QEMU runs *from a container* too, so the VM tier needs nothing on the Mac
+either. You get a serial console, `trinix login:`, and a root password of
+`trinix` — a development image sets a known credential rather than an
+unguessable one nobody can log in with; Phase 8's installer is where a real one
+gets set. `Ctrl-a x` quits.
+
+`./scripts/run-vm.ps1 -Arch arm64 -Check` boots unattended and asserts that the
+login prompt appeared, which is the Phase 2 exit criterion as a test. There is
+no accelerator — Docker Desktop does not pass virtualisation through — so
+expect a couple of minutes for arm64 and considerably longer for x86_64.
+
+See [image/README.md](image/README.md) for the partition layout and why the
+root filesystem is read-only.
 
 ## Source pinning
 
@@ -90,7 +122,7 @@ Downloads are cached in `.cache/sources/` (gitignored).
 | `image/` | Rootfs assembly, ESP layout, A/B image + dm-verity tooling |
 | `src/` | All C#: compositor, shell, apps, package manager, bundle/signing libraries |
 | `signing/` | Dev PKI layout and key policy — real keys are never committed |
-| `scripts/` | `build.ps1`, `update-sources.ps1` — the host-side entry points |
+| `scripts/` | `build.ps1`, `run-vm.ps1`, `update-sources.ps1` — the host-side entry points |
 
 ## Two-tier testing
 
@@ -99,5 +131,8 @@ Docker cannot boot a kernel, so testing is split deliberately:
 - **Container tier** — the finished rootfs runs as a Docker container to exercise
   userland: PowerShell, .NET services, the package manager, and the compositor
   headless (wlroots' headless backend, with screenshots for visual assertions).
-- **VM tier** — QEMU (`-accel hvf`, near-native on Apple Silicon) or UTM for real
-  boot, real DRM/KMS via `virtio-gpu`, both architectures.
+- **VM tier** — QEMU for real boot, real DRM/KMS via `virtio-gpu`, both
+  architectures. QEMU runs from a container ([docker/vm.Dockerfile](docker/vm.Dockerfile)),
+  so the host still needs nothing; UTM stays the optional host tool for
+  graphical work from Phase 4 onwards. There is no accelerator inside Docker
+  Desktop's VM, so this is TCG emulation — correct, and slow.
