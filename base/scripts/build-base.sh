@@ -203,11 +203,21 @@ build_recipe() {
     # fragment and a package's patches are inputs to the build in exactly the
     # same way, and hashing only the script means editing one of those changes
     # nothing at all — which is a long afternoon of wondering why.
-    local key
+    local key extra
     key="$(find "$RECIPES_DIR/$name" -type f -exec sha256sum {} + | sort | sha256sum | cut -d' ' -f1)"
     if [ -n "$source_name" ]; then
         key="$key $(trinix-fetch --version "$source_name")"
     fi
+    # Sources the recipe fetches for itself. Three kinds of pin cannot be
+    # expressed as RECIPE_SOURCE: one that differs per architecture (.NET and
+    # PowerShell ship a separate tarball for each), one whose archive has no
+    # top-level directory for the driver to unpack into, and one that is not an
+    # archive at all (the CA bundle is a single .pem). Those recipes call
+    # trinix-fetch themselves — and their pinned versions still have to reach
+    # the stamp, or bumping one would rebuild nothing.
+    for extra in $(recipe_field "$name" RECIPE_EXTRA_SOURCES); do
+        key="$key $extra=$(trinix-fetch --version "$extra")"
+    done
     # Skipping the *build* is safe; skipping the *install* is not.
     #
     # Stamps and staging trees live in a cache mount, but $SYSROOT and $ROOTFS

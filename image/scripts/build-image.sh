@@ -120,6 +120,19 @@ linux      /trinix/a/vmlinuz
 options    root=PARTUUID=$ROOT_A_UUID ro rootfstype=ext4 $console_args systemd.show_status=yes
 EOF
 
+# The rescue entry. PowerShell is the login shell, which means the interactive
+# path now depends on a .NET runtime starting correctly — so there has to be a
+# way in that does not. systemd's rescue target runs sulogin, which execs
+# root's shell, and root's shell is deliberately bash (see the trinix-system
+# recipe). Nothing here is Trinix-specific except the decision to put it in the
+# boot menu rather than expecting someone to know the incantation.
+cat > "$esp/loader/entries/trinix-a-rescue.conf" <<EOF
+title      Trinix $version (slot A, rescue shell)
+version    $kernel_release
+linux      /trinix/a/vmlinuz
+options    root=PARTUUID=$ROOT_A_UUID ro rootfstype=ext4 $console_args systemd.unit=rescue.target
+EOF
+
 esp_img="$WORK/esp.img"
 truncate -s "${ESP_SIZE_MIB}M" "$esp_img"
 mkfs.vfat -F 32 -n TRINIX-ESP "$esp_img" >/dev/null

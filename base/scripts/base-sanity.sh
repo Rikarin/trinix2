@@ -53,8 +53,14 @@ done < <(find "$ROOTFS" -name '*.so' -o -name '*.so.*')
 
 checked=0
 while IFS= read -r binary; do
-    # readelf failing is how a non-ELF file (a script, a config) is recognised;
-    # `|| true` keeps that from tripping pipefail and aborting the whole check.
+    # Only ELF objects. The obvious test — "did readelf produce output" — was
+    # true for far too much once .NET arrived: a managed assembly is a PE/COFF
+    # file, llvm-readelf parses those too, and every one of them reports the
+    # i386 machine type that the CLI header has carried since 2002. They are
+    # architecture-neutral IL and identical on both arches, so reading four
+    # magic bytes is both cheaper and more accurate than asking a parser.
+    [ "$(head -c 4 "$binary" | od -An -tx1 | tr -d ' \n')" = '7f454c46' ] || continue
+
     header="$(llvm-readelf --file-header "$binary" 2>/dev/null || true)"
     [ -n "$header" ] || continue
     checked=$((checked + 1))

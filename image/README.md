@@ -27,6 +27,12 @@ for someone to press a key — Phase 7's updater writes `trinix-b.conf`, with
 systemd-boot's boot-attempt counters in the filename, at the same moment it
 writes the slot.
 
+Slot A has two entries: the normal one, and a rescue entry that boots
+`systemd.unit=rescue.target`. That exists because PowerShell is the login
+shell, so the interactive path now depends on a .NET runtime starting
+correctly. The rescue target runs `sulogin`, which execs root's shell — and
+root's shell is deliberately bash.
+
 ## Why the root filesystem is read-only
 
 It is the decision the whole update model rests on: an image that cannot be

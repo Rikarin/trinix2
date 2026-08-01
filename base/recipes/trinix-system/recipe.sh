@@ -20,7 +20,7 @@
 #     until Phase 7 gives the image an installer that can seed one.
 
 RECIPE_SOURCE=""          # synthetic: this is Trinix's own content
-RECIPE_DEPENDS="glibc-runtime systemd shadow bash dash coreutils util-linux"
+RECIPE_DEPENDS="glibc-runtime systemd shadow bash dash coreutils util-linux powershell dotnet"
 
 # Nothing links against configuration, and the layout below actively disagrees
 # with the sysroot's: /var here is a symlink onto the writable partition, while
@@ -28,9 +28,9 @@ RECIPE_DEPENDS="glibc-runtime systemd shadow bash dash coreutils util-linux"
 RECIPE_ROOTFS_ONLY=1
 
 # Bumped by hand; there is no release engineering yet (Phase 8).
-TRINIX_VERSION='0.2.0'
-TRINIX_VERSION_ID='0.2'
-TRINIX_CODENAME='Phase 2'
+TRINIX_VERSION='0.3.0'
+TRINIX_VERSION_ID='0.3'
+TRINIX_CODENAME='Phase 3'
 
 # The default root password for a development image.
 #
@@ -41,6 +41,14 @@ TRINIX_CODENAME='Phase 2'
 # documented in the README rather than hidden here.
 TRINIX_ROOT_PASSWORD="${TRINIX_ROOT_PASSWORD:-trinix}"
 
+# The first user account. It exists in the image rather than being created by a
+# setup assistant because there is no setup assistant until Phase 8, and an
+# image whose only account is root would make PowerShell-as-the-login-shell
+# untestable — root deliberately keeps a POSIX shell.
+TRINIX_USER='trinix'
+TRINIX_USER_UID=1000
+TRINIX_USER_PASSWORD="${TRINIX_USER_PASSWORD:-trinix}"
+
 trinix_build() {
     install -d "$DESTDIR"/etc "$DESTDIR"/usr/lib "$DESTDIR"/usr/share
 
@@ -48,6 +56,7 @@ trinix_build() {
     _accounts
     _filesystems
     _console
+    _powershell
     _units
 }
 
@@ -98,12 +107,17 @@ _accounts() {
     # two Trinix images of the same version must be byte-identical and because
     # /data survives an A/B update that replaces everything else. A file owned
     # by GID 6 has to still mean `disk` after the update.
-    cat > "$DESTDIR/etc/passwd" <<'EOF'
+    # root's shell is bash, not pwsh, and that is the whole rescue story: when
+    # PowerShell is the thing that will not start, the account you use to fix
+    # it must not depend on PowerShell starting. Users get pwsh; root gets a
+    # shell that has no runtime, no JIT and no module path.
+    cat > "$DESTDIR/etc/passwd" <<EOF
 root:x:0:0:root:/root:/usr/bin/bash
 daemon:x:1:1:daemon:/usr/sbin:/usr/bin/false
 bin:x:2:2:bin:/bin:/usr/bin/false
 sys:x:3:3:sys:/dev:/usr/bin/false
 messagebus:x:18:18:D-Bus Message Bus:/nonexistent:/usr/bin/false
+$TRINIX_USER:x:$TRINIX_USER_UID:$TRINIX_USER_UID:Trinix User:/home/$TRINIX_USER:/usr/bin/pwsh
 nobody:x:65534:65534:Nobody:/:/usr/bin/false
 EOF
 
@@ -134,6 +148,7 @@ kvm:x:19:
 sgx:x:20:
 systemd-journal:x:21:
 users:x:100:
+$TRINIX_USER:x:$TRINIX_USER_UID:
 nogroup:x:65534:
 EOF
 
@@ -142,9 +157,11 @@ EOF
     # SHA-512 rather than login.defs' yescrypt default for exactly that reason:
     # it is the strongest method both sides are guaranteed to agree on. Only
     # the salt is fixed, so the image stays reproducible.
-    local root_hash
+    local root_hash user_hash
     root_hash="$(openssl passwd -6 -salt trinixdev "$TRINIX_ROOT_PASSWORD")"
-    [ -n "$root_hash" ] || { echo 'trinix-system: could not hash the root password' >&2; return 1; }
+    user_hash="$(openssl passwd -6 -salt trinixusr "$TRINIX_USER_PASSWORD")"
+    [ -n "$root_hash" ] && [ -n "$user_hash" ] \
+        || { echo 'trinix-system: could not hash the default passwords' >&2; return 1; }
 
     # Field 3 is "days since epoch of last change". A literal 0 would mean
     # 1970, which shadow reads as "expired"; 20000 is a date safely in the past
@@ -155,6 +172,7 @@ EOF
         printf 'bin:!*:20000::::::\n'
         printf 'sys:!*:20000::::::\n'
         printf 'messagebus:!*:20000::::::\n'
+        printf '%s:%s:20000:0:99999:7:::\n' "$TRINIX_USER" "$user_hash"
         printf 'nobody:!*:20000::::::\n'
     } > "$DESTDIR/etc/shadow"
     chmod 600 "$DESTDIR/etc/shadow"
@@ -162,8 +180,23 @@ EOF
     awk -F: '{ printf "%s:!::\n", $1 }' "$DESTDIR/etc/group" > "$DESTDIR/etc/gshadow"
     chmod 600 "$DESTDIR/etc/gshadow"
 
-    # PowerShell joins this list in Phase 3, when it becomes the default.
+    # The user's home directory, shipped rather than created at first boot.
+    #
+    # tmpfiles.d can create it and does — but only once /data is mounted and
+    # sysinit has run, and a home directory that appears slightly later than
+    # the first login prompt is a login that fails with "Unable to cd". So it
+    # is built here instead: /home does not exist in the rootfs yet, so this
+    # lands in the driver's factory image and is seeded into /data when the
+    # disk image is assembled. The tmpfiles rule stays as the answer for a
+    # /data that has been wiped.
+    install -d -m 0700 -o "$TRINIX_USER_UID" -g "$TRINIX_USER_UID" \
+        "$DESTDIR/home/$TRINIX_USER"
+
+    # chsh and anything else that validates a login shell reads this. pwsh is
+    # first because it is the default; the POSIX shells stay because /bin/sh
+    # scripting and the rescue path both depend on them.
     cat > "$DESTDIR/etc/shells" <<'EOF'
+/usr/bin/pwsh
 /bin/sh
 /usr/bin/sh
 /usr/bin/dash
@@ -224,6 +257,16 @@ esac
 
 umask 022
 
+# Components drop their environment here rather than editing this file: .NET
+# needs DOTNET_ROOT and its telemetry opt-out, and a recipe that owns a
+# variable should own the file that sets it. pwsh reads this too — it runs
+# /etc/profile through sh when started as a login shell — which is how a
+# PowerShell session inherits a POSIX-shaped environment.
+for _profile in /etc/profile.d/*.sh; do
+    [ -r "$_profile" ] && . "$_profile"
+done
+unset _profile
+
 if [ "$(id -u)" = 0 ]; then
     PS1='\u@\h:\w# '
 else
@@ -231,6 +274,56 @@ else
 fi
 export PS1
 EOF
+}
+
+# --- The interactive shell --------------------------------------------------
+_powershell() {
+    # $PSHOME/profile.ps1 — the all-users, all-hosts profile, which is the only
+    # one that exists on a fresh system where /home is empty. It lives under
+    # the powershell recipe's directory but belongs to the distribution, the
+    # same way /etc/login.defs belongs to Trinix rather than to shadow.
+    install -d "$DESTDIR/usr/lib/powershell"
+    cat > "$DESTDIR/usr/lib/powershell/profile.ps1" <<'EOF'
+# Trinix system-wide PowerShell profile.
+#
+# Deliberately short. A login shell that takes a second to start because its
+# profile is doing clever things is a login shell people learn to dread, and
+# pwsh's cold start is already the slowest part of reaching a prompt.
+
+# The administration surface. Imported rather than left to autoloading so that
+# Get-Command and tab completion know about it on the first keystroke.
+Import-Module Trinix.Management -ErrorAction SilentlyContinue
+
+# A prompt that answers "where am I and am I root", and nothing else. ~ for
+# home is the one abbreviation worth the string work.
+#
+# No external commands: a prompt runs before every single line a user types,
+# and forking `hostname` and `id` each time is both slower than it looks and
+# fragile — the first version of this used them and rendered an empty hostname
+# on a system where the binary was not where it expected.
+$script:TrinixHost = [Environment]::MachineName
+$script:TrinixMark = if ([Environment]::UserName -eq 'root') { '#' } else { '$' }
+
+function prompt {
+    $path = $PWD.Path
+    if ($HOME -and $path.StartsWith($HOME)) { $path = '~' + $path.Substring($HOME.Length) }
+    "$([char]27)[36m$([Environment]::UserName)@$script:TrinixHost$([char]27)[0m $path $script:TrinixMark "
+}
+
+# Conveniences a mac user reaches for without thinking. Aliases, not functions,
+# where PowerShell already has the cmdlet.
+Set-Alias -Name ll -Value Get-ChildItem -Option AllScope -ErrorAction SilentlyContinue
+Set-Alias -Name which -Value Get-Command -Option AllScope -ErrorAction SilentlyContinue
+
+if (Get-Module PSReadLine) {
+    Set-PSReadLineOption -EditMode Emacs -PredictionSource History -BellStyle None
+}
+EOF
+
+    # Where pwsh looks for modules that belong to the system rather than to a
+    # user. Trinix.Management is installed here by the C# publish stage; this
+    # only guarantees the directory exists so an empty install is not an error.
+    install -d "$DESTDIR/usr/lib/powershell/Modules"
 }
 
 # --- What starts at boot ----------------------------------------------------
@@ -282,7 +375,13 @@ _units() {
     cat > "$DESTDIR/etc/systemd/journald.conf" <<'EOF'
 [Journal]
 Storage=persistent
-# The serial console is the only way to see a failed boot in Phase 2.
+# Off, after trying it on. Forwarding the journal to the console duplicates
+# every message systemd already prints as a status line, and on an emulated
+# serial port that traffic is slow enough to measurably delay the boot it is
+# supposed to be reporting on. What made it unnecessary is that the units
+# whose output actually has to be visible — trinix-selftest.service — ask for
+# the console themselves with StandardOutput=journal+console, which is both
+# more precise and free for everything else.
 ForwardToConsole=no
 MaxLevelConsole=warning
 SystemMaxUse=256M
@@ -292,7 +391,7 @@ EOF
     # systemd's own var.conf; these are the directories that are Trinix's, not
     # systemd's, and the ones the symlinks above point at.
     install -d "$DESTDIR/usr/lib/tmpfiles.d"
-    cat > "$DESTDIR/usr/lib/tmpfiles.d/trinix.conf" <<'EOF'
+    cat > "$DESTDIR/usr/lib/tmpfiles.d/trinix.conf" <<EOF
 # The writable half of the system, created on first boot under /data.
 d /data              0755 root root -
 d /data/var          0755 root root -
@@ -301,7 +400,33 @@ d /data/root         0700 root root -
 d /data/srv          0755 root root -
 d /data/opt          0755 root root -
 d /data/Applications 0755 root root -
+
+# The first user's home. It cannot be shipped in the image — /home is a symlink
+# onto the partition that does not exist until first boot — so tmpfiles creates
+# it, which is also what would happen for any later account.
+d /data/home/$TRINIX_USER 0700 $TRINIX_USER $TRINIX_USER -
 EOF
+}
+
+# _installed_in_sysroot <absolute path> — is this executable really there?
+#
+# The subtlety is symlinks with absolute targets, which both pwsh and dotnet
+# are: /usr/bin/pwsh points at /usr/lib/powershell/pwsh, and the shell resolves
+# that against the *build container's* root, where it does not exist. Testing
+# -x on the link therefore says "missing" about a file that is present. One
+# level of indirection is all these have, and all this follows.
+_installed_in_sysroot() {
+    local path="$1" target
+
+    if [ -L "$SYSROOT$path" ]; then
+        target="$(readlink "$SYSROOT$path")"
+        case "$target" in
+            /*) path="$target" ;;
+            *)  path="${path%/*}/$target" ;;
+        esac
+    fi
+
+    [ -x "$SYSROOT$path" ]
 }
 
 trinix_check() {
@@ -320,12 +445,26 @@ trinix_check() {
     done
     [ -z "$missing" ] || { echo "trinix-system: missing$missing" >&2; return 1; }
 
-    # root's shell has to exist in the image, or the login prompt is reached
-    # and then immediately loses to "no such file or directory".
-    local shell
-    shell="$(awk -F: '$1 == "root" { print $7 }' "$DESTDIR/etc/passwd")"
-    [ -x "$SYSROOT$shell" ] \
-        || { echo "trinix-system: root's shell $shell is not in the sysroot" >&2; return 1; }
+    # Every login shell has to exist in the image, or the prompt is reached and
+    # then immediately loses to "no such file or directory". Checked for every
+    # account rather than just root, because the interesting one is now the
+    # user whose shell is pwsh.
+    local account shell
+    while IFS=: read -r account _ _ _ _ _ shell; do
+        case "$shell" in
+            /usr/bin/false|'') continue ;;
+        esac
+        _installed_in_sysroot "$shell" \
+            || { echo "trinix-system: $account's shell $shell is not in the sysroot" >&2; return 1; }
+    done < "$DESTDIR/etc/passwd"
+
+    # The Phase 3 exit criterion in static form: a user whose shell is
+    # PowerShell, and a root account whose shell is not — so that the rescue
+    # path does not depend on the thing being rescued.
+    grep -q "^$TRINIX_USER:.*:/usr/bin/pwsh\$" "$DESTDIR/etc/passwd" \
+        || { echo "trinix-system: $TRINIX_USER does not land in PowerShell" >&2; return 1; }
+    grep -q '^root:.*:/usr/bin/bash$' "$DESTDIR/etc/passwd" \
+        || { echo 'trinix-system: root no longer has a POSIX rescue shell' >&2; return 1; }
 
     # An empty second field would let anyone in without a password; a literal
     # '!' would let nobody in at all. Both are easy to produce by accident here.

@@ -27,6 +27,7 @@ Optional:
 | Symbol | Kind | Meaning |
 |---|---|---|
 | `RECIPE_HOST_ONLY` | var | `1` if this builds a tool for the *build* machine, not the target. |
+| `RECIPE_EXTRA_SOURCES` | var | Space-separated `sources.json` keys the recipe fetches itself with `trinix-fetch`, for pins the driver cannot unpack: one tarball per architecture (`dotnet-sdk-$TRINIX_ARCH`), an archive with no top-level directory, or a single file. Naming them here is what puts their pinned versions in the rebuild stamp. |
 | `RECIPE_ROOTFS_ONLY` | var | `1` to install into `$ROOTFS` but not `$SYSROOT`. For configuration that ships and that nothing builds against — and specifically for a recipe whose layout contradicts the sysroot's, as `trinix-system` does by making `/var` a symlink. |
 | `RECIPE_ARCH` | var | Restrict to `arm64` / `x86_64` when a component is genuinely arch-specific (rare — and a smell). |
 | `trinix_patch` | function | Replaces the default "apply `patches/*.patch` with `-p1`". For source surgery a diff expresses badly — deleting a vendored header, regenerating a build system. Runs once for the shared source tree, before either architecture builds. |
