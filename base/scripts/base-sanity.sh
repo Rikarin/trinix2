@@ -125,6 +125,47 @@ for link in var home root; do
     fi
 done
 
+# --- The graphical session ------------------------------------------------
+# The same kind of assertion, one layer up: the compositor is published by the
+# C# stage, its native half is built by a recipe, the seat comes from a third,
+# and the keymap database from a fourth. Nothing but this notices when one of
+# the four is missing, and the symptom in a VM is a black screen.
+log 'Graphical session'
+for essential in usr/lib/trinix/compositor/trinix-compositor \
+                 usr/lib/libtrinix-wlr.so.1 \
+                 usr/lib/libwlroots-0.19.so \
+                 usr/bin/seatd \
+                 usr/bin/trinix-wl-demo \
+                 usr/lib/systemd/system/trinix-compositor.service \
+                 usr/lib/systemd/system/seatd.service; do
+    [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
+done
+
+# libxkbcommon has the config root compiled in; if the database is not at that
+# path, every key produces a keycode and no keysym.
+#
+# Both halves, and separately, because /usr/share/X11/xkb is a symlink with an
+# absolute target — following it from here would resolve against the build
+# container's root, where it is not.
+if [ -e "$ROOTFS/usr/share/xkeyboard-config-2/symbols/us" ]; then
+    pass 'the XKB keymap database is installed'
+else
+    fail 'the XKB symbols are missing — no key would produce a character'
+fi
+if [ "$(readlink "$ROOTFS/usr/share/X11/xkb" 2>/dev/null)" = '/usr/share/xkeyboard-config-2' ]; then
+    pass '/usr/share/X11/xkb points at it'
+else
+    fail '/usr/share/X11/xkb does not point at the keymap database libxkbcommon was built for'
+fi
+
+# The compositor runs as `trinix`, and its only privilege is membership of the
+# group seatd hands devices to. Without the group it starts and finds no seat.
+if awk -F: '$1 == "_seatd"' "$ROOTFS/etc/group" 2>/dev/null | grep -q 'trinix'; then
+    pass 'the trinix user is in _seatd'
+else
+    fail 'the trinix user is not in the _seatd group — the compositor would get no devices'
+fi
+
 echo
 [ "$failures" -eq 0 ] || die "$failures rootfs check(s) failed for $TRINIX_ARCH"
 log "Base rootfs sanity passed for $TRINIX_ARCH ($(du -sh "$ROOTFS" | cut -f1))"

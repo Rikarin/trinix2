@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Trinix.Interop — the managed side of Trinix's native bindings.
+
+    Nothing here is generated. ClangSharp can produce bindings for wlroots'
+    headers, and what comes out is a faithful transcription of a struct layout
+    that changes every release, which is precisely the thing a managed
+    compositor should not depend on. So the boundary is a hand-written C
+    library with a flat, stable interface — base/recipes/trinix-wlr — and this
+    project is the declaration of that interface, which is small enough to read
+    in one sitting and to keep honest by hand.
+
+    The C library's own header, src/trinix-wlr.h in that recipe, is the
+    normative version of everything declared here.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Trinix.Interop</RootNamespace>
+    <AssemblyName>Trinix.Interop</AssemblyName>
+    <!-- Function pointers and raw char* — an interop assembly is where unsafe
+         belongs, and confining it here is the reason this is its own project. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

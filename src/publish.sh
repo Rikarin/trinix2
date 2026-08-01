@@ -42,10 +42,17 @@ common=(
 )
 
 daemon_out="$destdir/usr/lib/trinix/daemon"
+compositor_out="$destdir/usr/lib/trinix/compositor"
 module_out="$destdir/usr/lib/powershell/Modules/Trinix.Management"
-install -d "$daemon_out" "$module_out" "$destdir/usr/lib/systemd/system"
+install -d "$daemon_out" "$compositor_out" "$module_out" "$destdir/usr/lib/systemd/system"
 
 dotnet publish "$srcdir/Trinix.Daemon/Trinix.Daemon.csproj" "${common[@]}" --output "$daemon_out"
+
+# The compositor. Its native half — libtrinix-wlr — is not here: that is a base
+# recipe, because it cross-compiles against a sysroot containing wlroots, which
+# is exactly what this stage cannot do and what a recipe is for. The two meet
+# at /usr/lib, where the loader finds the library by soname.
+dotnet publish "$srcdir/Trinix.Compositor/Trinix.Compositor.csproj" "${common[@]}" --output "$compositor_out"
 
 # The module is loaded by pwsh, which is architecture-specific only in that it
 # has to be able to load the assembly; publishing with the same RID keeps the
@@ -65,16 +72,26 @@ install -m644 "$srcdir/Trinix.Management/selftest.ps1" "$destdir/usr/lib/trinix/
 install -m644 "$srcdir/Trinix.Daemon/trinixd.service" "$destdir/usr/lib/systemd/system/trinixd.service"
 install -m644 "$srcdir/Trinix.Management/trinix-selftest.service" \
               "$destdir/usr/lib/systemd/system/trinix-selftest.service"
+install -m644 "$srcdir/Trinix.Compositor/trinix-compositor.service" \
+              "$destdir/usr/lib/systemd/system/trinix-compositor.service"
 
 # Enabled here rather than by `systemctl enable` on the target, for the same
 # reason every other unit is: /etc is read-only on a running system, so the
 # symlink has to exist in the image. It goes under /usr because the unit is
 # part of the image rather than a local decision.
-install -d "$destdir/usr/lib/systemd/system/multi-user.target.wants"
+install -d "$destdir/usr/lib/systemd/system/multi-user.target.wants" \
+           "$destdir/usr/lib/systemd/system/graphical.target.wants"
 for unit in trinixd.service trinix-selftest.service; do
     ln -sfn "../$unit" "$destdir/usr/lib/systemd/system/multi-user.target.wants/$unit"
 done
+# The compositor belongs to graphical.target, which is what makes booting to a
+# text console a matter of choosing a different target rather than editing
+# anything.
+ln -sfn ../trinix-compositor.service \
+        "$destdir/usr/lib/systemd/system/graphical.target.wants/trinix-compositor.service"
 
-chmod 755 "$daemon_out/trinixd"
+chmod 755 "$daemon_out/trinixd" "$compositor_out/trinix-compositor"
 
-echo "==> published $(du -sh "$daemon_out" | cut -f1) of daemon, $(du -sh "$module_out" | cut -f1) of module"
+echo "==> published $(du -sh "$daemon_out" | cut -f1) of daemon," \
+     "$(du -sh "$compositor_out" | cut -f1) of compositor," \
+     "$(du -sh "$module_out" | cut -f1) of module"

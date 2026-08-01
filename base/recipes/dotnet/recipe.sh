@@ -46,6 +46,27 @@ trinix_build() {
     install -d "$DESTDIR/usr/bin"
     ln -sfn "$DOTNET_ROOT_DIR/dotnet" "$DESTDIR/usr/bin/dotnet"
 
+    # Where a *published application* finds the runtime.
+    #
+    # An apphost — the small native launcher `dotnet publish` puts next to the
+    # assembly — cannot resolve argv[0] to the runtime, because it is not in
+    # the runtime's directory. It looks at DOTNET_ROOT, then at this file, then
+    # at /usr/share/dotnet, and Trinix installs to /usr/lib/dotnet. Without the
+    # registration every unit has to carry an Environment=DOTNET_ROOT= line,
+    # and the one that forgets fails at startup with a wall of text about
+    # installing .NET onto a system that already has it.
+    #
+    # The suffix is the RID architecture, not Trinix's name for it.
+    local rid_arch
+    case "$TRINIX_ARCH" in
+        arm64)  rid_arch='arm64' ;;
+        x86_64) rid_arch='x64'   ;;
+    esac
+    install -d "$DESTDIR/etc/dotnet"
+    printf '%s' "$DOTNET_ROOT_DIR" > "$DESTDIR/etc/dotnet/install_location_$rid_arch"
+    # Hosts older than .NET 6 read the unsuffixed name. It costs one file.
+    printf '%s' "$DOTNET_ROOT_DIR" > "$DESTDIR/etc/dotnet/install_location"
+
     # Telemetry off, and off in the image rather than in a login profile: a
     # service started by systemd never reads a profile, and "phones home unless
     # a shell said otherwise" is not a defensible default for an OS.
@@ -83,6 +104,22 @@ trinix_check() {
         || { echo 'dotnet: no shared runtime' >&2; return 1; }
     ls -d "$DESTDIR$DOTNET_ROOT_DIR"/sdk/*/ >/dev/null 2>&1 \
         || { echo 'dotnet: no SDK' >&2; return 1; }
+
+    # The registration, checked because its absence is invisible until a
+    # published application starts — and then the failure looks like a missing
+    # .NET rather than a missing one-line file.
+    local file registered count=0
+    for file in "$DESTDIR/etc/dotnet"/install_location*; do
+        [ -f "$file" ] || continue
+        count=$((count + 1))
+        registered="$(cat "$file")"
+        [ "$registered" = "$DOTNET_ROOT_DIR" ] || {
+            echo "dotnet: ${file##*/} registers '$registered', not $DOTNET_ROOT_DIR" >&2
+            return 1
+        }
+    done
+    [ "$count" -eq 2 ] \
+        || { echo "dotnet: $count install-location file(s), expected 2" >&2; return 1; }
 
     # Now the question the plan actually raises: do Microsoft's binaries run
     # against *this* glibc?

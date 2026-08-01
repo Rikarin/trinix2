@@ -9,8 +9,9 @@ namespace Trinix.Management;
 /// <para>
 /// Every check here answers a question that has a right answer on a healthy
 /// Trinix system and a wrong one on a broken image: is the shell PowerShell,
-/// does .NET run, did the C# service start, is the root filesystem read-only
-/// as the A/B model requires, is <c>/data</c> mounted and writable.
+/// does .NET run, did the C# service start, did the C# compositor start, is
+/// the root filesystem read-only as the A/B model requires, is <c>/data</c>
+/// mounted and writable.
 /// </para>
 /// <para>
 /// It exists because Phase 7 needs it. An A/B update commits to a new slot
@@ -47,7 +48,8 @@ public sealed class TestTrinixSystemCommand : PSCmdlet
         {
             CheckPowerShell(),
             CheckDotNet(),
-            CheckService("trinixd"),
+            CheckService("Daemon", "trinixd"),
+            CheckService("Compositor", "trinix-compositor"),
             CheckImmutableRoot(),
             CheckWritableData(),
         };
@@ -109,7 +111,13 @@ public sealed class TestTrinixSystemCommand : PSCmdlet
         }
     }
 
-    private static TrinixCheck CheckService(string name)
+    // The compositor is on this list for the same reason the daemon is: an
+    // update that boots into a system with no display server has not worked,
+    // whatever else survived. Booting deliberately without one —
+    // systemd.unit=multi-user.target — is a choice made on the kernel command
+    // line, and a self-test that disagreed with it would be reporting on the
+    // wrong question.
+    private static TrinixCheck CheckService(string component, string name)
     {
         try
         {
@@ -119,14 +127,14 @@ public sealed class TestTrinixSystemCommand : PSCmdlet
 
             return new TrinixCheck
             {
-                Component = "Daemon",
+                Component = component,
                 Ok = state == "active",
                 Detail = $"{name} is {state}/{properties.GetValueOrDefault("SubState", "unknown")}",
             };
         }
         catch (InvalidOperationException e)
         {
-            return new TrinixCheck { Component = "Daemon", Ok = false, Detail = e.Message };
+            return new TrinixCheck { Component = component, Ok = false, Detail = e.Message };
         }
     }
 

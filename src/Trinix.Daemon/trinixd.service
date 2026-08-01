@@ -21,8 +21,15 @@ ExecStart=/usr/lib/trinix/daemon/trinixd
 Restart=on-failure
 RestartSec=5s
 
-# The .NET host reads these, and a service never sees a login profile.
-Environment=DOTNET_ROOT=/usr/lib/dotnet
+# A service never sees a login profile, so these are stated here.
+#
+# DOTNET_ROOT is not among them, deliberately. Trinix installs .NET to
+# /usr/lib/dotnet rather than the /usr/share/dotnet an apphost looks in by
+# default, and the answer is /etc/dotnet/install_location_<arch>, written by
+# the dotnet recipe — one registration for the whole system instead of a line
+# every unit has to remember. The unit that forgot it was the compositor, and
+# what it printed was a page of advice about installing .NET onto a machine
+# that already had it.
 Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
 Environment=DOTNET_NOLOGO=1
 

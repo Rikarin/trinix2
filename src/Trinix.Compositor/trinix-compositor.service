@@ -1,0 +1,81 @@
+# Trinix's window server.
+#
+# Not root, and that is the point of everything below. seatd owns the DRM
+# device and the input devices; membership of the _seatd group is what lets
+# this process ask for them, and it is the only privilege it has.
+#
+# There is no PAM here — see base/recipes/seatd/recipe.sh — so none of the
+# things a login normally provides arrive by themselves. XDG_RUNTIME_DIR is
+# created by RuntimeDirectory= rather than pam_systemd, and the seat comes from
+# seatd rather than logind.
+
+[Unit]
+Description=Trinix compositor
+Documentation=https://github.com/rikarin/trinix
+After=seatd.service systemd-udevd.service
+Requires=seatd.service
+# The display and the login prompt are different things and neither should wait
+# on the other; a compositor that fails must not take the system with it.
+Conflicts=getty@tty1.service
+After=getty@tty1.service
+
+[Service]
+# Ready is the moment the Wayland socket exists, which is the moment a client
+# could connect. Anything ordered after this can therefore assume a display.
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/lib/trinix/compositor/trinix-compositor --socket wayland-0
+
+User=trinix
+Group=trinix
+# _seatd for the seat. video and render are not needed while seatd is
+# mediating, and are listed nowhere for that reason: adding them would quietly
+# make the seat optional.
+SupplementaryGroups=_seatd
+
+# tty1 belongs to the display. The virtual-console getty is on tty2 — see the
+# trinix-system recipe — precisely so these two do not draw over each other.
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+StandardInput=tty-fail
+StandardOutput=journal
+StandardError=journal
+
+# /run/user/1000, which pam_systemd would normally create. Preserved across a
+# restart because the Wayland socket lives in it and clients hold paths into
+# it; RuntimeDirectoryMode is 0700 because a display socket is not public.
+RuntimeDirectory=user/1000
+RuntimeDirectoryMode=0700
+RuntimeDirectoryPreserve=yes
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=XDG_SESSION_TYPE=wayland
+# libseat tries logind before seatd. logind is present — systemd builds it —
+# but with no PAM stack nothing ever registers a session for it to find, so
+# that attempt can only fail. Naming the backend turns a confusing error at
+# startup into a decision recorded in a file.
+Environment=LIBSEAT_BACKEND=seatd
+# No GL in this image; see base/recipes/wlroots/recipe.sh. Naming the renderer
+# rather than letting wlroots autodetect makes a future Mesa an explicit
+# change rather than a surprise.
+Environment=WLR_RENDERER=pixman
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+
+# The runtime JITs, so pages must be able to become executable after they were
+# written. Same concession trinixd makes, and for the same reason.
+MemoryDenyWriteExecute=no
+NoNewPrivileges=yes
+ProtectHome=no
+# full rather than strict, unlike trinixd. The root filesystem is already
+# mounted read-only, so what strict would additionally protect is /run — and
+# /run is exactly where the display socket has to be created.
+ProtectSystem=full
+PrivateTmp=yes
+RestrictSUIDSGID=yes
+
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target

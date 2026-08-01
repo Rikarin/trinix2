@@ -124,7 +124,12 @@ EOF
     # The device groups are the ones udev's shipped rules chown nodes to. A
     # missing one is not fatal, it just makes udev log an error for every
     # matching device — which on a graphical system is every boot.
-    cat > "$DESTDIR/etc/group" <<'EOF'
+    #
+    # _seatd is the entire authorisation model for the display: seatd runs as
+    # root, owns the DRM device and every input device, and hands them out to
+    # whoever can talk to its socket — which is this group and nothing else.
+    # The compositor is in it, and that is why the compositor is not root.
+    cat > "$DESTDIR/etc/group" <<EOF
 root:x:0:
 daemon:x:1:
 bin:x:2:
@@ -147,6 +152,7 @@ messagebus:x:18:
 kvm:x:19:
 sgx:x:20:
 systemd-journal:x:21:
+_seatd:x:22:$TRINIX_USER
 users:x:100:
 $TRINIX_USER:x:$TRINIX_USER_UID:
 nogroup:x:65534:
@@ -329,21 +335,39 @@ EOF
 # --- What starts at boot ----------------------------------------------------
 _units() {
     install -d "$DESTDIR/etc/systemd/system" \
-               "$DESTDIR/etc/systemd/system/getty.target.wants"
+               "$DESTDIR/etc/systemd/system/getty.target.wants" \
+               "$DESTDIR/etc/systemd/system/multi-user.target.wants"
 
     # A read-only /etc means `systemctl enable` can never run on the target, so
     # every enablement symlink is made here. These are the same symlinks
     # `systemctl preset-all` would produce, written by hand because there is no
     # point at which the image is writable and running.
-    ln -sfn /usr/lib/systemd/system/multi-user.target "$DESTDIR/etc/systemd/system/default.target"
+    #
+    # graphical.target, from Phase 4 onwards. It requires multi-user.target, so
+    # nothing that worked before stops working — the serial console, the
+    # journal, trinixd and the self-test all still come up, and the compositor
+    # is added on top. Booting without a display is `systemd.unit=multi-user.target`
+    # on the kernel command line, which is a smaller thing to remember than an
+    # edit to a read-only filesystem.
+    ln -sfn /usr/lib/systemd/system/graphical.target "$DESTDIR/etc/systemd/system/default.target"
 
-    # The virtual console. The *serial* console is not enabled here: systemd's
-    # getty generator reads console= from the kernel command line and
-    # instantiates serial-getty@ for whatever it finds, which is what makes one
-    # image work on ttyAMA0 (arm64 virt) and ttyS0 (x86_64) without knowing
-    # which it booted on.
+    # The virtual console, on tty2 rather than tty1. tty1 is where the
+    # compositor draws, and seatd binds a session to whichever VT is active —
+    # which at boot is tty1. A getty there would be writing text into the
+    # framebuffer the compositor is composing into, and both would be right.
+    #
+    # The *serial* console is not enabled here: systemd's getty generator reads
+    # console= from the kernel command line and instantiates serial-getty@ for
+    # whatever it finds, which is what makes one image work on ttyAMA0 (arm64
+    # virt) and ttyS0 (x86_64) without knowing which it booted on.
     ln -sfn /usr/lib/systemd/system/getty@.service \
-            "$DESTDIR/etc/systemd/system/getty.target.wants/getty@tty1.service"
+            "$DESTDIR/etc/systemd/system/getty.target.wants/getty@tty2.service"
+
+    # seatd, which is how the compositor gets the display and the keyboard
+    # without being root. In multi-user rather than graphical.target.wants so
+    # that a text boot still has a working seat for anything that wants one.
+    ln -sfn /usr/lib/systemd/system/seatd.service \
+            "$DESTDIR/etc/systemd/system/multi-user.target.wants/seatd.service"
 
     # The dynamic linker cache is a /etc/ld.so.cache that cannot be written and
     # would buy nothing if it could: every shared library in the image is in
@@ -440,7 +464,8 @@ trinix_check() {
     # Testing them with -e asks whether the build container has a systemd, and
     # the answer is no.
     for required in etc/systemd/system/default.target \
-                    etc/systemd/system/getty.target.wants/getty@tty1.service; do
+                    etc/systemd/system/getty.target.wants/getty@tty2.service \
+                    etc/systemd/system/multi-user.target.wants/seatd.service; do
         [ -L "$DESTDIR/$required" ] || missing="$missing $required"
     done
     [ -z "$missing" ] || { echo "trinix-system: missing$missing" >&2; return 1; }
