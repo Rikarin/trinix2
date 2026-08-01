@@ -41,6 +41,16 @@ fi
 
 # --- Every shipped ELF is the right machine, and its needs are satisfiable --
 log 'Executables and libraries'
+
+# An index of every shared object in the rootfs, by soname. Not just
+# /usr/lib: systemd installs libsystemd-shared-257.so into /usr/lib/systemd and
+# finds it through a RUNPATH, and a check that only looked in the default
+# library path would call every systemd binary broken.
+declare -A available=()
+while IFS= read -r lib; do
+    available["${lib##*/}"]=1
+done < <(find "$ROOTFS" -name '*.so' -o -name '*.so.*')
+
 checked=0
 while IFS= read -r binary; do
     # readelf failing is how a non-ELF file (a script, a config) is recognised;
@@ -59,7 +69,7 @@ while IFS= read -r binary; do
     # recipe that linked against something only present in the build container.
     while IFS= read -r needed; do
         [ -n "$needed" ] || continue
-        [ -e "$ROOTFS/usr/lib/$needed" ] \
+        [ -n "${available[$needed]:-}" ] \
             || fail "${binary#"$ROOTFS"}: needs $needed, which is not in the rootfs"
     done < <(llvm-readelf --dynamic "$binary" 2>/dev/null | awk '/NEEDED/ {print $NF}' | tr -d '[]' || true)
 done < <(find "$ROOTFS" \( -type f -perm -u+x \) -o \( -type f -name '*.so*' \) | sort)
@@ -77,6 +87,37 @@ if [ -e "$ROOTFS/usr/bin/sh" ]; then
 else
     fail '/bin/sh is missing'
 fi
+
+# --- The boot path, end to end -------------------------------------------
+# These are the assertions no single recipe can make, because each one spans
+# two of them: the shell named in /etc/passwd is installed by a different
+# recipe from the one that names it, and the kernel knows nothing about the
+# init it will exec.
+log 'Boot path'
+for essential in usr/lib/systemd/systemd usr/bin/login usr/bin/agetty \
+                 usr/lib/trinix/vmlinuz etc/fstab etc/passwd etc/shadow; do
+    [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
+done
+
+if [ -e "$ROOTFS/etc/passwd" ]; then
+    root_shell="$(awk -F: '$1 == "root" { print $7 }' "$ROOTFS/etc/passwd")"
+    if [ -x "$ROOTFS$root_shell" ]; then
+        pass "root's shell ($root_shell) is installed"
+    else
+        fail "root's shell is $root_shell, which is not in the rootfs — login would succeed and then fail"
+    fi
+fi
+
+# /var, /home and /root are symlinks onto the writable partition. If one of
+# them is a real directory, some recipe installed into it and that content will
+# be shadowed the moment /data is mounted.
+for link in var home root; do
+    if [ -L "$ROOTFS/$link" ]; then
+        pass "/$link points at $(readlink "$ROOTFS/$link")"
+    else
+        fail "/$link is not a symlink onto /data — it would be shadowed at boot"
+    fi
+done
 
 echo
 [ "$failures" -eq 0 ] || die "$failures rootfs check(s) failed for $TRINIX_ARCH"

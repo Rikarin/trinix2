@@ -84,6 +84,11 @@ trinix_check() {
         CONFIG_CGROUPS CONFIG_SECCOMP_FILTER    # systemd will not start without
         CONFIG_DM_VERITY                        # the immutable base image
         CONFIG_EFI_STUB                         # how systemd-boot loads it
+        CONFIG_EXT4_FS                          # the root filesystem, built in:
+                                                # there is no initramfs to load
+                                                # a module from
+        CONFIG_INPUT_EVDEV                      # the Phase 4 compositor's only
+                                                # route to a keyboard
     )
     for option in "${required[@]}"; do
         grep -qx "$option=y" "$config" || missing="$missing $option"

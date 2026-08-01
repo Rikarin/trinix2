@@ -19,9 +19,21 @@
 # release, but not before the system has booted once.
 
 RECIPE_SOURCE="util-linux"
-RECIPE_DEPENDS="glibc-runtime zlib libcap"
+RECIPE_DEPENDS="glibc-runtime zlib libcap ncurses"
 
 trinix_build() {
+    # A `*-config` script on the build machine's PATH is a cross-compilation
+    # trap, and this is the one that springs it. util-linux looks for
+    # ncursesw6-config, finds the *host's*, and believes what it says — which
+    # on Debian is "-lncursesw -ltinfo", because Debian splits terminfo into
+    # its own library. Trinix's ncurses does not, so the link then fails on a
+    # library that was never going to exist.
+    #
+    # The sysroot ships its own copy of the script, describing the ncurses that
+    # was actually built. Naming it here is the difference between configuring
+    # against the target and configuring against the container.
+    export NCURSESW6_CONFIG="$SYSROOT/usr/bin/ncursesw6-config"
+
     # scanf_cv_alloc_modifier cannot be probed when cross-compiling: the test
     # runs a program. glibc supports the 'm' modifier, so answer it directly
     # rather than letting configure guess 'as'.
@@ -55,6 +67,18 @@ trinix_build() {
         --disable-chfn-chsh \
         --disable-makeinstall-chown \
         --disable-makeinstall-setuid \
+        `# Terminal handling, answered explicitly rather than autodetected.` \
+        `# Left to configure this becomes order-dependent: build util-linux` \
+        `# before ncurses and it finds neither; build it after and it links` \
+        `# -ltinfo, which Trinix's ncurses does not produce (no --with-termlib,` \
+        `# because one library for terminfo and curses is one fewer thing to` \
+        `# get out of step). The same rootfs would then build or not depending` \
+        `# on what was already in the sysroot — which is the opposite of the` \
+        `# reproducibility the pinned-sources discipline is for.` \
+        --without-tinfo \
+        --with-ncursesw \
+        --without-slang \
+        --without-readline \
         scanf_cv_alloc_modifier=ms
 
     make -j"$JOBS"
