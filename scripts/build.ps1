@@ -195,6 +195,9 @@ function Build-Base {
     $dockerArgs += @(
         '--build-arg', "TOOLCHAIN_IMAGE=$toolchainImage",
         '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
+        # The C# publish stage installs into the rootfs by path, and the path
+        # is per-triple.
+        '--build-arg', "TRINIX_TRIPLE=$($Architecture.Triple)",
         '--tag', $image, '--load', $root
     )
 

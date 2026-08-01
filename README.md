@@ -8,10 +8,11 @@ conventional package database.
 The full design, and the reasoning behind each decision, is in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Status: Phase 2.** The base system cross-builds — kernel, glibc, systemd,
+**Status: Phase 3.** The base system cross-builds — kernel, glibc, systemd,
 shadow, coreutils and the rest — and assembles into a signed-later, A/B-capable
-GPT disk image that boots to a login prompt in QEMU. Phase 3, .NET and
-PowerShell as first-class citizens, is next.
+GPT disk image. Booting it and logging in lands you in **PowerShell**, with
+.NET, Trinix's own `Trinix.Management` cmdlets, and a C# system service running
+under systemd. Phase 4, the graphics stack and the C# compositor, is next.
 
 ## Requirements
 
@@ -83,15 +84,42 @@ docker run --rm -it -v "$PWD:/work" trinix/host-tools:dev bash
 ```
 
 QEMU runs *from a container* too, so the VM tier needs nothing on the Mac
-either. You get a serial console, `trinix login:`, and a root password of
-`trinix` — a development image sets a known credential rather than an
-unguessable one nobody can log in with; Phase 8's installer is where a real one
-gets set. `Ctrl-a x` quits.
+either. You get a serial console and `trinix login:`. Two accounts, both with
+the password `trinix` — a development image sets a known credential rather than
+an unguessable one nobody can log in with, and Phase 8's installer is where a
+real one gets set:
 
-`./scripts/run-vm.ps1 -Arch arm64 -Check` boots unattended and asserts that the
-login prompt appeared, which is the Phase 2 exit criterion as a test. There is
-no accelerator — Docker Desktop does not pass virtualisation through — so
-expect a couple of minutes for arm64 and considerably longer for x86_64.
+| Account | Shell | For |
+|---|---|---|
+| `trinix` | **PowerShell** | The system as it is meant to be used |
+| `root` | bash | Rescue, deliberately: the account you fix PowerShell from must not need PowerShell to start |
+
+The boot menu carries a rescue entry for the same reason, and `Ctrl-a x` quits.
+
+Once logged in:
+
+```powershell
+Get-TrinixSystem                  # identity, kernel, which A/B slot booted
+Test-TrinixSystem                 # is this image healthy? one row per check
+Get-TrinixService -Failed         # anything not running as intended
+Get-TrinixNetworkInterface        # addresses, via iproute2's JSON output
+dotnet --version
+```
+
+`Test-TrinixSystem` also runs at every boot as `trinix-selftest.service`, which
+is where Phase 7's A/B updater will get its answer to "did the slot I just
+wrote actually work". `trinixd` is the first C# system service — `Type=notify`,
+logging to the journal, hosted by systemd like any other.
+
+Two unattended checks, each a phase's exit criteria expressed as a test:
+
+```bash
+./scripts/run-vm.ps1 -Arch arm64 -Check        # boots to a login prompt
+./scripts/run-vm.ps1 -Arch arm64 -LoginCheck   # logs in, lands in pwsh, runs .NET
+```
+
+There is no accelerator — Docker Desktop does not pass virtualisation through —
+so expect a couple of minutes for arm64 and considerably longer for x86_64.
 
 See [image/README.md](image/README.md) for the partition layout and why the
 root filesystem is read-only.

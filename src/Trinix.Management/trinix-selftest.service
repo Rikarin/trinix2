@@ -1,0 +1,45 @@
+# Checks that the system this slot booted is actually healthy.
+#
+# On a conventional distribution this would be a curiosity. On an A/B image
+# system it is the mechanism the whole update model rests on: an update is only
+# committed if the image it installed boots into a working system, and "working"
+# has to be something a machine can evaluate. Test-TrinixSystem is that
+# definition — the shell, .NET, the C# service, and the read-only-root
+# invariant — and this unit is where it gets evaluated.
+#
+# Phase 7 orders systemd-bless-boot.service after boot-complete.target, so a
+# failure here becomes an automatic rollback rather than a line in a log.
+
+[Unit]
+Description=Trinix system self-test
+Documentation=https://github.com/rikarin/trinix
+After=multi-user.target
+# boot-complete.target is systemd's passive marker for "the boot got far enough
+# to be considered good". Being ordered before it is what will let the A/B
+# updater treat this result as the verdict on a new slot.
+Before=boot-complete.target
+Wants=boot-complete.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# -NoProfile because a self-test must not depend on anything a login profile
+# does, and -NonInteractive so a prompt is an error rather than a hang.
+#
+# -File rather than -Command: systemd expands `$` in ExecStart= itself, so an
+# inline PowerShell script arrives with its variables already eaten.
+ExecStart=/usr/bin/pwsh -NoProfile -NonInteractive -File /usr/lib/trinix/selftest.ps1
+
+# journal+console: the result belongs in the journal, and on the console
+# because during bring-up the serial line is often the only thing anyone can
+# see — including the unattended boot check, which reads exactly this.
+StandardOutput=journal+console
+StandardError=journal+console
+
+Environment=DOTNET_CLI_TELEMETRY_OPTOUT=1
+Environment=DOTNET_NOLOGO=1
+Environment=POWERSHELL_TELEMETRY_OPTOUT=1
+
+[Install]
+WantedBy=multi-user.target

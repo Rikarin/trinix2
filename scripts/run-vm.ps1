@@ -24,6 +24,12 @@
         over an interactive console. This is the Phase 2 exit criterion as a test,
         and what CI runs.
 
+    .PARAMETER LoginCheck
+        Everything -Check does, and then log in and drive the session: assert that
+        it lands in PowerShell, that `dotnet --version` works, that Trinix's own
+        module loaded, and that the C# system service is running. The Phase 3 exit
+        criteria as a test.
+
     .PARAMETER Timeout
         Seconds to wait in -Check mode before giving up. Default: the per-architecture
         value in image/scripts/run-qemu.sh.
@@ -50,6 +56,7 @@ param(
     [string]$Arch,
 
     [switch]$Check,
+    [switch]$LoginCheck,
     [int]$Timeout = 0,
 
     [string]$ImageDir = 'out',
@@ -107,9 +114,11 @@ Invoke-TrinixDocker @buildArgs
 
 # --- Boot ------------------------------------------------------------------
 
+$unattended = $Check -or $LoginCheck
+
 $dockerArgs = @('run', '--rm')
 
-if ($Check) {
+if ($unattended) {
     # No TTY: the console is redirected to a log file that the container writes
     # into the mounted image directory, so it survives for inspection afterwards.
     $dockerArgs += @('--init')
@@ -118,20 +127,25 @@ if ($Check) {
 }
 
 $dockerArgs += @('--volume', "${imageDirPath}:/images", $vmImage, $Arch)
-if ($Check) {
-    $dockerArgs += '--check'
-    if ($Timeout -gt 0) { $dockerArgs += "$Timeout" }
-}
 
-if ($Check) {
+if ($LoginCheck) {
+    $dockerArgs += '--login-check'
+} elseif ($Check) {
+    $dockerArgs += '--check'
+}
+if ($unattended -and $Timeout -gt 0) { $dockerArgs += "$Timeout" }
+
+if ($LoginCheck) {
+    Write-Host "Booting trinix-$Arch.img, logging in, and checking PowerShell and .NET..." -ForegroundColor Cyan
+} elseif ($Check) {
     Write-Host "Booting trinix-$Arch.img and waiting for a login prompt..." -ForegroundColor Cyan
 } else {
-    Write-Host "Booting trinix-$Arch.img. Ctrl-a x quits; log in as root." -ForegroundColor Cyan
+    Write-Host "Booting trinix-$Arch.img. Ctrl-a x quits; log in as trinix (PowerShell) or root (bash)." -ForegroundColor Cyan
 }
 
 Invoke-TrinixDocker @dockerArgs
 
-if ($Check) {
+if ($unattended) {
     Write-Host ''
     Write-Host "Boot check passed for $Arch." -ForegroundColor Green
     Write-Host "  console log: $(Join-Path $imageDirPath "serial-$Arch.log")"

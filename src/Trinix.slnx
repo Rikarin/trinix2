@@ -1,2 +1,4 @@
 <Solution>
+  <Project Path="Trinix.Daemon/Trinix.Daemon.csproj" />
+  <Project Path="Trinix.Management/Trinix.Management.csproj" />
 </Solution>

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.10
 #
-# Phase 2 — the base system.
+# Phase 2 — the base system. Phase 3 adds Trinix's own C# components on top.
 #
 # Starts from the per-arch toolchain image, so the sysroot and the
 # self-configuring clang driver are already in place, and cross-builds the base
@@ -10,9 +10,36 @@
 
 ARG TOOLCHAIN_IMAGE=trinix/toolchain-arm64:dev
 
+# ---------------------------------------------------------------------------
+# Trinix's own C# — trinixd and the Trinix.Management module.
+#
+# A stage rather than a base recipe, and the distinction is real: recipes
+# cross-compile pinned upstream tarballs with clang against a sysroot, while
+# `dotnet publish -r linux-arm64` is a first-class cross-compile that needs
+# neither. The deciding argument is staleness. A recipe is rebuilt when its
+# own directory changes; BuildKit rebuilds this when a .cs file does, which is
+# the behaviour source code actually needs.
+#
+# Its own stage, and early, so that editing C# does not rebuild the base system
+# and vice versa.
+# ---------------------------------------------------------------------------
+FROM ${TOOLCHAIN_IMAGE} AS dotnet-apps
+
+ARG TRINIX_ARCH=arm64
+
+COPY global.json /work/global.json
+COPY src /work/src
+
+# NUGET_PACKAGES is set in the build container; the cache mount keeps restores
+# off the network on every rebuild without baking packages into a layer.
+RUN --mount=type=cache,target=/nuget,sharing=locked \
+    chmod +x /work/src/publish.sh \
+ && /work/src/publish.sh "${TRINIX_ARCH}" /publish
+
 FROM ${TOOLCHAIN_IMAGE} AS base
 
 ARG TRINIX_ARCH=arm64
+ARG TRINIX_TRIPLE=aarch64-trinix-linux-gnu
 ENV TRINIX_ARCH=${TRINIX_ARCH}
 ENV TRINIX_ROOTFS=/opt/trinix/rootfs
 ENV TRINIX_RECIPES=/usr/local/lib/trinix/recipes
@@ -35,6 +62,12 @@ RUN --mount=type=bind,from=sources,target=/sources-seed,ro \
     chmod +x /usr/local/lib/trinix/scripts/build-base.sh \
  && trinix-seed-sources \
  && /usr/local/lib/trinix/scripts/build-base.sh "${TRINIX_ARCH}"
+
+# Trinix's own components land in the finished rootfs. Last, so that they
+# overlay the base rather than being something the base has to know about —
+# and after the driver's layout finalisation, since nothing here belongs in
+# the mutable directories it relocates.
+COPY --from=dotnet-apps /publish/ /opt/trinix/rootfs/${TRINIX_TRIPLE}/
 
 # ---------------------------------------------------------------------------
 # Phase 2 acceptance gate for the rootfs itself. The real exit criterion is a

@@ -147,9 +147,12 @@ jobs:
         shell: pwsh
         run: ./scripts/build.ps1 -Stage base,image -Arch ${{ matrix.arch }} -Verify -Progress plain
 
-      - name: Boot it
+      # -LoginCheck is a superset of -Check: it waits for the same login prompt
+      # and then proves the session is what Phase 3 claims — PowerShell, a
+      # working .NET, Trinix's own cmdlets, and the C# service running.
+      - name: Boot it, log in, and check PowerShell and .NET
         shell: pwsh
-        run: ./scripts/run-vm.ps1 -Arch ${{ matrix.arch }} -Check
+        run: ./scripts/run-vm.ps1 -Arch ${{ matrix.arch }} -LoginCheck
 
       - uses: actions/upload-artifact@v4
         with:
