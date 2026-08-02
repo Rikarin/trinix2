@@ -156,6 +156,40 @@ if ($GraphicsCheck) {
 
 Invoke-TrinixDocker @dockerArgs
 
+if (-not $unattended) {
+    <#
+        Drain whatever the terminal said back.
+
+        An interactive session hands this terminal to the guest, and the guest
+        asks it questions — PSReadLine wants the cursor position, terminfo wants
+        the device attributes. The terminal answers, but by the time it does,
+        QEMU has exited and nothing is reading its input any more. The replies
+        sit in the tty buffer until the shell that ran this script reads them as
+        a command line, and because a device-attributes reply contains '>', what
+        that shell does with them is create a file whose name is the rest of the
+        answer. Four of them appeared in the repository root before anyone
+        worked out where they came from.
+
+        Reading until the terminal has been quiet for a moment consumes the
+        replies before the prompt can.
+    #>
+    if (-not [Console]::IsInputRedirected) {
+        try {
+            $quietUntil = [DateTime]::UtcNow.AddMilliseconds(250)
+            while ([DateTime]::UtcNow -lt $quietUntil) {
+                if ([Console]::KeyAvailable) {
+                    [void][Console]::ReadKey($true)
+                    $quietUntil = [DateTime]::UtcNow.AddMilliseconds(250)
+                } else {
+                    Start-Sleep -Milliseconds 20
+                }
+            }
+        } catch [System.InvalidOperationException] {
+            # No console to drain — nothing was handed over, so nothing replied.
+        }
+    }
+}
+
 if ($unattended) {
     Write-Host ''
     Write-Host "Boot check passed for $Arch." -ForegroundColor Green

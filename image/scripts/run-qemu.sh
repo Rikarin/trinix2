@@ -340,8 +340,18 @@ if [ "$check" -eq 1 ]; then
     wait "$qemu_pid" 2>/dev/null || true
     exec 3>&-
 
+    # `cat -v`, not `cat`. A serial console carries escape sequences, and some
+    # of them are *questions*: the guest's PowerShell asks where the cursor is,
+    # terminfo asks what the terminal is. Replaying those bytes onto whatever
+    # terminal is reading this output makes that terminal answer — into its own
+    # stdin, long after the thing that asked has exited. The shell then reads
+    # the answer as a command line, and since the answers contain '>', it
+    # creates a file named after the rest of the reply.
+    #
+    # Escaping them costs the colour and costs nothing else; the unescaped
+    # article is still in $serial_log for anyone who wants it.
     echo '--- serial console ---'
-    cat "$serial_log" 2>/dev/null || true
+    cat -v "$serial_log" 2>/dev/null || true
     echo '--- end of console ---'
 
     if [ -s "$qemu_log" ]; then
