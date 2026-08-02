@@ -70,6 +70,27 @@ RUN --mount=type=bind,from=sources,target=/sources-seed,ro \
 COPY --from=dotnet-apps /publish/ /opt/trinix/rootfs/${TRINIX_TRIPLE}/
 
 # ---------------------------------------------------------------------------
+# The trust store: the certificate authorities this image will accept signed
+# applications from.
+#
+# Part of the image rather than of the writable half, and that is the whole
+# mechanism. The root filesystem is read-only and replaced as a unit by an A/B
+# update, so adding a trusted root means shipping a new image — which is itself
+# signed. There is deliberately no way to add one at runtime.
+#
+# A named build context rather than a path in the repository, because these are
+# generated per machine and never committed: scripts/build.ps1 stages
+# signing/trusted/ (committed anchors) and signing/local/ (this developer's)
+# into one directory and passes it as `trust`.
+# ---------------------------------------------------------------------------
+COPY --from=trust / /opt/trinix/rootfs/${TRINIX_TRIPLE}/usr/share/trinix/pki/roots/
+
+# The reference application, as a signed distribution image, so that a booted
+# system has something to install without a network. `trinix-bundle install`
+# reads it from here; see docs/app-bundles.md.
+COPY --from=apps *.tdi /opt/trinix/rootfs/${TRINIX_TRIPLE}/usr/share/trinix/applications/
+
+# ---------------------------------------------------------------------------
 # Phase 2 acceptance gate for the rootfs itself. The real exit criterion is a
 # boot, which needs QEMU rather than Docker — this checks the things that can be
 # checked without one, so a broken rootfs is caught before the VM stage.

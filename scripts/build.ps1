@@ -16,6 +16,7 @@
           host-tools  Phase 0  the build container itself
           llvm        Phase 1  the single Clang/LLD install, shared by all targets
           toolchain   Phase 1  per-arch sysroot: headers, mini-GCC, glibc, LLVM runtimes
+          app         Phase 6  signed .app bundles, packaged as .tdi images
           base        Phase 2  cross-built base system into a clean rootfs
           image       Phase 2  bootable, signed A/B disk image
 
@@ -48,7 +49,7 @@
 #>
 [CmdletBinding(SupportsShouldProcess)]
 param(
-    [ValidateSet('host-tools', 'llvm', 'toolchain', 'base', 'image', 'all')]
+    [ValidateSet('host-tools', 'llvm', 'toolchain', 'app', 'base', 'image', 'all')]
     [string[]]$Stage = @('host-tools'),
 
     [ValidateSet('arm64', 'x86_64', 'both')]
@@ -74,7 +75,7 @@ Import-Module (Join-Path $PSScriptRoot 'lib' 'Trinix.Build.psm1') -Force
 $root = Get-TrinixRoot
 $architectures = Get-TrinixArch -Name $Arch
 
-if ($Stage -contains 'all') { $Stage = @('host-tools', 'llvm', 'toolchain', 'base', 'image') }
+if ($Stage -contains 'all') { $Stage = @('host-tools', 'llvm', 'toolchain', 'app', 'base', 'image') }
 
 Assert-TrinixDocker
 
@@ -101,6 +102,23 @@ function Get-CommonBuildArgs {
 function Get-SourcesContextArg {
     $cache = Get-TrinixSourceCache
     return @('--build-context', "sources=$cache")
+}
+
+# The roots a built image will accept signatures from, staged into one directory
+# and handed to BuildKit as a named context. Recomputed on every build rather
+# than cached: adding a trust anchor should take effect on the next build, and
+# a stale trust store is a failure whose symptom (an application refusing to
+# launch) points nowhere near its cause.
+function Get-TrustContextArg {
+    $staged = Update-TrinixTrustStore -OutputDirectory $outputDir
+    return @('--build-context', "trust=$staged")
+}
+
+# Where the app stage's output lands, and where the base stage picks it up.
+function Get-AppsDirectory {
+    $apps = Join-Path $outputDir 'apps'
+    if (-not (Test-Path $apps)) { New-Item -ItemType Directory -Path $apps -Force | Out-Null }
+    return $apps
 }
 
 # --- Stage: host-tools (Phase 0) -------------------------------------------
@@ -181,10 +199,67 @@ function Build-Toolchain {
     Write-Host "Sysroot ready: $image ($($Architecture.Triple))" -ForegroundColor Green
 }
 
+# --- Stage: app (Phase 6, per architecture) ---------------------------------
+
+function Build-App {
+    param([Parameter(Mandatory)][psobject]$Architecture)
+
+    Assert-HostToolsCurrent
+    Assert-TrinixSigningIdentity -HostToolsImage "$ImagePrefix/host-tools:$Tag"
+    $identity = Get-TrinixSigningIdentity
+
+    $apps = Join-Path (Get-AppsDirectory) $Architecture.Name
+
+    # The gate is its own target, run before the export, the same way the image
+    # stage does it: BuildKit exports from a single target only, and the export
+    # is then a cache hit apart from the copy.
+    if ($Verify) {
+        $verifyArgs = Get-CommonBuildArgs -Target 'app-verify' -Dockerfile 'app.Dockerfile'
+        $verifyArgs += Get-TrustContextArg
+        $verifyArgs += @(
+            '--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag",
+            '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
+            '--secret', "id=trinix-signing-certificate,src=$($identity.Certificate)",
+            '--secret', "id=trinix-signing-key,src=$($identity.Key)",
+            $root
+        )
+        Invoke-TrinixDocker @verifyArgs
+    }
+
+    $dockerArgs = Get-CommonBuildArgs -Target 'app-export' -Dockerfile 'app.Dockerfile'
+    $dockerArgs += Get-TrustContextArg
+    $dockerArgs += @(
+        '--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag",
+        '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
+        '--secret', "id=trinix-signing-certificate,src=$($identity.Certificate)",
+        '--secret', "id=trinix-signing-key,src=$($identity.Key)",
+        '--output', "type=local,dest=$apps",
+        $root
+    )
+    Invoke-TrinixDocker @dockerArgs
+
+    Write-Host ''
+    Write-Host "Applications packaged: $apps" -ForegroundColor Green
+    Get-ChildItem -Path $apps -Filter '*.tdi' -ErrorAction SilentlyContinue |
+        ForEach-Object { Write-Host ("  {0,-24} {1,10:N0} bytes" -f $_.Name, $_.Length) }
+}
+
 # --- Stage: base (Phase 2, per architecture) --------------------------------
+
+# The base image carries both the trust store and the reference application, so
+# a base built before the applications exist would boot a system with nothing to
+# install. Built here for the same reason host-tools is: it is a cache hit when
+# nothing changed, and the alternative is a stage that silently does not reflect
+# an edit.
+function Assert-TrinixAppsCurrent {
+    param([Parameter(Mandatory)][psobject]$Architecture)
+    Build-App -Architecture $Architecture
+}
 
 function Build-Base {
     param([Parameter(Mandatory)][psobject]$Architecture)
+
+    Assert-TrinixAppsCurrent -Architecture $Architecture
 
     $toolchainImage = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
     $image = "$ImagePrefix/base-$($Architecture.Name):$Tag"
@@ -192,6 +267,8 @@ function Build-Base {
 
     $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'base.Dockerfile'
     $dockerArgs += Get-SourcesContextArg
+    $dockerArgs += Get-TrustContextArg
+    $dockerArgs += @('--build-context', "apps=$(Join-Path (Get-AppsDirectory) $Architecture.Name)")
     $dockerArgs += @(
         '--build-arg', "TOOLCHAIN_IMAGE=$toolchainImage",
         '--build-arg', "TRINIX_ARCH=$($Architecture.Name)",
@@ -264,6 +341,12 @@ foreach ($stageName in $Stage) {
         'toolchain' {
             foreach ($a in $architectures) {
                 Build-Toolchain -Architecture $a
+                $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = $a.Name; Result = 'built' })
+            }
+        }
+        'app' {
+            foreach ($a in $architectures) {
+                Build-App -Architecture $a
                 $summary.Add([pscustomobject]@{ Stage = $stageName; Arch = $a.Name; Result = 'built' })
             }
         }

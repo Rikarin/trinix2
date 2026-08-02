@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# run-qemu <arm64|x86_64> [--check | --login-check | --graphics-check [seconds]] [qemu args...]
+# run-qemu <arm64|x86_64> [--check | --login-check | --graphics-check | --app-check [seconds]] [qemu args...]
 #
 # Boots a Trinix disk image. Runs inside the vm container (docker/vm.Dockerfile),
 # with the image directory bind-mounted at /images.
 #
-# Four modes:
+# Five modes:
 #   interactive       serial console on stdio — this is `run-vm.ps1 -Arch arm64`
 #   --check           boot unattended and assert that a login prompt appeared.
 #                     The Phase 2 exit criterion as a test.
@@ -14,6 +14,9 @@
 #   --graphics-check  run a Wayland client under the C# compositor and read the
 #                     verdict out of the journal. The Phase 4 exit criterion as
 #                     a test.
+#   --app-check       install a signed .tdi, launch the application it contains,
+#                     then tamper with it and assert that it stops launching.
+#                     The Phase 6 exit criterion as a test.
 
 set -euo pipefail
 
@@ -23,11 +26,13 @@ shift
 check=0
 login_check=0
 graphics_check=0
+app_check=0
 timeout_s=0
 case "${1:-}" in
     --check)          check=1; shift ;;
     --login-check)    check=1; login_check=1; shift ;;
     --graphics-check) check=1; graphics_check=1; shift ;;
+    --app-check)      check=1; app_check=1; shift ;;
 esac
 if [ "$check" -eq 1 ]; then
     case "${1:-}" in
@@ -298,6 +303,74 @@ if [ "$check" -eq 1 ]; then
         fi
     fi
 
+    if [ "$reached" -eq 1 ] && [ "$app_check" -eq 1 ]; then
+        # Phase 6, end to end, from a root shell: install a signed distribution
+        # image, launch what came out of it, break it, and watch it stop
+        # launching. Everything here prints to the console rather than to the
+        # journal, because unlike the compositor these are commands rather than
+        # services.
+        echo '==> logging in as root to install and launch a signed application'
+        type_line 'root'
+
+        if await 'Password' 120; then
+            type_line "${TRINIX_ROOT_PASSWORD:-trinix}"
+
+            if await 'root@trinix' 240; then
+                # The image ships one .tdi under /usr/share/trinix/applications,
+                # which is what makes this checkable without a network.
+                type_line 'trinix-bundle install /usr/share/trinix/applications/Hello.tdi'
+                if ! await 'BUNDLE-INSTALLED io.trinix.hello' 300; then
+                    verdict="$verdict install"
+                fi
+
+                # fs-verity is asserted rather than merely hoped for: the data
+                # filesystem is created with the feature on purpose (see
+                # image/scripts/build-image.sh) and the kernel is configured for
+                # it, so "could not seal" here means one of those two regressed.
+                if ! await 'sealed by the kernel' 60; then
+                    verdict="$verdict fs-verity"
+                fi
+
+                # The launcher verifies, then execs. TRINIX-HELLO-OK is printed
+                # by the application itself, which means the whole chain held:
+                # signature, Merkle tree, erofs round trip, apphost, runtime.
+                type_line 'trinix-open /Applications/Hello.app'
+                if ! await 'TRINIX-HELLO-OK' 300; then
+                    verdict="$verdict launch"
+                fi
+
+                # And that the bundle location reached the application through
+                # execve, which is the one part of the launch contract that
+                # nothing else would notice the absence of.
+                if ! await 'bundle=/Applications/Hello.app' 60; then
+                    verdict="$verdict bundle-environment"
+                fi
+
+                # Tamper. Adding a file rather than editing one, deliberately:
+                # fs-verity has just made every existing file unwritable, so an
+                # edit would be refused by the kernel and would prove nothing
+                # about the signature. A new file is something the kernel has no
+                # opinion about and the signed manifest does.
+                type_line 'echo tampered > /Applications/Hello.app/Contents/Resources/extra.txt'
+                type_line 'trinix-open /Applications/Hello.app'
+                if ! await 'refused to launch' 300; then
+                    verdict="$verdict tamper-detected"
+                fi
+
+                # Belt and braces: the refusal has to be the *last* word. An
+                # implementation that printed a refusal and then launched anyway
+                # would satisfy every assertion above.
+                if [ "$(grep -ac 'TRINIX-HELLO-OK' "$serial_log" 2>/dev/null || echo 0)" -gt 1 ]; then
+                    verdict="$verdict tampered-bundle-launched"
+                fi
+            else
+                verdict="$verdict root-shell"
+            fi
+        else
+            verdict="$verdict root-password-prompt"
+        fi
+    fi
+
     if [ "$reached" -eq 1 ] && [ "$login_check" -eq 1 ]; then
         # Two logins, in this order for a reason.
         #
@@ -410,7 +483,9 @@ if [ "$check" -eq 1 ]; then
         exit 1
     fi
 
-    if [ "$graphics_check" -eq 1 ]; then
+    if [ "$app_check" -eq 1 ]; then
+        echo "PASS: trinix-$arch installed, launched and then refused a tampered application in ${SECONDS}s."
+    elif [ "$graphics_check" -eq 1 ]; then
         echo "PASS: trinix-$arch ran a Wayland client under the C# compositor in ${SECONDS}s."
     elif [ "$login_check" -eq 1 ]; then
         echo "PASS: trinix-$arch logged in to PowerShell with a working .NET in ${SECONDS}s."

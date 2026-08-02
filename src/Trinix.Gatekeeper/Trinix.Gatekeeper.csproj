@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    trinix-open — the launcher, and the point at which Trinix decides whether
+    code may execute.
+
+    Its own executable rather than a verb on trinix-bundle, for two reasons.
+    It is on the path of every single application launch, so it should load the
+    smallest possible amount of code; and it is what a Files app runs on a
+    double-click, which means its name and its argument list are part of the
+    platform's surface rather than a detail of a packaging tool.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>trinix-open</AssemblyName>
+    <RootNamespace>Trinix.Gatekeeper</RootNamespace>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- execve is the whole point of this program: a launcher that stayed
+         alive as a parent process would put a .NET runtime between the session
+         and every application, and would have to forward signals, exit codes
+         and the controlling terminal to be correct. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Trinix.Bundle/Trinix.Bundle.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -5,7 +5,10 @@
 # overlaid onto the target rootfs:
 #
 #   usr/lib/trinix/daemon/            trinixd and its dependencies
-#   usr/lib/systemd/system/           its unit, and the symlink that enables it
+#   usr/lib/trinix/compositor/        the Wayland compositor
+#   usr/lib/trinix/bundle/            trinix-bundle and trinix-open
+#   usr/bin/                          symlinks onto the two above
+#   usr/lib/systemd/system/           their units, and the enablement symlinks
 #   usr/lib/powershell/Modules/       Trinix.Management
 #
 # Why this is a script and not a base recipe: recipes cross-compile pinned
@@ -43,8 +46,10 @@ common=(
 
 daemon_out="$destdir/usr/lib/trinix/daemon"
 compositor_out="$destdir/usr/lib/trinix/compositor"
+bundle_out="$destdir/usr/lib/trinix/bundle"
 module_out="$destdir/usr/lib/powershell/Modules/Trinix.Management"
-install -d "$daemon_out" "$compositor_out" "$module_out" "$destdir/usr/lib/systemd/system"
+install -d "$daemon_out" "$compositor_out" "$bundle_out" "$module_out" \
+           "$destdir/usr/lib/systemd/system" "$destdir/usr/bin"
 
 dotnet publish "$srcdir/Trinix.Daemon/Trinix.Daemon.csproj" "${common[@]}" --output "$daemon_out"
 
@@ -57,6 +62,20 @@ dotnet publish "$srcdir/Trinix.Compositor/Trinix.Compositor.csproj" "${common[@]
 # The module is loaded by pwsh, which is architecture-specific only in that it
 # has to be able to load the assembly; publishing with the same RID keeps the
 # two in step and avoids shipping a second copy of the runtime.
+# The application-format tools. Both go in one directory on purpose: they share
+# Trinix.Bundle, and two publish directories would mean two copies of the
+# assembly that decides whether code may run — which is one copy too many for
+# something whose whole value is being the single answer to that question.
+dotnet publish "$srcdir/Trinix.Bundle.Tool/Trinix.Bundle.Tool.csproj" "${common[@]}" --output "$bundle_out"
+dotnet publish "$srcdir/Trinix.Gatekeeper/Trinix.Gatekeeper.csproj" "${common[@]}" --output "$bundle_out"
+
+# On PATH under their own names. Symlinks rather than wrappers: an apphost
+# resolves its assembly directory from argv[0] after following symlinks, so
+# there is nothing for a wrapper to fix and a shell script in front of the
+# launcher would put a process between the session and every application.
+ln -sfn ../lib/trinix/bundle/trinix-bundle "$destdir/usr/bin/trinix-bundle"
+ln -sfn ../lib/trinix/bundle/trinix-open   "$destdir/usr/bin/trinix-open"
+
 dotnet publish "$srcdir/Trinix.Management/Trinix.Management.csproj" "${common[@]}" --output "$module_out"
 
 # A published module directory is full of framework assemblies that pwsh
@@ -90,8 +109,10 @@ done
 ln -sfn ../trinix-compositor.service \
         "$destdir/usr/lib/systemd/system/graphical.target.wants/trinix-compositor.service"
 
-chmod 755 "$daemon_out/trinixd" "$compositor_out/trinix-compositor"
+chmod 755 "$daemon_out/trinixd" "$compositor_out/trinix-compositor" \
+          "$bundle_out/trinix-bundle" "$bundle_out/trinix-open"
 
 echo "==> published $(du -sh "$daemon_out" | cut -f1) of daemon," \
      "$(du -sh "$compositor_out" | cut -f1) of compositor," \
+     "$(du -sh "$bundle_out" | cut -f1) of bundle tools," \
      "$(du -sh "$module_out" | cut -f1) of module"

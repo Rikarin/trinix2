@@ -166,6 +166,46 @@ else
     fail 'the trinix user is not in the _seatd group — the compositor would get no devices'
 fi
 
+# --- The application format -----------------------------------------------
+# Three things assembled by three different stages, and an image missing any one
+# of them boots to a system that cannot install or launch an application while
+# looking perfectly healthy: the tools come from the C# publish stage, the trust
+# store from a build context, and the reference application from the app stage.
+log 'Applications'
+for essential in usr/lib/trinix/bundle/trinix-bundle \
+                 usr/lib/trinix/bundle/trinix-open \
+                 usr/lib/trinix/bundle/Trinix.Bundle.dll; do
+    [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
+done
+
+# The symlinks are what put the two on PATH; -L rather than -e, because they
+# point at absolute paths that resolve against the build container's root.
+for link in usr/bin/trinix-bundle usr/bin/trinix-open; do
+    [ -L "$ROOTFS/$link" ] && pass "$link" || fail "$link is not a symlink onto /usr/lib/trinix/bundle"
+done
+
+# An empty trust store is the failure this section exists for. The launcher
+# treats it as a broken system rather than as a rejected application, but only
+# after someone has booted the image to find out.
+# `|| true` on both counts, and it is load-bearing. This script runs under
+# `set -euo pipefail`, and find exits non-zero when the directory is missing —
+# which is exactly the case being checked for. Without it the assignment fails,
+# errexit aborts, and the check that was supposed to report a missing trust
+# store instead reports nothing at all.
+roots="$(find "$ROOTFS/usr/share/trinix/pki/roots" -name '*.pem' 2>/dev/null | wc -l || true)"
+if [ "$roots" -gt 0 ]; then
+    pass "the trust store carries $roots root certificate(s)"
+else
+    fail 'the trust store is empty — no application could ever be launched'
+fi
+
+images="$(find "$ROOTFS/usr/share/trinix/applications" -name '*.tdi' 2>/dev/null | wc -l || true)"
+if [ "$images" -gt 0 ]; then
+    pass "$images distribution image(s) shipped in /usr/share/trinix/applications"
+else
+    fail 'no .tdi was shipped — the app stage did not run before this one'
+fi
+
 echo
 [ "$failures" -eq 0 ] || die "$failures rootfs check(s) failed for $TRINIX_ARCH"
 log "Base rootfs sanity passed for $TRINIX_ARCH ($(du -sh "$ROOTFS" | cut -f1))"

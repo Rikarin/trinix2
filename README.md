@@ -8,14 +8,24 @@ conventional package database.
 The full design, and the reasoning behind each decision, is in
 [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
-**Status: Phase 4.** The base system cross-builds — kernel, glibc, systemd,
-shadow, coreutils and the rest — and assembles into a signed-later, A/B-capable
-GPT disk image. Booting it and logging in lands you in **PowerShell**, with
-.NET, Trinix's own `Trinix.Management` cmdlets, and a C# system service running
-under systemd. On top of that sits the graphics stack — libdrm, libinput,
+**Status: Phase 6.** The base system cross-builds — kernel, glibc, systemd,
+shadow, coreutils and the rest — and assembles into an A/B-capable GPT disk
+image. Booting it and logging in lands you in **PowerShell**, with .NET,
+Trinix's own `Trinix.Management` cmdlets, and a C# system service running under
+systemd. On top of that sits the graphics stack — libdrm, libinput,
 libxkbcommon, wlroots, seatd — and **a Wayland compositor written in C#**,
-which runs stock Wayland clients in windows. Phase 5, Vixen and the system
-shell, is next.
+which runs stock Wayland clients in windows, with two Trinix protocol
+extensions for decorations and a mac-style global menu bar
+([the contract](docs/vixen-platform-contract.md)).
+
+Phase 6 adds the **application format**: `.app` bundles with a signed Merkle
+manifest, `.tdi` distribution images (EROFS + a signed footer), a development
+PKI, and a Gatekeeper-analog launcher. Build, sign, package, install, launch —
+and a tampered bundle refuses to start. See
+[docs/app-bundles.md](docs/app-bundles.md).
+
+Still to come: Vixen and the system shell (Phase 5's remaining items), then the
+package manager and A/B updates (Phase 7).
 
 ## Requirements
 
@@ -64,6 +74,19 @@ ESP with systemd-boot, two root slots and a writable `/data`. Their `-Verify`
 gates check what can be checked without booting: that every shipped binary is
 the right machine type with all its libraries present, and that the firmware
 will find a bootloader that names a root partition which actually exists.
+
+Applications are their own stage, and `base` builds it first — the image carries
+both the trust store and a signed reference application:
+
+```bash
+./scripts/build.ps1 -Stage app -Arch arm64 -Verify
+```
+
+That publishes `Hello.app`, seals it with a Merkle manifest signed by this
+machine's development certificate, packages it as `out/apps/arm64/Hello.tdi`,
+and — under `-Verify` — asserts that each of the seven ways of tampering with it
+is detected. The development PKI is created on first use under `signing/local/`
+and is never committed; see [docs/app-bundles.md](docs/app-bundles.md).
 
 ### Why GCC is still here
 
@@ -150,12 +173,13 @@ The virtual-console login moved to `tty2` when the compositor took `tty1`. The
 serial console is unaffected, and `systemd.unit=multi-user.target` boots without
 a display at all.
 
-Three unattended checks, each a phase's exit criteria expressed as a test:
+Four unattended checks, each a phase's exit criteria expressed as a test:
 
 ```bash
 ./scripts/run-vm.ps1 -Arch arm64 -Check          # boots to a login prompt
 ./scripts/run-vm.ps1 -Arch arm64 -LoginCheck     # logs in, lands in pwsh, runs .NET
 ./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # runs a Wayland client under the compositor
+./scripts/run-vm.ps1 -Arch arm64 -AppCheck       # installs, launches and then refuses a tampered app
 ```
 
 There is no accelerator — Docker Desktop does not pass virtualisation through —

@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Trinix.Bundle — the app format, its signatures, and the .tdi container.
+
+    This assembly decides whether code is allowed to run, which is the reason
+    for its one unusual rule: it references nothing outside the shared
+    framework. Every other Trinix component is free to take a NuGet dependency
+    (trinixd takes three), but the component that answers "may this execute"
+    must not be able to be compromised by a package feed. X.509, ECDSA, SHA-256
+    and PEM are all in System.Security.Cryptography, which ships with the
+    runtime the image already installs.
+
+    That rule is what decided against CMS/PKCS#7 as the signature container,
+    which the Phase 6 plan named. System.Security.Cryptography.Pkcs is a
+    separate package and is *not* in the shared framework — confirmed against
+    the runtime Trinix installs, not assumed — so a CMS signature would put
+    nuget.org in the trust path of the launcher. The alternative costs little:
+    there is exactly one signer, nothing else consumes these signatures, and
+    the signed object is a file whose bytes are signed literally, so there is
+    no canonicalisation to get wrong. See docs/app-bundles.md.
+  -->
+
+  <PropertyGroup>
+    <RootNamespace>Trinix.Bundle</RootNamespace>
+    <AssemblyName>Trinix.Bundle</AssemblyName>
+    <!-- The fs-verity ioctl is the only unsafe surface, and it is confined to
+         FsVerity.cs. Everything else here is managed. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+</Project>

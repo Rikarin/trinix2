@@ -13,5 +13,8 @@ docs
 *.img
 *.tdi
 *.qcow2
+# No key material in a build context, ever. The trust anchors an image needs
+# reach it as a named build context (see scripts/build.ps1), and the signing key
+# as a BuildKit secret — neither of which comes through here.
 signing/**/*.key
 signing/**/*.pem

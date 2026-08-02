@@ -1,0 +1,15 @@
+{
+  "schema": "trinix.bundle/1",
+  "identifier": "io.trinix.hello",
+  "name": "Hello",
+  "version": "1.0.0",
+  "shortVersion": "1.0",
+  "entryPoint": "Contents/Bin/hello",
+  "minimumSystemVersion": "0.3",
+  "permissions": [
+    "files.home"
+  ],
+  "categories": [
+    "developer"
+  ]
+}

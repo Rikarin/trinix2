@@ -14,6 +14,17 @@
 /signing/**/*.pfx
 !/signing/**/*.pub.pem
 
+# ...and signing/local/ is excluded whole, which is deliberately the last word
+# here. It holds the development authority this machine generated: a private key
+# and the certificate that pairs with it. The public half is committable in
+# principle — the rule above would let it through — but committing it would
+# publish a trust anchor whose private key exists on exactly one laptop, and
+# every other clone would then trust a key it can never use and never revoke.
+#
+# Git cannot re-include a file whose parent directory is excluded, so this rule
+# wins over the negation above regardless of ordering. That is the intent.
+/signing/local/
+
 # .NET
 bin/
 obj/

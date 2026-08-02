@@ -15,7 +15,14 @@ firmware boots without any further installation step.
 | 1 | `trinix-esp` | FAT32, 256 MiB | systemd-boot, loader entries, the kernel |
 | 2 | `trinix-root-a` | ext4, sized to content + 25 % | The base system, mounted **read-only** |
 | 3 | `trinix-root-b` | ext4-sized, empty | Target of the first A/B update |
-| 4 | `trinix-data` | ext4, 1 GiB | `/var`, `/home`, `/root`, `/Applications` |
+| 4 | `trinix-data` | ext4 (`-O verity`), 1 GiB | `/var`, `/home`, `/root`, `/Applications` |
+
+`/data` carries the ext4 `verity` feature because `/Applications` is on it:
+installing an application asks the kernel to seal each of its files with
+fs-verity, and the feature has to be in the superblock, which is decided when
+the filesystem is created and never afterwards. Without it the installer still
+works and reports that it could not seal anything — a considerably more
+confusing thing to read than one `mke2fs` flag is to add.
 
 The root slots are identical in size on purpose: the partition table is written
 once, at install time, and every future update has to fit inside the slot this
@@ -43,8 +50,23 @@ for what it costs (users baked in at build time, `/var` and friends as symlinks
 onto `/data`, a transient machine ID).
 
 dm-verity, which is what makes "read-only" mean *verified* rather than merely
-inconvenient to modify, arrives with the signing work in Phase 6. The kernel is
-already configured for it.
+inconvenient to modify, is **not** here yet. Phase 6 built the signing
+infrastructure and applied it to applications
+([docs/app-bundles.md](../docs/app-bundles.md)); the base image is still merely
+read-only.
+
+The reason it did not land with the rest of the signing work is structural
+rather than a matter of effort. Turning it on means computing a hash tree over
+slot A, finding somewhere to put it, signing the root hash, and passing
+`dm-mod.create=` on the kernel command line — Trinix has no initramfs, so the
+device has to be assembled by the kernel itself before root is mounted. Every
+one of those is written by the thing that also writes the loader entry and
+flips the active slot, which is Phase 7's updater. Building it twice, once
+without an updater and once with, would mean the version without one was never
+exercised by an update.
+
+The kernel is already configured for it (`CONFIG_DM_VERITY`), and the A/B layout
+above is what it needs.
 
 ## Why nothing is mounted
 

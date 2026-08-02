@@ -194,7 +194,14 @@ fi
 
 data_img="$WORK/data.img"
 truncate -s "${DATA_SIZE_MIB}M" "$data_img"
+# -O verity, because /Applications is here. Installing an application asks the
+# kernel to seal each of its files with fs-verity, which turns "this bundle
+# verified a moment ago" into "this bundle cannot be modified" — and the feature
+# has to be present in the superblock, which is decided here and nowhere else.
+# Without it the installer still works and says why it could not seal anything,
+# which is a considerably more confusing thing to read than this line is to add.
 mke2fs -q -t ext4 \
+       -O verity \
        -L trinix-data \
        -U "$DATA_UUID" \
        -E "hash_seed=$DATA_UUID,root_owner=0:0" \

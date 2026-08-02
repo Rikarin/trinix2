@@ -36,6 +36,11 @@
         find a display, did a client that knows nothing about it get a window on
         that display. The Phase 4 exit criterion as a test.
 
+    .PARAMETER AppCheck
+        Everything -Check does, and then install a signed .tdi distribution image,
+        launch the application inside it, tamper with the installed bundle and
+        assert that it stops launching. The Phase 6 exit criterion as a test.
+
     .PARAMETER Timeout
         Seconds to wait in -Check mode before giving up. Default: the per-architecture
         value in image/scripts/run-qemu.sh.
@@ -64,6 +69,7 @@ param(
     [switch]$Check,
     [switch]$LoginCheck,
     [switch]$GraphicsCheck,
+    [switch]$AppCheck,
     [int]$Timeout = 0,
 
     [string]$ImageDir = 'out',
@@ -121,7 +127,7 @@ Invoke-TrinixDocker @buildArgs
 
 # --- Boot ------------------------------------------------------------------
 
-$unattended = $Check -or $LoginCheck -or $GraphicsCheck
+$unattended = $Check -or $LoginCheck -or $GraphicsCheck -or $AppCheck
 
 $dockerArgs = @('run', '--rm')
 
@@ -135,7 +141,9 @@ if ($unattended) {
 
 $dockerArgs += @('--volume', "${imageDirPath}:/images", $vmImage, $Arch)
 
-if ($GraphicsCheck) {
+if ($AppCheck) {
+    $dockerArgs += '--app-check'
+} elseif ($GraphicsCheck) {
     $dockerArgs += '--graphics-check'
 } elseif ($LoginCheck) {
     $dockerArgs += '--login-check'
@@ -144,7 +152,9 @@ if ($GraphicsCheck) {
 }
 if ($unattended -and $Timeout -gt 0) { $dockerArgs += "$Timeout" }
 
-if ($GraphicsCheck) {
+if ($AppCheck) {
+    Write-Host "Booting trinix-$Arch.img and installing, launching and tampering with a signed application..." -ForegroundColor Cyan
+} elseif ($GraphicsCheck) {
     Write-Host "Booting trinix-$Arch.img and running a Wayland client under the compositor..." -ForegroundColor Cyan
 } elseif ($LoginCheck) {
     Write-Host "Booting trinix-$Arch.img, logging in, and checking PowerShell and .NET..." -ForegroundColor Cyan

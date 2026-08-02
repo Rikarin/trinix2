@@ -179,7 +179,13 @@ contract:
 | A shell that draws the menu bar | Menus are transported and held, not yet displayed | The rest of Phase 5 |
 | Minimise, and a dock to minimise into | `control_activated(minimise)` is delivered and the shell does nothing with it | The rest of Phase 5 |
 | Fractional scaling | Integer scale factors only | When something needs it |
-| Screen capture, portals, PipeWire | No screenshots, no screen sharing | Phase 6 onwards |
+| Screen capture, portals, PipeWire | No screenshots, no screen sharing | Not scheduled |
+
+One gap on this list has since closed: **how an application is packaged,
+signed and installed** is now defined and implemented — see
+[docs/app-bundles.md](app-bundles.md). A Vixen application is a `.app` bundle
+whose `Contents/Bin` holds its executable, published as a signed `.tdi`. Nothing
+about the format is Vixen-specific.
 
 The first two are the ones that matter today: the menu bar protocol is
 implemented end to end and the shell holds a complete menu model, but it cannot
@@ -189,7 +195,23 @@ draw the words in it until there is a font in the image.
 
 Both protocols are `v1` and unstable, in the sense wayland-protocols means:
 breaking changes bump the interface version and the old version is not kept.
-Trinix ships the compositor and the applications together in one signed image,
-so there is no window in which a client and a compositor of different versions
-can meet — which is what makes an unstable protocol an acceptable thing to
-depend on here, and would not be true of a general-purpose desktop.
+
+That was defensible while the compositor and every client shipped together in
+one image. Phase 6 changed it: applications are now signed `.tdi` distribution
+images installed independently of the system
+([docs/app-bundles.md](app-bundles.md)), so a client built against `v1` can meet
+a compositor that has moved on.
+
+Two things keep that honest for now, and neither is a permanent answer:
+
+- `Info.json` carries `minimumSystemVersion`, checked against the image's
+  `VERSION_ID`. It is coarse — it says "this needs at least that system", not
+  "this needs `trinix_shell_v1`".
+- A client that binds a global the compositor no longer advertises fails at
+  startup rather than misbehaving, because these globals are bound by name and
+  version at connect time.
+
+The real answer is that a protocol an out-of-tree application depends on has to
+stop being unstable, and both of these will freeze before there is a third-party
+application to break. Until then, a version bump means rebuilding and re-signing
+every bundle.

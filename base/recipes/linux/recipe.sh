@@ -100,6 +100,9 @@ trinix_check() {
                                                 # route to a keyboard
         CONFIG_DRM_VIRTIO_GPU                   # and its only route to a screen
         CONFIG_VT                               # no VTs, no seat0, no session
+        CONFIG_EROFS_FS                         # what a .tdi distribution image
+        CONFIG_BLK_DEV_LOOP                     # is, and how it gets mounted
+        CONFIG_FS_VERITY                        # what seals an installed app
     )
     for option in "${required[@]}"; do
         grep -qx "$option=y" "$config" || missing="$missing $option"
