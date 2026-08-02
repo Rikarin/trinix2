@@ -14,21 +14,35 @@
 # "does a real toolkit work"; this is the answer to "does the protocol".
 
 RECIPE_SOURCE=""
-RECIPE_DEPENDS="wayland wayland-protocols wayland-scanner"
+RECIPE_DEPENDS="wayland wayland-protocols wayland-scanner trinix-protocols libxkbcommon"
 
 trinix_build() {
-    local protocol_dir
+    local protocol_dir trinix_protocols
     protocol_dir="$(pkg-config --variable=pkgdatadir wayland-protocols)"
+    trinix_protocols="$(pkg-config --variable=pkgdatadir trinix-protocols)"
     local xdg_shell="$protocol_dir/stable/xdg-shell/xdg-shell.xml"
     [ -f "$xdg_shell" ] || { echo "trinix-wl-demo: no xdg-shell.xml at $xdg_shell" >&2; return 1; }
 
     # The same generator every other Wayland component in the image used. It
     # runs on the build machine and emits target-independent C.
+    local generated=()
     wayland-scanner client-header "$xdg_shell" "$BUILDDIR/xdg-shell-client-protocol.h"
     wayland-scanner private-code  "$xdg_shell" "$BUILDDIR/xdg-shell-protocol.c"
+    generated+=("$BUILDDIR/xdg-shell-protocol.c")
+
+    # Trinix's own extensions, from the same XML the compositor generates its
+    # server side from — which is the point of shipping the protocol as a
+    # package rather than as two copies.
+    local protocol name
+    for protocol in "$trinix_protocols"/*.xml; do
+        name="$(basename "$protocol" .xml)"
+        wayland-scanner client-header "$protocol" "$BUILDDIR/$name-client-protocol.h"
+        wayland-scanner private-code  "$protocol" "$BUILDDIR/$name-protocol.c"
+        generated+=("$BUILDDIR/$name-protocol.c")
+    done
 
     local cflags=() ldflags=()
-    mapfile -t cflags  < <(pkg-config --cflags wayland-client | tr ' ' '\n' | grep -v '^$')
+    mapfile -t cflags  < <(pkg-config --cflags wayland-client xkbcommon | tr ' ' '\n' | grep -v '^$')
     mapfile -t ldflags < <(pkg-config --libs   wayland-client | tr ' ' '\n' | grep -v '^$')
 
     # -Wno-missing-field-initializers: designated initialisers for a struct
@@ -38,7 +52,7 @@ trinix_build() {
         "${cflags[@]}" \
         -o "$BUILDDIR/trinix-wl-demo" \
         "$RECIPE_DIR/src/demo.c" \
-        "$BUILDDIR/xdg-shell-protocol.c" \
+        "${generated[@]}" \
         "${ldflags[@]}"
 
     install -d "$DESTDIR/usr/bin"

@@ -138,6 +138,99 @@ public static unsafe partial class Wlroots
 
         /// <summary>An input device was added: type and name.</summary>
         public delegate* unmanaged<int, byte*, void> InputAdded;
+
+        /// <summary>
+        /// A client declared how it wants to be decorated: window, shadow style,
+        /// corner radius. From <c>trinix-shell-v1</c>.
+        /// </summary>
+        public delegate* unmanaged<IntPtr, uint, int, void> ToplevelDecorated;
+
+        /// <summary>
+        /// A window control's hit zone moved: window, control, x, y, width,
+        /// height. A zero-sized zone means the control was withdrawn.
+        /// </summary>
+        public delegate* unmanaged<IntPtr, uint, int, int, int, int, void> ToplevelControl;
+
+        /// <summary>A menu is about to be delivered; discard what was held for this window.</summary>
+        public delegate* unmanaged<IntPtr, void> MenuBegin;
+
+        /// <summary>
+        /// One menu item, in tree order: window, id, parent, kind, state,
+        /// keysym, modifiers, label. Parents always arrive before their
+        /// children, so a receiver can build its tree in a single pass.
+        /// </summary>
+        public delegate* unmanaged<IntPtr, uint, uint, uint, uint, uint, uint, byte*, void> MenuItem;
+
+        /// <summary>The menu is complete: window and the number of items delivered.</summary>
+        public delegate* unmanaged<IntPtr, uint, void> MenuEnd;
+
+        /// <summary>The window withdrew its menu bar.</summary>
+        public delegate* unmanaged<IntPtr, void> MenuRemoved;
+    }
+
+    /// <summary>A window control, from <c>trinix-shell-v1</c>.</summary>
+    public enum WindowControl
+    {
+        /// <summary>Dismiss the window.</summary>
+        Close = 0,
+
+        /// <summary>Hide the window to the dock.</summary>
+        Minimise = 1,
+
+        /// <summary>Toggle the window's ideal size.</summary>
+        Zoom = 2,
+
+        /// <summary>The pointer is over no control.</summary>
+        None = -1,
+    }
+
+    /// <summary>What the pointer is doing to a window control.</summary>
+    public enum ControlHover
+    {
+        /// <summary>The pointer is no longer over any control.</summary>
+        Left = 0,
+
+        /// <summary>The pointer is over the named control.</summary>
+        Entered = 1,
+
+        /// <summary>The named control is being held down.</summary>
+        Pressed = 2,
+    }
+
+    /// <summary>What kind of thing a menu item is, from <c>trinix-menu-v1</c>.</summary>
+    public enum MenuItemKind
+    {
+        /// <summary>An ordinary item.</summary>
+        Item = 0,
+
+        /// <summary>A divider.</summary>
+        Separator = 1,
+
+        /// <summary>A container for further items.</summary>
+        Submenu = 2,
+
+        /// <summary>An item with an independent on/off state.</summary>
+        Checkbox = 3,
+
+        /// <summary>One of a mutually exclusive set.</summary>
+        Radio = 4,
+    }
+
+    /// <summary>Menu item state bits.</summary>
+    [Flags]
+    public enum MenuItemState : uint
+    {
+        /// <summary>Not selectable and not ticked.</summary>
+        None = 0,
+
+        /// <summary>Selectable.</summary>
+        Enabled = 1,
+
+        /// <summary>Ticked.</summary>
+        Checked = 2,
+
+        /// <summary>In the model but not shown.</summary>
+        Hidden = 4,
     }
 
     /// <summary>
@@ -265,6 +358,64 @@ public static unsafe partial class Wlroots
         NativePointerPassthrough(server, timeMsec);
 
     /// <summary>
+    /// Which control's hit zone contains this point, in window-geometry-local
+    /// coordinates, or <see cref="WindowControl.None"/>.
+    /// </summary>
+    /// <param name="toplevel">A window handle.</param>
+    /// <param name="x">Horizontal position within the window.</param>
+    /// <param name="y">Vertical position within the window.</param>
+    /// <returns>The control under the point.</returns>
+    public static WindowControl ToplevelControlAt(IntPtr toplevel, int x, int y) =>
+        (WindowControl)NativeToplevelControlAt(toplevel, x, y);
+
+    /// <summary>Tells a client the pointer entered, moved between, or left its controls.</summary>
+    /// <param name="toplevel">A window handle.</param>
+    /// <param name="control">The control under the pointer.</param>
+    /// <param name="state">What the pointer is doing.</param>
+    public static void ToplevelSendControlHover(IntPtr toplevel, WindowControl control,
+                                                ControlHover state) =>
+        NativeToplevelSendControlHover(toplevel, (int)control, (uint)state);
+
+    /// <summary>Tells a client the user operated one of its controls.</summary>
+    /// <remarks>
+    /// A request, not an instruction: closing is the application's decision,
+    /// exactly as with <c>xdg_toplevel.close</c>.
+    /// </remarks>
+    /// <param name="toplevel">A window handle.</param>
+    /// <param name="control">The control that was operated.</param>
+    public static void ToplevelSendControlActivated(IntPtr toplevel, WindowControl control) =>
+        NativeToplevelSendControlActivated(toplevel, (int)control);
+
+    /// <summary>
+    /// Whether a point is in the window's declared drag region — the title bar,
+    /// usually — and so should move the window rather than reach the client.
+    /// </summary>
+    /// <param name="toplevel">A window handle.</param>
+    /// <param name="x">Horizontal position within the window.</param>
+    /// <param name="y">Vertical position within the window.</param>
+    /// <returns><see langword="true"/> if dragging here moves the window.</returns>
+    public static bool ToplevelInDragRegion(IntPtr toplevel, int x, int y) =>
+        NativeToplevelInDragRegion(toplevel, x, y);
+
+    /// <summary>Tells a client the user chose one of its menu items.</summary>
+    /// <param name="toplevel">A window handle.</param>
+    /// <param name="id">The item's client-assigned id.</param>
+    public static void MenuSendActivated(IntPtr toplevel, uint id) =>
+        NativeMenuSendActivated(toplevel, id);
+
+    /// <summary>
+    /// Tells a client one of its submenus is opening, so it can populate lazily.
+    /// </summary>
+    /// <param name="toplevel">A window handle.</param>
+    /// <param name="id">The submenu's client-assigned id.</param>
+    public static void MenuSendAboutToShow(IntPtr toplevel, uint id) =>
+        NativeMenuSendAboutToShow(toplevel, id);
+
+    /// <summary>Tells a client nothing of its menu is open any more.</summary>
+    /// <param name="toplevel">A window handle.</param>
+    public static void MenuSendClosed(IntPtr toplevel) => NativeMenuSendClosed(toplevel);
+
+    /// <summary>
     /// Reads a NUL-terminated UTF-8 string that C owns.
     /// </summary>
     /// <remarks>
@@ -331,4 +482,27 @@ public static unsafe partial class Wlroots
 
     [LibraryImport(Library, EntryPoint = "trinix_wlr_pointer_passthrough")]
     private static partial void NativePointerPassthrough(IntPtr server, uint timeMsec);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_toplevel_control_at")]
+    private static partial int NativeToplevelControlAt(IntPtr toplevel, int x, int y);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_toplevel_send_control_hover")]
+    private static partial void NativeToplevelSendControlHover(IntPtr toplevel, int control,
+                                                               uint state);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_toplevel_send_control_activated")]
+    private static partial void NativeToplevelSendControlActivated(IntPtr toplevel, int control);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_toplevel_in_drag_region")]
+    [return: MarshalAs(UnmanagedType.U1)]
+    private static partial bool NativeToplevelInDragRegion(IntPtr toplevel, int x, int y);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_menu_send_activated")]
+    private static partial void NativeMenuSendActivated(IntPtr toplevel, uint id);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_menu_send_about_to_show")]
+    private static partial void NativeMenuSendAboutToShow(IntPtr toplevel, uint id);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_menu_send_closed")]
+    private static partial void NativeMenuSendClosed(IntPtr toplevel);
 }

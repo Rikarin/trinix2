@@ -32,7 +32,7 @@
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 
-#include "trinix-wlr.h"
+#include "trinix-internal.h"
 
 /*
  * The desktop background, and the cursor.
@@ -53,42 +53,6 @@ static const float CURSOR_EDGE_COLOR[4] = { 0.08f, 0.08f, 0.10f, 1.0f };
  * the scene graph only ever rasterises the damaged part of it. */
 #define BACKGROUND_SPAN 16384
 
-struct tx_server {
-    struct wl_display *display;
-    struct wlr_backend *backend;
-    struct wlr_renderer *renderer;
-    struct wlr_allocator *allocator;
-    struct wlr_scene *scene;
-    struct wlr_scene_output_layout *scene_layout;
-    struct wlr_output_layout *output_layout;
-    struct wlr_xdg_shell *xdg_shell;
-    struct wlr_cursor *cursor;
-    struct wlr_seat *seat;
-
-    struct wlr_scene_tree *cursor_tree;
-
-    struct wl_listener new_output;
-    struct wl_listener new_input;
-    struct wl_listener new_xdg_toplevel;
-    struct wl_listener new_xdg_popup;
-    struct wl_listener cursor_motion;
-    struct wl_listener cursor_motion_absolute;
-    struct wl_listener cursor_button;
-    struct wl_listener cursor_axis;
-    struct wl_listener cursor_frame;
-    struct wl_listener request_cursor;
-    struct wl_listener request_set_selection;
-
-    struct wl_list outputs;
-    struct wl_list keyboards;
-
-    struct trinix_wlr_callbacks cb;
-    /* Owned, not borrowed: the caller may be a garbage-collected runtime that
-     * marshalled the name into a buffer valid only for the duration of the
-     * call, and trinix_wlr_socket() hands this back long afterwards. */
-    char socket[64];
-};
-
 struct tx_output {
     struct wl_list link;
     struct tx_server *server;
@@ -96,20 +60,6 @@ struct tx_output {
     struct wl_listener frame;
     struct wl_listener request_state;
     struct wl_listener destroy;
-};
-
-struct tx_toplevel {
-    struct tx_server *server;
-    struct wlr_xdg_toplevel *xdg_toplevel;
-    struct wlr_scene_tree *scene_tree;
-    struct wl_listener map;
-    struct wl_listener unmap;
-    struct wl_listener commit;
-    struct wl_listener destroy;
-    struct wl_listener request_move;
-    struct wl_listener request_resize;
-    struct wl_listener request_maximize;
-    struct wl_listener request_fullscreen;
 };
 
 struct tx_popup {
@@ -529,6 +479,7 @@ static void xdg_toplevel_destroy(struct wl_listener *listener, void *data) {
     wl_list_remove(&toplevel->request_resize.link);
     wl_list_remove(&toplevel->request_maximize.link);
     wl_list_remove(&toplevel->request_fullscreen.link);
+    tx_toplevel_extensions_finish(toplevel);
     free(toplevel);
 }
 
@@ -584,6 +535,7 @@ static void server_new_xdg_toplevel(struct wl_listener *listener, void *data) {
     }
     toplevel->server = server;
     toplevel->xdg_toplevel = xdg_toplevel;
+    tx_toplevel_extensions_init(toplevel);
     toplevel->scene_tree = wlr_scene_xdg_surface_create(&server->scene->tree, xdg_toplevel->base);
     /* Both directions: the scene tree finds the toplevel during hit testing,
      * and popups find the tree to parent themselves under. */
@@ -720,6 +672,10 @@ struct trinix_wlr_server *trinix_wlr_create(const struct trinix_wlr_callbacks *c
     wl_signal_add(&server->backend->events.new_output, &server->new_output);
     server->new_input.notify = server_new_input;
     wl_signal_add(&server->backend->events.new_input, &server->new_input);
+
+    /* Trinix's own extensions. Created before the xdg shell only so that a
+     * client which binds everything in one roundtrip sees them together. */
+    tx_shell_init(server);
 
     server->xdg_shell = wlr_xdg_shell_create(server->display, 3);
     server->new_xdg_toplevel.notify = server_new_xdg_toplevel;

@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="trinix_shell_v1">
+
+  <copyright>
+    Copyright © 2026 The Trinix authors
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice (including the next
+    paragraph) shall be included in all copies or substantial portions of the
+    Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+  </copyright>
+
+  <description summary="window decoration split between client and compositor">
+    Trinix draws window decorations in the client, and handles the interaction
+    with them in the compositor.
+
+    That split is the whole reason this protocol exists. Client-side
+    decorations let an application look like itself: the toolkit knows its own
+    fonts, its own metrics, and what belongs in a title bar. What the toolkit
+    does *not* know is where the window is on screen, what is behind it, or
+    what the pointer was doing before it arrived — so shadows, window dragging,
+    resize edges and the hover behaviour of the close/minimise/zoom controls
+    are all handled here, by the compositor, which knows all three.
+
+    A client using this protocol therefore draws its own title bar and its own
+    control glyphs, and tells the compositor where it put them. The compositor
+    hit-tests them, reports hover and activation back, and renders the shadow
+    underneath. Neither side duplicates the other's work.
+
+    Warning! This protocol is Trinix's own and is not stable. It is versioned,
+    and a bump means clients must be rebuilt.
+  </description>
+
+  <interface name="trinix_shell_v1" version="1">
+    <description summary="decoration and window-management extensions">
+      A global whose only job is to hand out trinix_shell_surface_v1 objects
+      for xdg toplevels.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="release the shell object">
+        Destroying this object does not affect surfaces created from it.
+      </description>
+    </request>
+
+    <request name="get_shell_surface">
+      <description summary="extend an xdg toplevel">
+        Gives the toplevel Trinix's decoration behaviour. It is a protocol
+        error to request a second shell surface for the same toplevel.
+      </description>
+      <arg name="id" type="new_id" interface="trinix_shell_surface_v1"/>
+      <arg name="toplevel" type="object" interface="xdg_toplevel"/>
+    </request>
+
+    <event name="capabilities">
+      <description summary="what this compositor will actually do">
+        Sent once, immediately after binding. A client must not assume any
+        capability it was not told about: a compositor running without a GPU
+        may decline to blur, and one running on a memory-constrained device may
+        decline to shadow, and in both cases the client's own decorations are
+        still correct.
+      </description>
+      <arg name="capabilities" type="uint" enum="capability"/>
+    </event>
+
+    <enum name="capability" bitfield="true">
+      <entry name="shadow" value="1" summary="the compositor can draw drop shadows"/>
+      <entry name="rounded_corners" value="2" summary="the compositor can round and clip corners"/>
+      <entry name="blur" value="4" summary="the compositor can blur what is behind a surface"/>
+    </enum>
+
+    <enum name="error">
+      <entry name="already_extended" value="0" summary="the toplevel already has a shell surface"/>
+      <entry name="invalid_control" value="1" summary="control zone outside the window geometry"/>
+    </enum>
+  </interface>
+
+  <interface name="trinix_shell_surface_v1" version="1">
+    <description summary="a decorated window">
+      Everything here is double-buffered against the *xdg surface's* configure
+      cycle: a request takes effect on the next wl_surface.commit, so that a
+      window which resizes and moves its close button does both in the same
+      frame. There is no separate commit request for that reason.
+
+      Coordinates are surface-local, in the same space as
+      xdg_surface.set_window_geometry — which is to say they exclude whatever
+      invisible margin the client reserves for its own shadows, if any.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="stop using Trinix decorations">
+        The window keeps its xdg_toplevel and stays mapped; it simply loses
+        shadows and control hit-testing.
+      </description>
+    </request>
+
+    <request name="set_shadow">
+      <description summary="ask for a drop shadow">
+        The shadow is drawn outside the window geometry, by the compositor, and
+        is not part of any buffer the client allocates. Ignored if the
+        compositor did not advertise the shadow capability.
+      </description>
+      <arg name="style" type="uint" enum="shadow_style"/>
+    </request>
+
+    <request name="set_corner_radius">
+      <description summary="round the window's corners">
+        In surface-local pixels; zero means square. The compositor clips the
+        surface to the rounded rectangle, so the client need not punch its own
+        corners out and need not care what is behind them.
+      </description>
+      <arg name="radius" type="int"/>
+    </request>
+
+    <request name="set_drag_region">
+      <description summary="where dragging moves the window">
+        Typically the title bar, minus the controls. A press inside this region
+        that turns into a drag moves the window, and the client never sees the
+        motion — which is what makes dragging smooth on a window whose main
+        thread is busy.
+
+        A null region means the whole window, which is right for a panel and
+        wrong for almost anything else.
+      </description>
+      <arg name="region" type="object" interface="wl_region" allow-null="true"/>
+    </request>
+
+    <request name="set_resize_inset">
+      <description summary="how far in from the edges a resize grab starts">
+        A window whose resize edges are exactly its geometry edges is a window
+        nobody can resize on a high-DPI display. The inset extends the grab
+        area inwards; the compositor still consumes those events rather than
+        delivering them to the client.
+      </description>
+      <arg name="inset" type="int"/>
+    </request>
+
+    <request name="set_control">
+      <description summary="declare a window control's hit zone">
+        The client draws the control; the compositor decides what pointing at
+        it means. Sending the same control twice replaces the previous zone.
+
+        This is the part that makes the traffic lights behave: because the
+        compositor owns the hit-testing, hovering any one control can light all
+        three, and it can do so without waking the application at all.
+      </description>
+      <arg name="control" type="uint" enum="control"/>
+      <arg name="x" type="int"/>
+      <arg name="y" type="int"/>
+      <arg name="width" type="int"/>
+      <arg name="height" type="int"/>
+    </request>
+
+    <request name="unset_control">
+      <description summary="remove a control's hit zone"/>
+      <arg name="control" type="uint" enum="control"/>
+    </request>
+
+    <event name="control_activated">
+      <description summary="the user operated a control">
+        The compositor does not act on this itself. Closing a window is the
+        application's decision — it may have unsaved work to ask about — so
+        this is a request to the client, exactly as xdg_toplevel.close is.
+      </description>
+      <arg name="control" type="uint" enum="control"/>
+    </event>
+
+    <event name="control_hover">
+      <description summary="the pointer entered or left the control group">
+        Sent for the group rather than the individual control, because that is
+        the behaviour being described: the glyphs appear when the pointer is
+        anywhere over them. `control` names which one is under the pointer, or
+        is unused when state is `left`.
+      </description>
+      <arg name="control" type="uint" enum="control"/>
+      <arg name="state" type="uint" enum="hover_state"/>
+    </event>
+
+    <event name="shadow_applied">
+      <description summary="the shadow the compositor actually drew">
+        The margins the shadow occupies outside the window geometry, so a
+        client that cares about its total footprint — for a screenshot, or to
+        avoid placing a popup under its own shadow — can find out. All zero
+        when there is no shadow.
+      </description>
+      <arg name="left" type="int"/>
+      <arg name="top" type="int"/>
+      <arg name="right" type="int"/>
+      <arg name="bottom" type="int"/>
+    </event>
+
+    <enum name="control">
+      <entry name="close" value="0" summary="dismiss the window"/>
+      <entry name="minimise" value="1" summary="hide the window to the dock"/>
+      <entry name="zoom" value="2" summary="toggle the window's ideal size"/>
+    </enum>
+
+    <enum name="shadow_style">
+      <entry name="none" value="0" summary="no shadow"/>
+      <entry name="docked" value="1" summary="a tight shadow, for panels and menus"/>
+      <entry name="window" value="2" summary="the shadow an ordinary window casts"/>
+      <entry name="floating" value="3" summary="a deeper shadow, for dialogs and popovers"/>
+    </enum>
+
+    <enum name="hover_state">
+      <entry name="left" value="0" summary="the pointer is no longer over any control"/>
+      <entry name="entered" value="1" summary="the pointer is over the named control"/>
+      <entry name="pressed" value="2" summary="the named control is being held down"/>
+    </enum>
+  </interface>
+
+</protocol>

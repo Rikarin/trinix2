@@ -143,6 +143,24 @@ if [ "$check" -eq 1 ]; then
     [ "$timeout_s" -gt 0 ] || timeout_s="$default_timeout"
     serial_log="$images/serial-$arch.log"
 
+    # One check per architecture at a time.
+    #
+    # Every unattended run drives the same image and writes the same console
+    # log, and two of them at once interleave into that one file — so each
+    # reads the other's output and both verdicts become fiction. That is not
+    # hypothetical: it produced a PASS for a compositor that was in a restart
+    # loop, and then a FAIL for one that was working, and cost more time than
+    # every real bug in this file put together.
+    #
+    # A verdict that can be wrong in both directions is worse than no verdict,
+    # so this refuses to run rather than queueing: a check that silently waited
+    # would just hide the mistake of starting two.
+    exec 9>"$images/.check-$arch.lock"
+    if ! flock --nonblock 9; then
+        echo "run-qemu: another $arch check is already running (see $serial_log)" >&2
+        exit 1
+    fi
+
     qemu_log="$images/qemu-$arch.log"
 
     echo "==> booting trinix-$arch.img unattended (up to ${timeout_s}s); console -> ${serial_log}"
@@ -243,12 +261,34 @@ if [ "$check" -eq 1 ]; then
                     verdict="$verdict wayland-client"
                 fi
 
+                # Phase 5's first two items, asserted from the client's side:
+                # both Trinix extensions were advertised, and the shell answered
+                # over one of them. A protocol that binds and then says nothing
+                # is worse than one that is missing, so the round trip is what
+                # is checked rather than the bind.
+                if ! await 'trinix globals shell=1 menu=1' 60; then
+                    verdict="$verdict trinix-globals"
+                fi
+                if ! await 'shadow margins' 60; then
+                    verdict="$verdict shell-round-trip"
+                fi
+
                 # And that the compositor saw the client from its own side,
                 # which is what distinguishes "a window was mapped" from "a
                 # client connected to something".
                 type_line 'journalctl -u trinix-compositor -o cat --no-pager'
                 if ! await 'window mapped' 120; then
                     verdict="$verdict window-mapped"
+                fi
+
+                # And from the compositor's side: the menu model arrived whole.
+                # The client exports two menus and six items; anything that
+                # mishandles the tree or the ordering changes this line.
+                if ! await 'menu bar for' 60; then
+                    verdict="$verdict menu-exported"
+                fi
+                if ! await 'control Close at' 60; then
+                    verdict="$verdict control-zones"
                 fi
             else
                 verdict="$verdict root-shell"

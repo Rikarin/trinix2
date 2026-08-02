@@ -68,6 +68,12 @@ internal static unsafe class Program
             PointerMotion = &OnPointerMotion,
             PointerButton = &OnPointerButton,
             InputAdded = &OnInputAdded,
+            ToplevelDecorated = &OnToplevelDecorated,
+            ToplevelControl = &OnToplevelControl,
+            MenuBegin = &OnMenuBegin,
+            MenuItem = &OnMenuItem,
+            MenuEnd = &OnMenuEnd,
+            MenuRemoved = &OnMenuRemoved,
         };
 
         s_server = Wlroots.Create(in callbacks, logLevel);
@@ -189,4 +195,37 @@ internal static unsafe class Program
     [UnmanagedCallersOnly]
     private static void OnInputAdded(int type, byte* name) =>
         WindowManager.InputAdded((Wlroots.InputDeviceType)type, Wlroots.ReadString(name));
+
+    [UnmanagedCallersOnly]
+    private static void OnToplevelDecorated(IntPtr toplevel, uint shadowStyle, int cornerRadius) =>
+        WindowManager.WindowDecorated(toplevel, shadowStyle, cornerRadius);
+
+    [UnmanagedCallersOnly]
+    private static void OnToplevelControl(IntPtr toplevel, uint control,
+                                          int x, int y, int width, int height) =>
+        WindowManager.WindowControlZone(toplevel, control, x, y, width, height);
+
+    [UnmanagedCallersOnly]
+    private static void OnMenuBegin(IntPtr toplevel) => s_manager?.MenuBegin(toplevel);
+
+    [UnmanagedCallersOnly]
+    private static void OnMenuItem(IntPtr toplevel, uint id, uint parent, uint kind,
+                                   uint state, uint keysym, uint modifiers, byte* label) =>
+        s_manager?.MenuItem(toplevel, new MenuEntry(
+            id, parent,
+            (Wlroots.MenuItemKind)kind,
+            (Wlroots.MenuItemState)state,
+            keysym,
+            (Wlroots.Modifiers)modifiers,
+            Wlroots.ReadString(label) ?? string.Empty));
+
+    [UnmanagedCallersOnly]
+    private static void OnMenuEnd(IntPtr toplevel, uint itemCount)
+    {
+        _ = itemCount;
+        s_manager?.MenuEnd(toplevel);
+    }
+
+    [UnmanagedCallersOnly]
+    private static void OnMenuRemoved(IntPtr toplevel) => s_manager?.MenuRemoved(toplevel);
 }

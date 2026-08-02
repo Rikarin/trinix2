@@ -26,7 +26,10 @@
 #include <unistd.h>
 
 #include <wayland-client.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
 
+#include "trinix-menu-v1-client-protocol.h"
+#include "trinix-shell-v1-client-protocol.h"
 #include "xdg-shell-client-protocol.h"
 
 #define DEFAULT_WIDTH 640
@@ -42,10 +45,14 @@ struct demo {
     struct wl_shm *shm;
     struct xdg_wm_base *wm_base;
     struct wl_seat *seat;
+    struct trinix_shell_v1 *shell;
+    struct trinix_menu_manager_v1 *menu_manager;
 
     struct wl_surface *surface;
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *toplevel;
+    struct trinix_shell_surface_v1 *shell_surface;
+    struct trinix_menu_v1 *menu;
     struct wl_buffer *buffer;
     void *pixels;
     size_t pixels_size;
@@ -57,6 +64,12 @@ struct demo {
     bool configured;
     bool closed;
     bool failed;
+
+    /* What came back over the two Trinix extensions, so the check can assert
+     * the round trip rather than merely that nothing crashed. */
+    uint32_t shell_capabilities;
+    bool shadow_reported;
+    int32_t shadow_left, shadow_top, shadow_right, shadow_bottom;
 };
 
 static void registry_global(void *data, struct wl_registry *registry, uint32_t name,
@@ -72,6 +85,11 @@ static void registry_global(void *data, struct wl_registry *registry, uint32_t n
         demo->wm_base = wl_registry_bind(registry, name, &xdg_wm_base_interface, 1);
     } else if (strcmp(interface, wl_seat_interface.name) == 0) {
         demo->seat = wl_registry_bind(registry, name, &wl_seat_interface, 1);
+    } else if (strcmp(interface, trinix_shell_v1_interface.name) == 0) {
+        demo->shell = wl_registry_bind(registry, name, &trinix_shell_v1_interface, 1);
+    } else if (strcmp(interface, trinix_menu_manager_v1_interface.name) == 0) {
+        demo->menu_manager =
+            wl_registry_bind(registry, name, &trinix_menu_manager_v1_interface, 1);
     }
 }
 
@@ -96,6 +114,178 @@ static void wm_base_ping(void *data, struct xdg_wm_base *wm_base, uint32_t seria
 static const struct xdg_wm_base_listener wm_base_listener = {
     .ping = wm_base_ping,
 };
+
+/* --- trinix-shell-v1 ---------------------------------------------------- */
+
+static void shell_capabilities(void *data, struct trinix_shell_v1 *shell,
+                               uint32_t capabilities) {
+    struct demo *demo = data;
+    (void)shell;
+
+    demo->shell_capabilities = capabilities;
+    printf("%s: shell capabilities shadow=%d rounded=%d blur=%d\n", TAG,
+           (capabilities & TRINIX_SHELL_V1_CAPABILITY_SHADOW) != 0,
+           (capabilities & TRINIX_SHELL_V1_CAPABILITY_ROUNDED_CORNERS) != 0,
+           (capabilities & TRINIX_SHELL_V1_CAPABILITY_BLUR) != 0);
+    fflush(stdout);
+}
+
+static const struct trinix_shell_v1_listener shell_listener = {
+    .capabilities = shell_capabilities,
+};
+
+static void shell_surface_control_activated(void *data,
+                                            struct trinix_shell_surface_v1 *shell_surface,
+                                            uint32_t control) {
+    struct demo *demo = data;
+    (void)shell_surface;
+
+    /* A request, not an instruction — which is exactly why the client is the
+     * one that decides to stop. */
+    printf("%s: control activated %u\n", TAG, control);
+    fflush(stdout);
+    if (control == TRINIX_SHELL_SURFACE_V1_CONTROL_CLOSE) {
+        demo->closed = true;
+    }
+}
+
+static void shell_surface_control_hover(void *data,
+                                        struct trinix_shell_surface_v1 *shell_surface,
+                                        uint32_t control, uint32_t state) {
+    (void)data;
+    (void)shell_surface;
+
+    /* A real client would redraw its traffic lights here. */
+    printf("%s: control hover %u state %u\n", TAG, control, state);
+    fflush(stdout);
+}
+
+static void shell_surface_shadow_applied(void *data,
+                                         struct trinix_shell_surface_v1 *shell_surface,
+                                         int32_t left, int32_t top, int32_t right,
+                                         int32_t bottom) {
+    struct demo *demo = data;
+    (void)shell_surface;
+
+    demo->shadow_reported = true;
+    demo->shadow_left = left;
+    demo->shadow_top = top;
+    demo->shadow_right = right;
+    demo->shadow_bottom = bottom;
+    printf("%s: shadow margins %d,%d,%d,%d\n", TAG, left, top, right, bottom);
+    fflush(stdout);
+}
+
+static const struct trinix_shell_surface_v1_listener shell_surface_listener = {
+    .control_activated = shell_surface_control_activated,
+    .control_hover = shell_surface_control_hover,
+    .shadow_applied = shell_surface_shadow_applied,
+};
+
+/* --- trinix-menu-v1 ----------------------------------------------------- */
+
+static void menu_activated(void *data, struct trinix_menu_v1 *menu, uint32_t id) {
+    (void)data;
+    (void)menu;
+
+    printf("%s: menu item %u activated\n", TAG, id);
+    fflush(stdout);
+}
+
+static void menu_about_to_show(void *data, struct trinix_menu_v1 *menu, uint32_t id) {
+    (void)data;
+
+    /* Where an application with an expensive menu would fill it in. This one
+     * has nothing to add, and still has to commit so the shell stops waiting. */
+    printf("%s: menu %u about to show\n", TAG, id);
+    fflush(stdout);
+    trinix_menu_v1_commit(menu);
+}
+
+static void menu_closed(void *data, struct trinix_menu_v1 *menu) {
+    (void)data;
+    (void)menu;
+
+    printf("%s: menu closed\n", TAG);
+    fflush(stdout);
+}
+
+static const struct trinix_menu_v1_listener menu_listener = {
+    .activated = menu_activated,
+    .about_to_show = menu_about_to_show,
+    .closed = menu_closed,
+};
+
+/*
+ * The decorations this client claims to have drawn.
+ *
+ * It does not actually draw traffic lights — it has no font and no icons — but
+ * it declares them exactly where a real title bar would put them, which is
+ * what the protocol is being exercised for. The compositor hit-tests what it
+ * is told, not what is painted.
+ */
+#define TITLE_BAR_HEIGHT 28
+#define CONTROL_SIZE 14
+#define CONTROL_SPACING 20
+#define CONTROL_ORIGIN 12
+
+static void declare_decorations(struct demo *demo) {
+    if (demo->shell == NULL) {
+        return;
+    }
+
+    demo->shell_surface = trinix_shell_v1_get_shell_surface(demo->shell, demo->toplevel);
+    trinix_shell_surface_v1_add_listener(demo->shell_surface, &shell_surface_listener, demo);
+
+    trinix_shell_surface_v1_set_shadow(demo->shell_surface,
+                                       TRINIX_SHELL_SURFACE_V1_SHADOW_STYLE_WINDOW);
+    trinix_shell_surface_v1_set_corner_radius(demo->shell_surface, 10);
+    trinix_shell_surface_v1_set_resize_inset(demo->shell_surface, 4);
+
+    for (uint32_t control = 0; control < 3; control++) {
+        trinix_shell_surface_v1_set_control(
+            demo->shell_surface, control,
+            CONTROL_ORIGIN + (int32_t)(control * CONTROL_SPACING),
+            (TITLE_BAR_HEIGHT - CONTROL_SIZE) / 2, CONTROL_SIZE, CONTROL_SIZE);
+    }
+
+    /* The title bar, minus the controls: dragging here moves the window, and
+     * the client never hears about the motion. */
+    struct wl_region *drag = wl_compositor_create_region(demo->compositor);
+    wl_region_add(drag, CONTROL_ORIGIN + (3 * CONTROL_SPACING), 0,
+                  demo->width - CONTROL_ORIGIN - (3 * CONTROL_SPACING), TITLE_BAR_HEIGHT);
+    trinix_shell_surface_v1_set_drag_region(demo->shell_surface, drag);
+    wl_region_destroy(drag);
+}
+
+/*
+ * A menu bar, described rather than drawn. Two menus, a submenu, a separator,
+ * a checkbox and an accelerator — enough that anything which mishandles the
+ * tree or the ordering shows up in what the shell reports back.
+ */
+static void export_menu(struct demo *demo) {
+    if (demo->menu_manager == NULL) {
+        return;
+    }
+
+    demo->menu = trinix_menu_manager_v1_get_menu_bar(demo->menu_manager, demo->toplevel);
+    trinix_menu_v1_add_listener(demo->menu, &menu_listener, demo);
+
+    trinix_menu_v1_insert(demo->menu, 1, 0, -1, TRINIX_MENU_V1_KIND_SUBMENU, "_File");
+    trinix_menu_v1_insert(demo->menu, 2, 1, -1, TRINIX_MENU_V1_KIND_ITEM, "_New Window");
+    /* Command-N, handled by the shell whether or not the menu is ever opened. */
+    trinix_menu_v1_set_accelerator(demo->menu, 2, XKB_KEY_n, TRINIX_MENU_V1_MODIFIER_LOGO);
+    trinix_menu_v1_insert(demo->menu, 3, 1, -1, TRINIX_MENU_V1_KIND_SEPARATOR, "");
+    trinix_menu_v1_insert(demo->menu, 4, 1, -1, TRINIX_MENU_V1_KIND_ITEM, "_Close");
+    trinix_menu_v1_set_accelerator(demo->menu, 4, XKB_KEY_w, TRINIX_MENU_V1_MODIFIER_LOGO);
+
+    trinix_menu_v1_insert(demo->menu, 5, 0, -1, TRINIX_MENU_V1_KIND_SUBMENU, "_View");
+    trinix_menu_v1_insert(demo->menu, 6, 5, -1, TRINIX_MENU_V1_KIND_CHECKBOX, "_Show Grid");
+    trinix_menu_v1_update(demo->menu, 6, "_Show Grid",
+                          TRINIX_MENU_V1_STATE_ENABLED | TRINIX_MENU_V1_STATE_CHECKED);
+
+    trinix_menu_v1_commit(demo->menu);
+}
 
 /* Anonymous shared memory the compositor can map. memfd rather than a file in
  * /tmp: there is no writable /tmp guarantee this early, and a sealed memfd is
@@ -270,6 +460,8 @@ int main(int argc, char *argv[]) {
 
     printf("%s: globals compositor=%d shm=%d xdg_wm_base=%d seat=%d\n", TAG,
            demo.compositor != NULL, demo.shm != NULL, demo.wm_base != NULL, demo.seat != NULL);
+    printf("%s: trinix globals shell=%d menu=%d\n", TAG,
+           demo.shell != NULL, demo.menu_manager != NULL);
     fflush(stdout);
 
     if (demo.compositor == NULL || demo.shm == NULL || demo.wm_base == NULL) {
@@ -277,6 +469,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     xdg_wm_base_add_listener(demo.wm_base, &wm_base_listener, &demo);
+    if (demo.shell != NULL) {
+        trinix_shell_v1_add_listener(demo.shell, &shell_listener, &demo);
+    }
 
     demo.surface = wl_compositor_create_surface(demo.compositor);
     demo.xdg_surface = xdg_wm_base_get_xdg_surface(demo.wm_base, demo.surface);
@@ -285,6 +480,13 @@ int main(int argc, char *argv[]) {
     xdg_toplevel_add_listener(demo.toplevel, &toplevel_listener, &demo);
     xdg_toplevel_set_title(demo.toplevel, "Trinix Wayland demo");
     xdg_toplevel_set_app_id(demo.toplevel, "io.trinix.WaylandDemo");
+
+    /* The two Trinix extensions, exercised the way an application would: the
+     * decorations this client claims to have drawn, and the menus it wants the
+     * shell to draw for it. Both are optional — a compositor without them is
+     * still a compositor, and this client still runs. */
+    declare_decorations(&demo);
+    export_menu(&demo);
 
     /* The first commit carries no buffer: it asks for the configure that the
      * protocol requires before a buffer may be attached at all. */
@@ -300,6 +502,22 @@ int main(int argc, char *argv[]) {
 
     bool ok = !demo.failed && demo.configured && demo.frames >= demo.frames_wanted;
     printf("%s: frames=%d\n", TAG, demo.frames);
+
+    /* The extensions are optional, so their absence is reported and does not
+     * fail the run — but if they were present, the round trip has to have
+     * completed, because a protocol that binds and then says nothing is worse
+     * than one that is missing. */
+    if (demo.shell != NULL) {
+        if (!demo.shadow_reported) {
+            fprintf(stderr, "%s: the shell never reported shadow margins\n", TAG);
+            ok = false;
+        }
+        printf("%s: shell round trip capabilities=0x%x shadow=%d\n", TAG,
+               demo.shell_capabilities, demo.shadow_reported);
+    }
+    if (demo.menu != NULL) {
+        printf("%s: menu exported\n", TAG);
+    }
     printf("%s-%s\n", TAG, ok ? "OK" : "FAILED");
     fflush(stdout);
 

@@ -73,6 +73,32 @@ struct trinix_wlr_callbacks {
     void (*pointer_button)(uint32_t button, bool pressed, uint32_t time_msec);
 
     void (*input_added)(int32_t type, const char *name);
+
+    /* --- trinix-shell-v1 -------------------------------------------------
+     *
+     * A client declared how it wants to be decorated. The compositor has
+     * already recorded the geometry — these say that it changed, so the
+     * managed side can re-evaluate whatever it derives from it.
+     */
+    void (*toplevel_decorated)(void *toplevel, uint32_t shadow_style, int32_t corner_radius);
+    /* A control's hit zone moved, or was withdrawn (width and height zero). */
+    void (*toplevel_control)(void *toplevel, uint32_t control,
+                             int32_t x, int32_t y, int32_t width, int32_t height);
+
+    /* --- trinix-menu-v1 --------------------------------------------------
+     *
+     * The menu model, delivered one item at a time on commit rather than as a
+     * structure, because a structure would have to be allocated on one side of
+     * the boundary and freed on the other. `menu_item` is called once per item
+     * in tree order, bracketed by menu_begin/menu_end — so the managed side
+     * rebuilds its own model without either side owning the other's memory.
+     */
+    void (*menu_begin)(void *toplevel);
+    void (*menu_item)(void *toplevel, uint32_t id, uint32_t parent, uint32_t kind,
+                      uint32_t state, uint32_t keysym, uint32_t modifiers,
+                      const char *label);
+    void (*menu_end)(void *toplevel, uint32_t item_count);
+    void (*menu_removed)(void *toplevel);
 };
 
 /* --- lifecycle ---------------------------------------------------------- */
@@ -125,6 +151,31 @@ void trinix_wlr_toplevel_get_box(void *toplevel, int32_t *x, int32_t *y,
  * every compositor writes once. */
 void trinix_wlr_toplevel_focus(void *toplevel);
 void trinix_wlr_toplevel_close(void *toplevel);
+
+/* --- decorations, from trinix-shell-v1 ---------------------------------- */
+
+/*
+ * Which control's hit zone contains this point, or -1 for none. Coordinates
+ * are surface-local. The compositor keeps the zones because it receives them;
+ * deciding what a click on one means stays with the caller.
+ */
+int32_t trinix_wlr_toplevel_control_at(void *toplevel, int32_t x, int32_t y);
+
+/* Tell a client the pointer entered, moved between, or left its controls, and
+ * that one was operated. Both are events the client cannot generate itself. */
+void trinix_wlr_toplevel_send_control_hover(void *toplevel, int32_t control, uint32_t state);
+void trinix_wlr_toplevel_send_control_activated(void *toplevel, int32_t control);
+
+/* True if the point is inside the client's declared drag region — the title
+ * bar, usually — and so should move the window rather than reach the client. */
+bool trinix_wlr_toplevel_in_drag_region(void *toplevel, int32_t x, int32_t y);
+
+/* --- menus, from trinix-menu-v1 ----------------------------------------- */
+
+/* Tell the client the user chose an item, or that a submenu is opening. */
+void trinix_wlr_menu_send_activated(void *toplevel, uint32_t id);
+void trinix_wlr_menu_send_about_to_show(void *toplevel, uint32_t id);
+void trinix_wlr_menu_send_closed(void *toplevel);
 
 /* --- pointer ------------------------------------------------------------ */
 

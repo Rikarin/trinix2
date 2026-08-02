@@ -64,6 +64,7 @@ internal sealed class WindowManager
     private const int CascadeWrapAfter = 6;
 
     private readonly List<IntPtr> _windows = [];
+    private readonly Dictionary<IntPtr, MenuBar> _menus = [];
     private readonly IntPtr _server;
 
     private PointerMode _mode = PointerMode.Passthrough;
@@ -76,6 +77,8 @@ internal sealed class WindowManager
     private int _grabBottom;
     private Edges _resizeEdges;
     private int _cascade;
+    private IntPtr _hoveredWindow;
+    private Wlroots.WindowControl _hoveredControl = Wlroots.WindowControl.None;
 
     /// <summary>Creates a manager for an already-created server.</summary>
     /// <param name="server">A handle from <see cref="Wlroots.Create"/>.</param>
@@ -141,9 +144,95 @@ internal sealed class WindowManager
     /// <param name="window">The window handle, no longer valid.</param>
     internal void WindowRemoved(IntPtr window)
     {
+        _menus.Remove(window);
+        if (_hoveredWindow == window)
+        {
+            _hoveredWindow = IntPtr.Zero;
+            _hoveredControl = Wlroots.WindowControl.None;
+        }
+
         if (_windows.Remove(window) && _grabbed == window)
         {
             ResetPointer();
+        }
+    }
+
+    // --- trinix-shell-v1 --------------------------------------------------
+
+    /// <summary>Records how a window asked to be decorated.</summary>
+    /// <param name="window">The window handle.</param>
+    /// <param name="shadowStyle">none, docked, window or floating.</param>
+    /// <param name="cornerRadius">Corner radius in surface-local pixels.</param>
+    internal static void WindowDecorated(IntPtr window, uint shadowStyle, int cornerRadius) =>
+        Log.Line($"decorated '{Title(window)}' shadow={ShadowName(shadowStyle)} radius={cornerRadius}");
+
+    /// <summary>Reports a window control's hit zone moving or being withdrawn.</summary>
+    /// <param name="window">The window handle.</param>
+    /// <param name="control">Which control.</param>
+    /// <param name="x">Left edge, window-local.</param>
+    /// <param name="y">Top edge, window-local.</param>
+    /// <param name="width">Zone width, or zero if withdrawn.</param>
+    /// <param name="height">Zone height, or zero if withdrawn.</param>
+    internal static void WindowControlZone(IntPtr window, uint control,
+                                           int x, int y, int width, int height)
+    {
+        var named = (Wlroots.WindowControl)control;
+        Log.Line(width > 0 && height > 0
+            ? $"control {named} at {x},{y} {width}x{height} on '{Title(window)}'"
+            : $"control {named} withdrawn on '{Title(window)}'");
+    }
+
+    // --- trinix-menu-v1 ---------------------------------------------------
+
+    /// <summary>A window is about to deliver a new menu model.</summary>
+    /// <param name="window">The window handle.</param>
+    internal void MenuBegin(IntPtr window)
+    {
+        if (!_menus.TryGetValue(window, out MenuBar? bar))
+        {
+            bar = new MenuBar();
+            _menus[window] = bar;
+        }
+
+        bar.Begin();
+    }
+
+    /// <summary>One item of the model being delivered.</summary>
+    /// <param name="window">The window handle.</param>
+    /// <param name="entry">The item.</param>
+    internal void MenuItem(IntPtr window, MenuEntry entry)
+    {
+        if (_menus.TryGetValue(window, out MenuBar? bar))
+        {
+            bar.Add(entry);
+        }
+    }
+
+    /// <summary>The model is complete and becomes the window's menu bar.</summary>
+    /// <param name="window">The window handle.</param>
+    internal void MenuEnd(IntPtr window)
+    {
+        if (!_menus.TryGetValue(window, out MenuBar? bar))
+        {
+            return;
+        }
+
+        bar.End();
+
+        // Printed rather than drawn, and that is where Phase 5 currently
+        // stands: the model arrives complete and the shell holds it, but the
+        // image has no font, so there is nothing to render the words with. The
+        // line below is what the boot check reads instead.
+        Log.Line($"menu bar for '{Title(window)}': {bar.Describe()}");
+    }
+
+    /// <summary>A window withdrew its menu bar.</summary>
+    /// <param name="window">The window handle.</param>
+    internal void MenuRemoved(IntPtr window)
+    {
+        if (_menus.Remove(window))
+        {
+            Log.Line($"menu bar withdrawn by '{Title(window)}'");
         }
     }
 
@@ -166,6 +255,24 @@ internal sealed class WindowManager
     /// <returns><see langword="true"/> if the compositor consumed the key.</returns>
     internal bool Key(uint keysym, Wlroots.Modifiers modifiers, bool pressed)
     {
+        // Menu accelerators first, and this ordering is the promise the menu
+        // protocol makes: a shortcut on a menu item works whether or not the
+        // menu has ever been opened, so the shell has to claim the key before
+        // the focused client sees it.
+        if (Focused != IntPtr.Zero && _menus.TryGetValue(Focused, out MenuBar? bar))
+        {
+            uint item = bar.FindAccelerator(keysym, modifiers);
+            if (item != 0)
+            {
+                if (pressed)
+                {
+                    Log.Line($"accelerator activated menu item {item}");
+                    Wlroots.MenuSendActivated(Focused, item);
+                }
+                return true;
+            }
+        }
+
         // Bindings fire on press and swallow the matching release, so a client
         // never sees half of one.
         if (!modifiers.HasFlag(Wlroots.Modifiers.Alt))
@@ -219,9 +326,63 @@ internal sealed class WindowManager
                 break;
 
             default:
+                // Window controls are hit-tested before anything is forwarded,
+                // because a pointer over a traffic light is the compositor's
+                // business and not the application's. That is what lets the
+                // glyphs light up while the client is blocked.
+                if (UpdateControlHover(x, y))
+                {
+                    return;
+                }
+
                 Wlroots.PointerPassthrough(_server, timeMsec);
                 break;
         }
+    }
+
+    /// <summary>
+    /// Tracks which window control the pointer is over, telling the clients
+    /// concerned when that changes.
+    /// </summary>
+    /// <returns><see langword="true"/> if the pointer is over a control.</returns>
+    private bool UpdateControlHover(double x, double y)
+    {
+        IntPtr window = Wlroots.ToplevelAt(_server, x, y);
+        var control = Wlroots.WindowControl.None;
+
+        if (window != IntPtr.Zero)
+        {
+            Wlroots.ToplevelGetBox(window, out int left, out int top, out _, out _);
+            control = Wlroots.ToplevelControlAt(window, (int)x - left, (int)y - top);
+        }
+
+        if (window == _hoveredWindow && control == _hoveredControl)
+        {
+            return control != Wlroots.WindowControl.None;
+        }
+
+        // The window being left is told first, so a client never sees itself
+        // entered and left in the wrong order when the pointer crosses
+        // directly from one window's controls to another's.
+        if (_hoveredWindow != IntPtr.Zero && _hoveredWindow != window &&
+            _hoveredControl != Wlroots.WindowControl.None)
+        {
+            Wlroots.ToplevelSendControlHover(_hoveredWindow, Wlroots.WindowControl.None,
+                                             Wlroots.ControlHover.Left);
+        }
+
+        if (window != IntPtr.Zero)
+        {
+            Wlroots.ToplevelSendControlHover(
+                window, control,
+                control == Wlroots.WindowControl.None
+                    ? Wlroots.ControlHover.Left
+                    : Wlroots.ControlHover.Entered);
+        }
+
+        _hoveredWindow = window;
+        _hoveredControl = control;
+        return control != Wlroots.WindowControl.None;
     }
 
     /// <summary>Handles focus-follows-click, and the end of a drag.</summary>
@@ -242,9 +403,34 @@ internal sealed class WindowManager
 
         Wlroots.CursorPosition(_server, out double x, out double y);
         IntPtr window = Wlroots.ToplevelAt(_server, x, y);
-        if (window != IntPtr.Zero)
+        if (window == IntPtr.Zero)
         {
-            Raise(window);
+            return;
+        }
+
+        Raise(window);
+
+        Wlroots.ToplevelGetBox(window, out int left, out int top, out _, out _);
+        int localX = (int)x - left;
+        int localY = (int)y - top;
+
+        // A traffic light is not a click the application ever hears about — it
+        // hears the *outcome*, which is a request it may refuse. Closing a
+        // window with unsaved work has to remain the application's decision.
+        Wlroots.WindowControl control = Wlroots.ToplevelControlAt(window, localX, localY);
+        if (control != Wlroots.WindowControl.None)
+        {
+            Log.Line($"control {control} activated on '{Title(window)}'");
+            Wlroots.ToplevelSendControlActivated(window, control);
+            return;
+        }
+
+        // A press in the title bar starts a compositor-driven drag. The client
+        // never sees the motion, which is the entire reason the region was
+        // declared: a window whose application is busy still moves.
+        if (Wlroots.ToplevelInDragRegion(window, localX, localY))
+        {
+            BeginGrab(window, PointerMode.Move, Edges.None);
         }
     }
 
@@ -361,4 +547,14 @@ internal sealed class WindowManager
     }
 
     private static string Title(IntPtr window) => Wlroots.ToplevelTitle(window) ?? "untitled";
+
+    /// <summary>Names a trinix-shell-v1 shadow style for the journal.</summary>
+    private static string ShadowName(uint style) => style switch
+    {
+        0 => "none",
+        1 => "docked",
+        2 => "window",
+        3 => "floating",
+        _ => $"unknown({style})",
+    };
 }

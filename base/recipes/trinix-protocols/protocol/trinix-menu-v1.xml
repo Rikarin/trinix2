@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocol name="trinix_menu_v1">
+
+  <copyright>
+    Copyright © 2026 The Trinix authors
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the "Software"),
+    to deal in the Software without restriction, including without limitation
+    the rights to use, copy, modify, merge, publish, distribute, sublicense,
+    and/or sell copies of the Software, and to permit persons to whom the
+    Software is furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice (including the next
+    paragraph) shall be included in all copies or substantial portions of the
+    Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+    THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+    DEALINGS IN THE SOFTWARE.
+  </copyright>
+
+  <description summary="applications export their menus; the shell renders them">
+    On Trinix the menu bar belongs to the screen, not to the window. An
+    application therefore does not draw its menus — it describes them, and the
+    shell draws the menus of whichever window is active, at the top of the
+    display, in one consistent style.
+
+    Why a Wayland protocol rather than D-Bus, which is what every previous
+    global-menu implementation used:
+
+    A menu belongs to a *surface*, and D-Bus has no notion of one. The
+    established designs work around that by exporting the menu on the bus and
+    then using a Wayland (or X11) protocol anyway, purely to say which surface
+    the bus name belongs to — so the D-Bus route costs two IPC mechanisms, two
+    lifetimes to reconcile, and a window whose menus outlive it by however long
+    the bus takes to notice. Carrying the model on the Wayland connection makes
+    the association structural: the menu is created from the toplevel, dies
+    with it, and arrives in order with the rest of that window's state.
+
+    What that costs is having to define a menu model here, which the rest of
+    this file is. It is a flat set of nodes addressed by client-assigned id and
+    linked by parent — a tree, expressed the way a tree survives being mutated
+    incrementally.
+
+    Interoperating with toolkits that already speak D-Bus menus is a bridge
+    over this protocol, and deliberately not a second path through it.
+
+    Warning! This protocol is Trinix's own and is not stable.
+  </description>
+
+  <interface name="trinix_menu_manager_v1" version="1">
+    <description summary="hands out menus for toplevels"/>
+
+    <request name="destroy" type="destructor">
+      <description summary="release the manager">
+        Menus created from it are unaffected.
+      </description>
+    </request>
+
+    <request name="get_menu_bar">
+      <description summary="describe this window's menu bar">
+        The menu bar is shown while the toplevel is active, and hidden when it
+        is not. It is a protocol error to ask for a second menu bar for the
+        same toplevel.
+      </description>
+      <arg name="id" type="new_id" interface="trinix_menu_v1"/>
+      <arg name="toplevel" type="object" interface="xdg_toplevel"/>
+    </request>
+
+    <enum name="error">
+      <entry name="already_has_menu" value="0" summary="the toplevel already exported a menu bar"/>
+      <entry name="bad_item" value="1" summary="an item id was zero, duplicated, or unknown"/>
+      <entry name="bad_parent" value="2" summary="the parent id is not a submenu"/>
+    </enum>
+  </interface>
+
+  <interface name="trinix_menu_v1" version="1">
+    <description summary="a menu model">
+      Changes are accumulated and applied atomically by `commit`, for the same
+      reason surface state is: a menu that is half-rebuilt must never be a menu
+      the user can see, let alone click.
+
+      Item ids are chosen by the client, must be non-zero, and must be unique
+      within this menu. Id 0 is the menu bar itself, and is the parent of the
+      top-level menus.
+
+      A client is free to describe the whole menu up front, or to describe only
+      the bar and fill each menu in when `about_to_show` arrives. The second is
+      what an application with a large or expensive menu should do, and the
+      protocol is shaped so that it costs nothing extra.
+    </description>
+
+    <request name="destroy" type="destructor">
+      <description summary="withdraw the menu bar"/>
+    </request>
+
+    <request name="insert">
+      <description summary="add an item">
+        `index` is the position among `parent`'s existing children; a negative
+        index appends. Inserting an item whose id already exists is a protocol
+        error — use `update`.
+      </description>
+      <arg name="id" type="uint" summary="client-assigned, non-zero, unique in this menu"/>
+      <arg name="parent" type="uint" summary="0 for a top-level menu"/>
+      <arg name="index" type="int"/>
+      <arg name="kind" type="uint" enum="kind"/>
+      <arg name="label" type="string" summary="with an underscore before the mnemonic, if any"/>
+    </request>
+
+    <request name="update">
+      <description summary="change an item in place">
+        Keeps the item's identity, its position and its children, which is what
+        makes it safe to call on every state change without the open menu
+        flickering.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="label" type="string"/>
+      <arg name="state" type="uint" enum="state"/>
+    </request>
+
+    <request name="set_accelerator">
+      <description summary="give an item a keyboard shortcut">
+        The shell both displays this and honours it: a shortcut on a menu item
+        works whether or not the menu has ever been opened, which is the
+        behaviour users expect and the reason the shell needs to know about it
+        rather than the application handling the key itself.
+
+        A keysym of zero removes the accelerator.
+      </description>
+      <arg name="id" type="uint"/>
+      <arg name="keysym" type="uint" summary="an xkb keysym"/>
+      <arg name="modifiers" type="uint" enum="modifier"/>
+    </request>
+
+    <request name="remove">
+      <description summary="delete an item and its children"/>
+      <arg name="id" type="uint"/>
+    </request>
+
+    <request name="commit">
+      <description summary="apply everything since the last commit">
+        A commit with no pending changes is valid and does nothing.
+      </description>
+    </request>
+
+    <event name="activated">
+      <description summary="the user chose an item">
+        Sent for leaf items only. For a checkbox or a radio item the client is
+        responsible for deciding the new state and sending `update`: the shell
+        does not assume a click toggles anything, because whether it does is
+        the application's business.
+      </description>
+      <arg name="id" type="uint"/>
+    </event>
+
+    <event name="about_to_show">
+      <description summary="a submenu is about to open">
+        The client may mutate the menu and commit; the shell shows the menu on
+        the next commit, or immediately if none arrives promptly. An
+        application that populates lazily should do it here.
+      </description>
+      <arg name="id" type="uint"/>
+    </event>
+
+    <event name="closed">
+      <description summary="the menu session ended">
+        Nothing is open any more, whether because the user chose something or
+        because they dismissed it.
+      </description>
+    </event>
+
+    <enum name="kind">
+      <entry name="item" value="0" summary="an ordinary item"/>
+      <entry name="separator" value="1" summary="a divider; label is ignored"/>
+      <entry name="submenu" value="2" summary="a container for further items"/>
+      <entry name="checkbox" value="3" summary="an item with an independent on/off state"/>
+      <entry name="radio" value="4" summary="one of a set; siblings of the same kind are exclusive"/>
+    </enum>
+
+    <enum name="state" bitfield="true">
+      <entry name="enabled" value="1" summary="selectable"/>
+      <entry name="checked" value="2" summary="ticked, for a checkbox or radio item"/>
+      <entry name="hidden" value="4" summary="present in the model but not shown"/>
+    </enum>
+
+    <enum name="modifier" bitfield="true">
+      <description summary="accelerator modifiers, matching xkb's masks"/>
+      <entry name="shift" value="1"/>
+      <entry name="ctrl" value="4"/>
+      <entry name="alt" value="8"/>
+      <entry name="logo" value="64" summary="the Command key"/>
+    </enum>
+  </interface>
+
+</protocol>
