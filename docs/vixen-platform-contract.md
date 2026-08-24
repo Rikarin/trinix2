@@ -190,10 +190,22 @@ contract:
 | Text shaping | Vixen brings its own, and a face is now installed at `/usr/share/fonts/truetype/dejavu` — but the system face is still a placeholder rather than a design decision | The rest of Phase 5 |
 | A shell that draws the menu bar | Menus are transported and held, not yet displayed | The rest of Phase 5 |
 | Minimise, and a dock to minimise into | `control_activated(minimise)` is delivered and the shell does nothing with it | The rest of Phase 5 |
+| The clipboard | `wl_data_device_manager` is bound and unused; `PlatformCapabilities.Clipboard` is absent, so copy and paste do nothing rather than losing what was copied | The rest of Phase 5 |
+| File pickers | A picker is an application, and Trinix's is Files. Until there is one, `OpenFileAsync` answers as a cancelled dialog does | The rest of Phase 5 |
+| Cursors | A client draws its own by attaching a buffer to the pointer surface, which needs a renderer this platform does not have. `CursorShape` is remembered and not applied | When something needs a cursor that is not an arrow |
+| Window position | Wayland does not tell a client where it is, deliberately. `IWindow.Position` is always zero and `WindowPositioning` is absent | Never — this one is the protocol, not the implementation |
 | Fractional scaling | Integer scale factors only | When something needs it |
 | Screen capture, portals, PipeWire | No screenshots, no screen sharing | Not scheduled |
 
-One gap on this list has since closed: **how an application is packaged,
+Two gaps on this list have since closed. **A platform to run on**: Trinix
+implements Vixen's `IPlatform` in `src/Trinix.Platform/`, over the C library in
+`base/recipes/trinix-wl-client/`, and a Vixen application opens a window,
+receives keyboard and pointer input, and presents a Vulkan swapchain through it.
+Vixen needed one generic change for that — `UiApplicationOptions.Platform`, a
+hook so the loop that opens a window can be handed something other than SDL —
+and nothing Trinix-specific went into Vixen.
+
+And **how an application is packaged,
 signed and installed** is now defined and implemented — see
 [docs/app-bundles.md](app-bundles.md). A Vixen application is a `.app` bundle
 whose `Contents/Bin` holds its executable, published as a signed `.tdi`. Nothing

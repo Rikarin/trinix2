@@ -26,6 +26,8 @@ ARG TRINIX_ARCH=arm64
 ARG SOURCE_DATE_EPOCH=0
 
 COPY global.json /work/global.json
+# See docker/base.Dockerfile: src/NuGet.config resolves Vixen from ../vendor.
+COPY vendor /work/vendor
 COPY src /work/src
 
 RUN --mount=type=cache,target=/nuget,sharing=locked \

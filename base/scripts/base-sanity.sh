@@ -166,6 +166,35 @@ else
     fail 'the trinix user is not in the _seatd group — the compositor would get no devices'
 fi
 
+# --- The Vixen platform ----------------------------------------------------
+# The other half of the graphics stack: the same compositor, reached from the
+# client side. A break here is invisible from the compositor's own logs, which
+# is why it gets its own section rather than a line in the one above.
+log 'Vixen platform'
+
+for essential in usr/lib/libtrinix-wl-client.so.1 \
+                 usr/bin/trinix-helloui \
+                 usr/lib/trinix/helloui/Trinix.Platform.dll \
+                 usr/lib/trinix/helloui/Vixen.Ui.Desktop.dll \
+                 usr/lib/systemd/system/trinix-helloui.service; do
+    [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
+done
+
+# Vixen shapes its own text and brings HarfBuzz to do it. The package publishes
+# a per-architecture native library, and the wrong one is a publish that picked
+# the wrong RID — which produces an application that starts and dies at the
+# first glyph.
+harfbuzz="$ROOTFS/usr/lib/trinix/helloui/libHarfBuzzSharp.so"
+if [ -e "$harfbuzz" ]; then
+    machine="$(llvm-readelf --file-header "$harfbuzz" | awk -F': +' '/Machine/ { print $2 }')"
+    case "$machine" in
+        *"$expect_machine"*) pass "libHarfBuzzSharp.so is $expect_machine" ;;
+        *) fail "libHarfBuzzSharp.so is '$machine', expected $expect_machine" ;;
+    esac
+else
+    fail 'libHarfBuzzSharp.so is missing — Vixen cannot shape text without it'
+fi
+
 # --- Vulkan, on a machine with no GPU --------------------------------------
 # The chain a Vixen application walks on its first frame, in order, because a
 # break anywhere in it looks identical from the application's side: "no Vulkan

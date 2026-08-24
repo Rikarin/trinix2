@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Platform — Vixen's IPlatform, implemented for Trinix.
+
+      This is the assembly the rule in vendor/vixen/README.md is about: Vixen is
+      developed in its own repository and knows nothing about Trinix, so the
+      Trinix-specific half of the join lives here. What Vixen needed was one
+      generic hook — UiApplicationOptions.Platform — so that the loop which opens
+      a window can be told to use something that is not SDL.
+
+      The native half is base/recipes/trinix-wl-client, cross-compiled against a
+      sysroot the way every other C library in the image is, and reached through
+      Trinix.Interop. The two meet at /usr/lib, where the loader finds the
+      library by soname.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Platform</RootNamespace>
+        <AssemblyName>Trinix.Platform</AssemblyName>
+        <!-- Function pointers for the unmanaged callbacks. Confined to the
+             callback table itself; everything else here is ordinary C#. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Interop\Trinix.Interop.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+          The contracts only. Vixen.Platform is the assembly that declares
+          IPlatform and nothing else — no renderer, no UI framework — which is
+          what lets this project be a window system rather than an application
+          host. An application picks up the rest.
+        -->
+        <PackageReference Include="Vixen.Platform" Version="$(VixenVersion)" />
+    </ItemGroup>
+
+</Project>

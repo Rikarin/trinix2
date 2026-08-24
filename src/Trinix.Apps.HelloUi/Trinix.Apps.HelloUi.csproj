@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      The first Vixen application on Trinix, and the Phase 5 gate for the
+      platform backend: it is what -GraphicsCheck starts to prove that the chain
+      from the compositor to a presented frame is whole.
+
+      Framework-dependent like every other Trinix application. NativeAOT would
+      suit a UI application well and cannot cross-compile between architectures,
+      which is the property src/publish.sh is organised around.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <RootNamespace>Trinix.Apps.HelloUi</RootNamespace>
+        <AssemblyName>Trinix.HelloUi</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <!-- Vixen's own trim analyser runs over the packages this pulls in and is
+             not clean for a UI application yet; the boot-path components keep it. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+
+        <!-- The interface draws text, and text needs a locale-aware comparison
+             somewhere inside the shaper. The system services stay invariant. -->
+        <InvariantGlobalization>false</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Platform\Trinix.Platform.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The window, the device and the four steps of a frame. It brings
+             Vixen.Ui and the control theme behind it. -->
+        <PackageReference Include="Vixen.Ui.Desktop" Version="$(VixenVersion)" />
+    </ItemGroup>
+
+</Project>

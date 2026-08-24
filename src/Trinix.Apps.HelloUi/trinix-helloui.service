@@ -1,0 +1,32 @@
+# The Phase 5 platform gate, as a unit.
+#
+# Not enabled, for trinix-wl-demo.service's reason: a check that produces a
+# verdict on demand beats one that produces noise at every boot.
+#
+#   systemctl start trinix-helloui.service
+#   journalctl -u trinix-helloui -o cat --no-pager
+#
+# What it proves is the whole chain — compositor, Wayland client, Trinix's
+# IPlatform, Vixen, lavapipe, swapchain, present — which is why it is the last
+# of the three graphical checks and the only one that fails if any of them do.
+
+[Unit]
+Description=Trinix Vixen platform check
+Documentation=https://github.com/rikarin/trinix
+After=trinix-compositor.service
+Requires=trinix-compositor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+User=trinix
+Group=trinix
+
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WAYLAND_DISPLAY=wayland-0
+
+ExecStart=/usr/bin/trinix-helloui --frames 10
+
+StandardOutput=journal+console
+StandardError=journal+console

@@ -28,6 +28,10 @@ FROM ${TOOLCHAIN_IMAGE} AS dotnet-apps
 ARG TRINIX_ARCH=arm64
 
 COPY global.json /work/global.json
+# The vendored Vixen packages, which src/NuGet.config names as ../vendor/vixen.
+# Copied as its own layer and before src/, so that editing C# does not invalidate
+# five megabytes of packages that did not change.
+COPY vendor /work/vendor
 COPY src /work/src
 
 # NUGET_PACKAGES is set in the build container; the cache mount keeps restores

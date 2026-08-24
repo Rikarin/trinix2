@@ -328,6 +328,19 @@ if [ "$check" -eq 1 ]; then
                 if ! await 'frames=10' 300; then
                     verdict="$verdict vulkan-present"
                 fi
+
+                # And then the whole of it at once: a Vixen application, which
+                # is the two stacks above plus Trinix's IPlatform plus the
+                # engine. It is last because it is the only one that fails when
+                # any of them do, and a verdict that names the lowest broken
+                # layer is worth more than one that names the top.
+                type_line 'systemctl start trinix-helloui.service; journalctl -u trinix-helloui -o cat --no-pager'
+                if ! await 'TRINIX-VIXEN: window' 600; then
+                    verdict="$verdict vixen-window"
+                fi
+                if ! await 'TRINIX-VIXEN-OK frames=' 600; then
+                    verdict="$verdict vixen-frames"
+                fi
             else
                 verdict="$verdict root-shell"
             fi
@@ -519,7 +532,7 @@ if [ "$check" -eq 1 ]; then
     if [ "$app_check" -eq 1 ]; then
         echo "PASS: trinix-$arch installed, launched and then refused a tampered application in ${SECONDS}s."
     elif [ "$graphics_check" -eq 1 ]; then
-        echo "PASS: trinix-$arch ran a Wayland client and a Vulkan swapchain under the C# compositor in ${SECONDS}s."
+        echo "PASS: trinix-$arch ran a Wayland client, a Vulkan swapchain and a Vixen application under the C# compositor in ${SECONDS}s."
     elif [ "$login_check" -eq 1 ]; then
         echo "PASS: trinix-$arch logged in to PowerShell with a working .NET in ${SECONDS}s."
     else

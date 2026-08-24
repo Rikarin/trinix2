@@ -24,15 +24,19 @@ PKI, and a Gatekeeper-analog launcher. Build, sign, package, install, launch —
 and a tampered bundle refuses to start. See
 [docs/app-bundles.md](docs/app-bundles.md).
 
-**Phase 5 has started from the bottom.** Before a Vixen application can draw
-anything it needs a Vulkan implementation and a font, and the image had
-neither: it now carries a Vulkan loader, Mesa's lavapipe rasterising on the CPU
-against an LLVM built for the target, and a face at the path Vixen looks in.
-`trinix-vk-probe` walks that chain — loader, ICD, device, swapchain, present —
-so the runtime is checkable before there is a toolkit on top of it.
+**Phase 5 runs a Vixen application.** The runtime came first — a Vulkan loader,
+Mesa's lavapipe rasterising on the CPU against an LLVM built for the target, and
+a font at the path Vixen looks in — and on top of it sits
+[src/Trinix.Platform/](src/Trinix.Platform/), Trinix's implementation of Vixen's
+`IPlatform`: a Wayland client that speaks xdg-shell and both Trinix protocol
+extensions, with the C half in
+[base/recipes/trinix-wl-client/](base/recipes/trinix-wl-client/). Vixen itself is
+unmodified and consumed as [pinned packages](vendor/vixen/); the one change it
+needed was a hook so `UiApplication.Run` can be handed a platform that is not
+SDL.
 
-Still to come: the Trinix platform backend Vixen renders through, the system
-shell and the core applications (the rest of Phase 5), then the package manager
+Still to come: the system shell and the core applications — a dock, a menu bar
+that draws, Terminal and Files (the rest of Phase 5) — then the package manager
 and A/B updates (Phase 7).
 
 ## Requirements
@@ -194,6 +198,33 @@ That is the correct answer on this VM tier rather than a degraded one, and the
 graphics check asserts it — a build that quietly found a GPU nobody arranged
 for should fail rather than pass faster.
 
+## Applications
+
+A Vixen application on Trinix is an ordinary Vixen application. It says which
+platform to use and nothing else:
+
+```csharp
+UiApplication.Run(new UiApplicationOptions {
+    Title = "Hello from Vixen",
+    Platform = options => new TrinixPlatform(new TrinixPlatformOptions { … }),
+    Content = () => new Greeting()
+});
+```
+
+[src/Trinix.Platform/](src/Trinix.Platform/) is what that line reaches: Vixen's
+`IPlatform`, implemented over the protocol Trinix's own compositor speaks. Its
+native half is [base/recipes/trinix-wl-client/](base/recipes/trinix-wl-client/),
+and that library exists for a reason worth knowing before reading either — Vulkan's
+WSI takes a libwayland `wl_display` and calls libwayland on it, so the display
+object has to be libwayland's whatever else is decided, and once it is, the
+protocol marshalling belongs on the same side of the boundary as the object.
+
+The division of labour with the compositor is
+[docs/vixen-platform-contract.md](docs/vixen-platform-contract.md): **Vixen draws,
+Trinix arranges.** Windows are decorated by the client and dragged, shadowed and
+hit-tested by the compositor, and menus live in the bar at the top of the screen
+rather than inside the window — `TrinixMenu` is how an application exports one.
+
 The virtual-console login moved to `tty2` when the compositor took `tty1`. The
 serial console is unaffected, and `systemd.unit=multi-user.target` boots without
 a display at all.
@@ -203,9 +234,15 @@ Four unattended checks, each a phase's exit criteria expressed as a test:
 ```bash
 ./scripts/run-vm.ps1 -Arch arm64 -Check          # boots to a login prompt
 ./scripts/run-vm.ps1 -Arch arm64 -LoginCheck     # logs in, lands in pwsh, runs .NET
-./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # a Wayland client, then a Vulkan swapchain
+./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # a Wayland client, a Vulkan swapchain, a Vixen window
 ./scripts/run-vm.ps1 -Arch arm64 -AppCheck       # installs, launches and then refuses a tampered app
 ```
+
+The graphics check runs three clients against the one compositor, in order, and
+the order is the point: a bare Wayland client, then a Vulkan swapchain, then a
+Vixen application — which is the two below it plus the platform backend plus the
+engine. A verdict naming the lowest broken layer is worth more than one naming
+the top.
 
 There is no accelerator — Docker Desktop does not pass virtualisation through —
 so expect a couple of minutes for arm64 and considerably longer for x86_64.
@@ -237,7 +274,8 @@ Downloads are cached in `.cache/sources/` (gitignored).
 | `toolchain/` | LLVM/Clang toolchain build, per-arch sysroots, cmake toolchain files |
 | `base/` | `sources.json` (all pins) and one build recipe per base component |
 | `image/` | Rootfs assembly, ESP layout, A/B image + dm-verity tooling |
-| `src/` | All C#: compositor, shell, apps, package manager, bundle/signing libraries |
+| `src/` | All C#: compositor, platform backend, shell, apps, package manager, bundle/signing libraries |
+| `vendor/` | Vixen, pinned as packages — see [vendor/vixen/README.md](vendor/vixen/README.md) |
 | `signing/` | Dev PKI layout and key policy — real keys are never committed |
 | `scripts/` | `build.ps1`, `run-vm.ps1`, `update-sources.ps1` — the host-side entry points |
 

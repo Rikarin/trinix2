@@ -47,8 +47,9 @@ common=(
 daemon_out="$destdir/usr/lib/trinix/daemon"
 compositor_out="$destdir/usr/lib/trinix/compositor"
 bundle_out="$destdir/usr/lib/trinix/bundle"
+helloui_out="$destdir/usr/lib/trinix/helloui"
 module_out="$destdir/usr/lib/powershell/Modules/Trinix.Management"
-install -d "$daemon_out" "$compositor_out" "$bundle_out" "$module_out" \
+install -d "$daemon_out" "$compositor_out" "$bundle_out" "$helloui_out" "$module_out" \
            "$destdir/usr/lib/systemd/system" "$destdir/usr/bin"
 
 dotnet publish "$srcdir/Trinix.Daemon/Trinix.Daemon.csproj" "${common[@]}" --output "$daemon_out"
@@ -76,6 +77,17 @@ dotnet publish "$srcdir/Trinix.Gatekeeper/Trinix.Gatekeeper.csproj" "${common[@]
 ln -sfn ../lib/trinix/bundle/trinix-bundle "$destdir/usr/bin/trinix-bundle"
 ln -sfn ../lib/trinix/bundle/trinix-open   "$destdir/usr/bin/trinix-open"
 
+# The first Vixen application, and the check that the platform backend works.
+# Its own directory rather than beside the bundle tools: it carries the whole of
+# Vixen — forty assemblies — and nothing else in the image links any of them.
+#
+# ⚠ Not --no-self-contained's usual company. It reads Vixen from the vendored
+# package feed in vendor/vixen, which src/NuGet.config points at as a relative
+# path — so this stage's working directory has to be able to see it, which is
+# why docker/base.Dockerfile copies vendor/ as well as src/.
+dotnet publish "$srcdir/Trinix.Apps.HelloUi/Trinix.Apps.HelloUi.csproj" "${common[@]}" --output "$helloui_out"
+ln -sfn ../lib/trinix/helloui/Trinix.HelloUi "$destdir/usr/bin/trinix-helloui"
+
 dotnet publish "$srcdir/Trinix.Management/Trinix.Management.csproj" "${common[@]}" --output "$module_out"
 
 # A published module directory is full of framework assemblies that pwsh
@@ -93,6 +105,8 @@ install -m644 "$srcdir/Trinix.Management/trinix-selftest.service" \
               "$destdir/usr/lib/systemd/system/trinix-selftest.service"
 install -m644 "$srcdir/Trinix.Compositor/trinix-compositor.service" \
               "$destdir/usr/lib/systemd/system/trinix-compositor.service"
+install -m644 "$srcdir/Trinix.Apps.HelloUi/trinix-helloui.service" \
+              "$destdir/usr/lib/systemd/system/trinix-helloui.service"
 
 # Enabled here rather than by `systemctl enable` on the target, for the same
 # reason every other unit is: /etc is read-only on a running system, so the
@@ -110,9 +124,11 @@ ln -sfn ../trinix-compositor.service \
         "$destdir/usr/lib/systemd/system/graphical.target.wants/trinix-compositor.service"
 
 chmod 755 "$daemon_out/trinixd" "$compositor_out/trinix-compositor" \
-          "$bundle_out/trinix-bundle" "$bundle_out/trinix-open"
+          "$bundle_out/trinix-bundle" "$bundle_out/trinix-open" \
+          "$helloui_out/Trinix.HelloUi"
 
 echo "==> published $(du -sh "$daemon_out" | cut -f1) of daemon," \
      "$(du -sh "$compositor_out" | cut -f1) of compositor," \
      "$(du -sh "$bundle_out" | cut -f1) of bundle tools," \
+     "$(du -sh "$helloui_out" | cut -f1) of Vixen application," \
      "$(du -sh "$module_out" | cut -f1) of module"

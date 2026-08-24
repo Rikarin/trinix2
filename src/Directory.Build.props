@@ -34,6 +34,17 @@
     </PropertyGroup>
 
     <PropertyGroup>
+        <!--
+          The Vixen pin, in one place. The suffix is Vixen's own commit, and
+          vendor/vixen/ holds the packages it names; scripts/update-vixen.ps1
+          rewrites both together. Every Trinix project that references Vixen
+          spells the version as $(VixenVersion) so that moving the pin is one
+          line rather than one line per project.
+        -->
+        <VixenVersion>0.1.0-trinix.6e46eee4180a</VixenVersion>
+    </PropertyGroup>
+
+    <PropertyGroup>
         <Company>Trinix</Company>
         <Product>Trinix</Product>
         <Deterministic>true</Deterministic>
