@@ -32,7 +32,17 @@ if "versionMajor" in entry:
 sha = entry.get("sha256")
 if not sha:
     sys.exit(f"'{name}' has no recorded sha256 — run scripts/update-sources.ps1 -Name {name}")
-print(entry["version"], url, sha, posixpath.basename(url))
+
+# The cache is one flat directory keyed by file name, so an entry may override
+# the URL's last segment: Vulkan-Headers and Vulkan-Loader are both GitHub
+# archives of a tag called `vulkan-sdk-<version>`, and without the override the
+# two fetches collide on one path.
+filename = entry.get("fileName", posixpath.basename(url))
+filename = filename.replace("${version}", entry["version"])
+if "versionMajor" in entry:
+    filename = filename.replace("${versionMajor}", entry["versionMajor"])
+
+print(entry["version"], url, sha, filename)
 PY
 }
 

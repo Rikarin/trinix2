@@ -40,8 +40,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       `# autotools output and must be regenerated, and aclocal then needs the` \
       `# macros the project declares even though no documentation is built.` \
       gtk-doc-tools \
-      `# scripting used by kernel/systemd/llvm build systems` \
-      python3 python3-setuptools python3-jinja2 python3-pyelftools perl \
+      `# scripting used by kernel/systemd/llvm build systems. The last three` \
+      `# are Mesa's: it generates dispatch tables and driver descriptors from` \
+      `# mako templates, reads a registry with yaml, and compares versions` \
+      `# with packaging now that Python 3.12 has dropped distutils. Mesa's` \
+      `# check for all three reports "Python >= 3.10 not found", which is` \
+      `# true of none of them — hence naming them here.` \
+      python3 python3-setuptools python3-jinja2 python3-pyelftools \
+      python3-mako python3-yaml python3-packaging perl \
       `# fetch + unpack pinned sources` \
       curl ca-certificates git xz-utils bzip2 zstd unzip rsync file cpio bc jq \
       `# host -dev libs used while *building* tools, never shipped to the target` \

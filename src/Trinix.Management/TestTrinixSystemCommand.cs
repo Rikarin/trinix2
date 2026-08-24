@@ -10,9 +10,9 @@ namespace Trinix.Management;
 ///     <para>
 ///         Every check here answers a question that has a right answer on a healthy
 ///         Trinix system and a wrong one on a broken image: is the shell PowerShell,
-///         does .NET run, did the C# service start, did the C# compositor start, is
-///         the root filesystem read-only as the A/B model requires, is <c>/data</c>
-///         mounted and writable.
+///         does .NET run, did the C# service start, did the C# compositor start, can
+///         anything render, is the root filesystem read-only as the A/B model
+///         requires, is <c>/data</c> mounted and writable.
 ///     </para>
 ///     <para>
 ///         It exists because Phase 7 needs it. An A/B update commits to a new slot
@@ -90,6 +90,37 @@ public sealed class TestTrinixSystemCommand : PSCmdlet {
         }
     }
 
+    // Graphics, from the application's side rather than the compositor's.
+    //
+    // CheckService("Compositor") answers "is there a window server"; this
+    // answers "could anything draw into it". They fail independently: a
+    // compositor runs perfectly well on an image whose Vulkan ICD is missing,
+    // and every application on that image fails to start with the same
+    // uninformative message. Since Phase 5 that is a way for an A/B slot to be
+    // broken, so it belongs in the definition of "this slot works".
+    //
+    // --no-window, deliberately: the probe would otherwise want a compositor
+    // and a seat, and this runs at boot from a system service that has neither.
+    // What is being checked is the loader, the driver and the device.
+    static TrinixCheck CheckVulkan() {
+        try {
+            var result = Cli.Run("trinix-vk-probe", "--no-window");
+            var device = Cli.Lines(result.StandardOutput)
+                .FirstOrDefault(line => line.StartsWith("device: ", StringComparison.Ordinal));
+
+            return new() {
+                Component = "Vulkan",
+                Ok = result.ExitCode == 0 && device is not null,
+                Detail = device?["device: ".Length..] ?? FirstNonEmpty(result.StandardError, "no device was reported")
+            };
+        } catch (Exception e) when (e is InvalidOperationException or Win32Exception) {
+            return new() { Component = "Vulkan", Ok = false, Detail = e.Message };
+        }
+    }
+
+    static string FirstNonEmpty(string candidate, string fallback) =>
+        string.IsNullOrWhiteSpace(candidate) ? fallback : candidate.Trim();
+
     static TrinixCheck CheckImmutableRoot() => MountCheck("ImmutableRoot", "/", true);
 
     static TrinixCheck CheckWritableData() => MountCheck("WritableData", "/data", false);
@@ -120,6 +151,7 @@ public sealed class TestTrinixSystemCommand : PSCmdlet {
             CheckDotNet(),
             CheckService("Daemon", "trinixd"),
             CheckService("Compositor", "trinix-compositor"),
+            CheckVulkan(),
             CheckImmutableRoot(),
             CheckWritableData()
         };

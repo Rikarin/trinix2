@@ -28,6 +28,13 @@
 # tier that can supply virgl. The compositor asks for a renderer by name
 # through WLR_RENDERER, so that day is a recipe and an environment variable,
 # not a rewrite.
+#
+# ⚠ Since Phase 5 there *is* a Mesa in the image, and none of the above has
+# changed. base/recipes/mesa builds one driver — lavapipe, which rasterises on
+# the CPU — because Vixen renders through Vulkan and an application needs an
+# ICD whether or not there is a GPU. It brings no GL, no EGL and no gbm, so
+# there is still nothing here for wlroots' GL renderer to use, and the check
+# below still fails if this library grows a dependency on one.
 
 RECIPE_SOURCE="wlroots"
 RECIPE_DEPENDS="glibc-runtime wayland wayland-protocols libdrm pixman \
@@ -45,7 +52,8 @@ trinix_build() {
         `# gets the same answer.` \
         -Dwerror=false \
         \
-        `# See the header. No EGL, no gbm, no Mesa.` \
+        `# See the header. No EGL, no gbm, and nothing from the Mesa that` \
+        `# Phase 5 added — it builds none of the three.` \
         -Drenderers=[] \
         -Dallocators=[] \
         \
@@ -90,8 +98,10 @@ trinix_check() {
         return 1
     fi
 
-    # And the converse: an EGL renderer that crept back in would link the image
-    # against a Mesa that is not there.
+    # And the converse: an EGL renderer that crept back in would link against
+    # libraries the image does not have. Mesa is in the image now and still
+    # does not build them, so this stays an assertion rather than becoming an
+    # option somebody could turn on.
     if llvm-readelf --dynamic "$lib" | grep -q 'libEGL\|libgbm'; then
         echo 'wlroots: links against EGL/gbm, which the image does not ship' >&2
         return 1

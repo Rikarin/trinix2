@@ -11,9 +11,10 @@
 #   --login-check     everything --check does, then log in and drive the
 #                     session: does it land in PowerShell, does .NET work, did
 #                     the C# service start. The Phase 3 exit criteria as a test.
-#   --graphics-check  run a Wayland client under the C# compositor and read the
-#                     verdict out of the journal. The Phase 4 exit criterion as
-#                     a test.
+#   --graphics-check  run a Wayland client under the C# compositor, then a
+#                     Vulkan swapchain against the same compositor, and read
+#                     both verdicts out of the journal. The Phase 4 exit
+#                     criterion plus Phase 5's graphics runtime, as a test.
 #   --app-check       install a signed .tdi, launch the application it contains,
 #                     then tamper with it and assert that it stops launching.
 #                     The Phase 6 exit criterion as a test.
@@ -221,7 +222,13 @@ if [ "$check" -eq 1 ]; then
         fi
 
         while kill -0 "$qemu_pid" 2>/dev/null; do
-            [ "$(grep -ac "$pattern" "$serial_log" 2>/dev/null || echo 0)" -ge "$want" ] && return 0
+            # `grep -c` prints its count *and* exits non-zero when the count is
+            # zero, so `|| echo 0` used to append a second line and `[` then
+            # complained about "0\n0" on every poll until the pattern matched.
+            # The count is captured and defaulted instead.
+            local seen
+            seen="$(grep -ac "$pattern" "$serial_log" 2>/dev/null || true)"
+            [ "${seen:-0}" -ge "$want" ] && return 0
             [ "$SECONDS" -ge "$until_t" ] && return 1
             sleep 2
         done
@@ -294,6 +301,32 @@ if [ "$check" -eq 1 ]; then
                 fi
                 if ! await 'control Close at' 60; then
                     verdict="$verdict control-zones"
+                fi
+
+                # And then the other graphics stack in the image, which shares
+                # nothing with the one above it but the compositor at the far
+                # end: loader, ICD, device, swapchain, present. A Vixen
+                # application's first frame is this sequence, so a break here
+                # is a break there — and the failure an application reports is
+                # "no Vulkan device" whichever link actually went.
+                type_line 'systemctl start trinix-vk-probe.service; journalctl -u trinix-vk-probe -o cat --no-pager'
+                if ! await 'logical device created' 300; then
+                    verdict="$verdict vulkan-device"
+                fi
+
+                # ⚠ The device is asserted to be the CPU one. On this VM tier
+                # that is the correct answer rather than a degraded one, and
+                # asserting it is what would catch a future build that quietly
+                # found a GPU nobody arranged for.
+                if ! await 'llvmpipe' 60; then
+                    verdict="$verdict lavapipe-icd"
+                fi
+
+                # Presentation, which is the half that needs the compositor: a
+                # swapchain on this driver is wl_shm buffers, so this line is
+                # also the proof that Mesa's software WSI path works here.
+                if ! await 'frames=10' 300; then
+                    verdict="$verdict vulkan-present"
                 fi
             else
                 verdict="$verdict root-shell"
@@ -486,7 +519,7 @@ if [ "$check" -eq 1 ]; then
     if [ "$app_check" -eq 1 ]; then
         echo "PASS: trinix-$arch installed, launched and then refused a tampered application in ${SECONDS}s."
     elif [ "$graphics_check" -eq 1 ]; then
-        echo "PASS: trinix-$arch ran a Wayland client under the C# compositor in ${SECONDS}s."
+        echo "PASS: trinix-$arch ran a Wayland client and a Vulkan swapchain under the C# compositor in ${SECONDS}s."
     elif [ "$login_check" -eq 1 ]; then
         echo "PASS: trinix-$arch logged in to PowerShell with a working .NET in ${SECONDS}s."
     else

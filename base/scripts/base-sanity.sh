@@ -166,6 +166,60 @@ else
     fail 'the trinix user is not in the _seatd group — the compositor would get no devices'
 fi
 
+# --- Vulkan, on a machine with no GPU --------------------------------------
+# The chain a Vixen application walks on its first frame, in order, because a
+# break anywhere in it looks identical from the application's side: "no Vulkan
+# device". Each link is produced by a different recipe.
+log 'Vulkan runtime'
+
+for essential in usr/lib/libvulkan.so.1 usr/lib/libvulkan.so \
+                 usr/bin/trinix-vk-probe \
+                 usr/lib/systemd/system/trinix-vk-probe.service; do
+    [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
+done
+
+# The manifest is how the loader finds a driver at all: with no file here the
+# loader initialises, reports zero physical devices, and nothing says why.
+icd="$(find "$ROOTFS/usr/share/vulkan/icd.d" -name '*.json' 2>/dev/null | head -1 || true)"
+if [ -n "$icd" ]; then
+    pass "an ICD manifest is installed (${icd##*/})"
+
+    # And the manifest has to name a library that is actually here. It carries
+    # an absolute path, which resolves against the build container from this
+    # side, so it is read and re-rooted rather than followed.
+    named="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["ICD"]["library_path"])' "$icd")"
+    case "$named" in
+        /*) named="$ROOTFS$named" ;;
+        *)  named="$(dirname "$icd")/$named" ;;
+    esac
+    [ -e "$named" ] && pass "it names ${named#"$ROOTFS"}, which exists" \
+        || fail "the ICD manifest names ${named#"$ROOTFS"}, which was not installed"
+else
+    fail 'no Vulkan ICD manifest — the loader would find no driver and every application would fail to start'
+fi
+
+# lavapipe rasterises by compiling shaders, so LLVM is a runtime dependency of
+# the graphics stack here rather than a build-time one. See
+# base/recipes/llvm-target/recipe.sh.
+# Captured rather than piped into `grep -q`: this script runs under pipefail,
+# grep exits on the first match, and whether find is still writing when that
+# happens is a race — so the piped form passes or fails by timing.
+llvm_libraries="$(find "$ROOTFS/usr/lib" -maxdepth 1 -name 'libLLVM.so.*' 2>/dev/null || true)"
+if [ -n "$llvm_libraries" ]; then
+    pass 'libLLVM is present for lavapipe to JIT with'
+else
+    fail 'no libLLVM — the software rasteriser has no back end'
+fi
+
+# --- A font ---------------------------------------------------------------
+# Vixen parses TrueType itself and probes a fixed list of paths; with none of
+# them present the interface lays out correctly and draws no text at all.
+if [ -e "$ROOTFS/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf" ]; then
+    pass 'DejaVuSans.ttf is where Vixen looks for it'
+else
+    fail 'no font at /usr/share/fonts/truetype/dejavu — an interface would draw no text'
+fi
+
 # --- The application format -----------------------------------------------
 # Three things assembled by three different stages, and an image missing any one
 # of them boots to a system that cannot install or launch an application while

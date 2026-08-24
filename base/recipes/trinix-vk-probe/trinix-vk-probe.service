@@ -1,0 +1,31 @@
+# The Vulkan runtime's exit criterion, as a unit.
+#
+# Not enabled, for trinix-wl-demo.service's reason: a check that produces a
+# verdict on demand beats one that produces noise at every boot.
+#
+#   systemctl start trinix-vk-probe.service
+#   journalctl -u trinix-vk-probe -o cat --no-pager
+#
+# Expect four lines naming each link of the chain, then the device — which on a
+# machine with no GPU reads "llvmpipe (LLVM 21.1.0, 128 bits)", type CPU, and
+# that is the correct answer here rather than a fallback.
+
+[Unit]
+Description=Trinix Vulkan probe
+Documentation=https://github.com/rikarin/trinix
+After=trinix-compositor.service
+Requires=trinix-compositor.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+User=trinix
+Group=trinix
+
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=WAYLAND_DISPLAY=wayland-0
+ExecStart=/usr/bin/trinix-vk-probe --frames 10
+
+StandardOutput=journal+console
+StandardError=journal+console

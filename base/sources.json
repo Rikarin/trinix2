@@ -4,6 +4,7 @@
     "The single source of truth for every upstream tarball Trinix builds from.",
     "LFS discipline: nothing is fetched that is not pinned here by version AND sha256.",
     "`${version}` and `${versionMajor}` are expanded in `url`.",
+    "`fileName` overrides what the download cache calls the archive, for two upstreams whose URLs end in the same name — Vulkan-Headers and Vulkan-Loader are both an archive of a tag called `vulkan-sdk-<version>`.",
     "Run `scripts/update-sources.ps1` to (re)compute checksums after bumping a version.",
     "GNU components go through ftpmirror.gnu.org: ftp.gnu.org itself is regularly unreachable, and the pinned digest makes an untrusted mirror a non-issue."
   ],
@@ -370,6 +371,44 @@
       "url": "https://gitlab.freedesktop.org/wlroots/wlroots/-/releases/${version}/downloads/wlroots-${version}.tar.gz",
       "sha256": "5d02693175e5afd9af5f10e3e4976d6e9249dc39a90eb17d23fa5f54b125ccc5",
       "notes": "Modesetting, buffer management and the protocol implementations the C# compositor drives. The 0.19 series rather than 0.20: it is what the binding layer in base/recipes/trinix-wlr is written against, and an ABI that moves under a hand-curated binding is a debugging session, not an upgrade."
+    },
+    "glslang": {
+      "version": "1.4.357.0",
+      "phase": 5,
+      "url": "https://github.com/KhronosGroup/glslang/archive/refs/tags/vulkan-sdk-${version}.tar.gz",
+      "fileName": "glslang-${version}.tar.gz",
+      "sha256": "81038794e20494556edbcc0fc70fa984d71d1b440f9c49adf2cbaaa60a519757",
+      "notes": "A GLSL-to-SPIR-V compiler for the *build* machine. Mesa 26 compiles lavapipe's ray-tracing BVH shaders at build time and this is what compiles them, so it is an input to a target binary and therefore pinned rather than taken from Debian. Same SDK tag as vulkan-headers, which is how Khronos versions the three together. NOTE: GitHub auto-generated archive."
+    },
+    "mesa": {
+      "version": "26.1.8",
+      "phase": 5,
+      "url": "https://archive.mesa3d.org/mesa-${version}.tar.xz",
+      "sha256": "b320f65874fd9653ac6c0bd1616605387344e1247411a50c797b5f3fb9dc0b55",
+      "notes": "Built for one driver: lavapipe, the software Vulkan implementation, and no GL of any kind. Phase 4 shipped no Mesa deliberately — wlroots' GL renderer wanted a DRM render node the VM tier cannot supply, and that is still true. Vixen's UI renderer is Vulkan-only, so an application needs an ICD whether or not there is a GPU, which is what changed. The 26.1 series rather than 26.2: 26.2.1 was four days old when this was pinned, and 26.1 is the branch that has had eight."
+    },
+    "vulkan-headers": {
+      "version": "1.4.357.0",
+      "phase": 5,
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/vulkan-sdk-${version}.tar.gz",
+      "fileName": "Vulkan-Headers-${version}.tar.gz",
+      "sha256": "e87dce08116151f6b6d7de6b6faf41498e87e6cf848ff16fa3bd5402190ad4a3",
+      "notes": "The Vulkan API headers and the registry XML the loader generates from. Must stay at the same SDK tag as vulkan-loader — the loader builds against these, not against whatever is installed. NOTE: GitHub auto-generated archive."
+    },
+    "vulkan-loader": {
+      "version": "1.4.357.0",
+      "phase": 5,
+      "url": "https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/vulkan-sdk-${version}.tar.gz",
+      "fileName": "Vulkan-Loader-${version}.tar.gz",
+      "sha256": "54f2537df22313768da0317dda2abdaaab7711b4081c48c869a79db343d0ae70",
+      "notes": "libvulkan.so.1 — what an application links against and what finds the ICD. Vixen reaches it through Silk.NET's DllImport of \"vulkan\", so the soname has to be present under that name at runtime. NOTE: GitHub auto-generated archive."
+    },
+    "dejavu-fonts": {
+      "version": "2.37",
+      "phase": 5,
+      "url": "https://github.com/dejavu-fonts/dejavu-fonts/releases/download/version_2_37/dejavu-fonts-ttf-${version}.tar.bz2",
+      "sha256": "fa9ca4d13871dd122f61258a80d01751d603b4d3ee14095d65453b4e846e17d7",
+      "notes": "The image had no fonts at all. Vixen.Ui parses TrueType itself — no freetype, no fontconfig — and probes three paths, of which DejaVuSans.ttf under /usr/share/fonts/truetype/dejavu is the first. NOTE: the release tag (version_2_37) is spelled out because it is not derivable from the version by this file's ${version} expansion."
     },
     "tzdata": {
       "version": "2025a",

@@ -36,6 +36,11 @@
         find a display, did a client that knows nothing about it get a window on
         that display. The Phase 4 exit criterion as a test.
 
+        Then the same question of the Vulkan stack, which shares nothing with
+        that client but the compositor at the far end: does the loader find the
+        lavapipe ICD, does a device come back, does a swapchain present. That
+        sequence is a Vixen application's first frame.
+
     .PARAMETER AppCheck
         Everything -Check does, and then install a signed .tdi distribution image,
         launch the application inside it, tamper with the installed bundle and

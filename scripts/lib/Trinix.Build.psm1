@@ -100,7 +100,7 @@ function Get-TrinixSource {
             Phase    = $entry.phase
             Url      = Resolve-TrinixSourceUrl -Entry $entry
             Sha256   = $entry.sha256
-            FileName = Split-Path -Leaf (Resolve-TrinixSourceUrl -Entry $entry)
+            FileName = Resolve-TrinixSourceFileName -Entry $entry
             Notes    = if ($entry.PSObject.Properties.Name -contains 'notes') { $entry.notes } else { $null }
         }
     }
@@ -117,6 +117,37 @@ function Resolve-TrinixSourceUrl {
         $url = $url -replace '\$\{versionMajor\}', $Entry.versionMajor
     }
     return $url
+}
+
+function Resolve-TrinixSourceFileName {
+    <#
+        .SYNOPSIS  What this source is called in the download cache.
+        .DESCRIPTION
+            The URL's last segment, unless the entry overrides it with `fileName`.
+
+            The override exists because the cache is one flat directory keyed by
+            that name, and two upstreams can disagree about who owns a name.
+            Vulkan-Headers and Vulkan-Loader are the case: both are GitHub
+            auto-generated archives of a tag called `vulkan-sdk-<version>`, so
+            both resolve to `vulkan-sdk-1.4.357.0.tar.gz` and the second fetch
+            finds the first one's bytes sitting at its path. That surfaces as a
+            checksum mismatch rather than a wrong build, which is the good
+            failure mode — but it is still a collision, and naming the file is
+            how an entry gets out of it.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][psobject]$Entry)
+
+    if ($Entry.PSObject.Properties.Name -contains 'fileName') {
+        $name = $Entry.fileName -replace '\$\{version\}', $Entry.version
+        if ($Entry.PSObject.Properties.Name -contains 'versionMajor') {
+            $name = $name -replace '\$\{versionMajor\}', $Entry.versionMajor
+        }
+        return $name
+    }
+
+    return (Split-Path -Leaf (Resolve-TrinixSourceUrl -Entry $Entry))
 }
 
 function Set-TrinixSourceChecksum {
@@ -339,6 +370,6 @@ function Update-TrinixTrustStore {
 
 Export-ModuleMember -Function `
     Get-TrinixRoot, Get-TrinixSourceCache, Get-TrinixArch, `
-    Get-TrinixSourceManifestPath, Get-TrinixSource, Resolve-TrinixSourceUrl, Set-TrinixSourceChecksum, `
+    Get-TrinixSourceManifestPath, Get-TrinixSource, Resolve-TrinixSourceUrl, Resolve-TrinixSourceFileName, Set-TrinixSourceChecksum, `
     Assert-TrinixDocker, Invoke-TrinixDocker, `
     Get-TrinixSigningDirectory, Get-TrinixSigningIdentity, Assert-TrinixSigningIdentity, Update-TrinixTrustStore

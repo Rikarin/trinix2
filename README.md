@@ -24,8 +24,16 @@ PKI, and a Gatekeeper-analog launcher. Build, sign, package, install, launch —
 and a tampered bundle refuses to start. See
 [docs/app-bundles.md](docs/app-bundles.md).
 
-Still to come: Vixen and the system shell (Phase 5's remaining items), then the
-package manager and A/B updates (Phase 7).
+**Phase 5 has started from the bottom.** Before a Vixen application can draw
+anything it needs a Vulkan implementation and a font, and the image had
+neither: it now carries a Vulkan loader, Mesa's lavapipe rasterising on the CPU
+against an LLVM built for the target, and a face at the path Vixen looks in.
+`trinix-vk-probe` walks that chain — loader, ICD, device, swapchain, present —
+so the runtime is checkable before there is a toolkit on top of it.
+
+Still to come: the Trinix platform backend Vixen renders through, the system
+shell and the core applications (the rest of Phase 5), then the package manager
+and A/B updates (Phase 7).
 
 ## Requirements
 
@@ -164,10 +172,27 @@ There is no OpenGL in the image, and that is a decision rather than an
 omission: wlroots' GL renderer needs a DRM render node, QEMU's virtio-gpu
 offers one only when the *host* can lend it a GL context, and the host here is
 a container. So the compositor composites in software through pixman into dumb
-buffers — correct, slow, and honestly the same thing every VM does. Mesa
-arrives when there is a GPU worth talking to; see
+buffers — correct, slow, and honestly the same thing every VM does. See
 [base/recipes/wlroots/recipe.sh](base/recipes/wlroots/recipe.sh) for the whole
 argument.
+
+**There is Vulkan, though**, and the two facts are compatible. Applications are
+a different consumer with a different requirement: Vixen renders its interface
+through a `VulkanDevice` and has no CPU path, so the image carries a Vulkan
+loader and one driver — Mesa's **lavapipe**, which rasterises on the processor
+by JIT-compiling shaders through an LLVM built for the target
+([base/recipes/mesa/](base/recipes/mesa/)). A swapchain on that driver has no
+dmabuf to hand over, so it presents through `wl_shm` — the same buffer the
+compositor was already expecting. `trinix-vk-probe` walks the whole chain and
+prints what it found:
+
+```
+device: llvmpipe (LLVM 21.1.0, 128 bits) (CPU, Vulkan 1.4.354)
+```
+
+That is the correct answer on this VM tier rather than a degraded one, and the
+graphics check asserts it — a build that quietly found a GPU nobody arranged
+for should fail rather than pass faster.
 
 The virtual-console login moved to `tty2` when the compositor took `tty1`. The
 serial console is unaffected, and `systemd.unit=multi-user.target` boots without
@@ -178,7 +203,7 @@ Four unattended checks, each a phase's exit criteria expressed as a test:
 ```bash
 ./scripts/run-vm.ps1 -Arch arm64 -Check          # boots to a login prompt
 ./scripts/run-vm.ps1 -Arch arm64 -LoginCheck     # logs in, lands in pwsh, runs .NET
-./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # runs a Wayland client under the compositor
+./scripts/run-vm.ps1 -Arch arm64 -GraphicsCheck  # a Wayland client, then a Vulkan swapchain
 ./scripts/run-vm.ps1 -Arch arm64 -AppCheck       # installs, launches and then refuses a tampered app
 ```
 

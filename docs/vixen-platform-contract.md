@@ -55,18 +55,30 @@ if it works on any wlroots compositor it works here.
 
 **Buffers, and an honest note about acceleration.** The contract specifies
 `wl_shm` as the path that always works, and EGL or Vulkan as the accelerated
-path. Today Trinix ships neither: there is no Mesa in the image, because
-wlroots' GL renderer needs a DRM render node and the VM tier cannot provide
-one — the reasoning is in
-[`base/recipes/wlroots/recipe.sh`](../base/recipes/wlroots/recipe.sh). The
-compositor composites in software.
+path. Trinix now ships Vulkan and still ships no acceleration, which sounds
+like a contradiction and is not.
 
-This is a real limit and Vixen should be written against it rather than around
-it: an engine that can present through `wl_shm` will run on Trinix now and will
-keep running when hardware acceleration arrives, whereas one that assumes EGL
-cannot be tested at all until then. When Mesa lands, the accelerated path is
-`linux-dmabuf-v1` plus `wl_egl_window`, and it is additive — no protocol in
-this document changes.
+The image carries a Vulkan loader and exactly one driver: Mesa's **lavapipe**,
+which rasterises on the CPU by compiling shaders with LLVM
+([`base/recipes/mesa/recipe.sh`](../base/recipes/mesa/recipe.sh)). So
+`VK_KHR_wayland_surface` works, a `VkSwapchainKHR` can be created against a
+`wl_surface`, and a Vixen window renders. What lavapipe does *not* have is a
+GPU or a DRM render node, so its Wayland swapchain takes Mesa's software path
+and presents through — `wl_shm`. The buffer that reaches the compositor is the
+same buffer the guaranteed path would have produced; Vulkan is how Vixen draws
+into it, not how it is handed over.
+
+The compositor is unchanged and still composites through pixman: wlroots' GL
+renderer wants a render node that does not exist here, and the reasoning in
+[`base/recipes/wlroots/recipe.sh`](../base/recipes/wlroots/recipe.sh) still
+holds.
+
+So the limit is performance, not capability, and Vixen should be written
+against it rather than around it. An engine whose frame survives a software
+rasteriser will run on Trinix now and run better later; one that assumes a
+discrete GPU cannot be tested at all until there is one. When real hardware
+arrives the path is `linux-dmabuf-v1` and a Vulkan driver that is not lavapipe,
+and it is additive — no protocol in this document changes.
 
 **Scaling.** Trinix targets 2× as the ordinary case. A window is described in
 logical pixels and a buffer in device pixels, related by
@@ -174,8 +186,8 @@ contract:
 
 | Missing | Consequence for Vixen | Arrives with |
 |---|---|---|
-| Hardware acceleration (Mesa, EGL, Vulkan, dmabuf) | `wl_shm` only; software compositing | Real GPU support — Phase 8, or a VM tier that can supply virgl |
-| Fonts and text shaping | Nothing can render text, including the menu bar the shell now receives | The rest of Phase 5 |
+| Hardware acceleration (a GPU, EGL, dmabuf) | Vulkan works, on a CPU: lavapipe rasterises and presents through `wl_shm`, and the compositor composites in software | Real GPU support — Phase 8, or a VM tier that can supply virgl |
+| Text shaping | Vixen brings its own, and a face is now installed at `/usr/share/fonts/truetype/dejavu` — but the system face is still a placeholder rather than a design decision | The rest of Phase 5 |
 | A shell that draws the menu bar | Menus are transported and held, not yet displayed | The rest of Phase 5 |
 | Minimise, and a dock to minimise into | `control_activated(minimise)` is delivered and the shell does nothing with it | The rest of Phase 5 |
 | Fractional scaling | Integer scale factors only | When something needs it |
