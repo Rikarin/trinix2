@@ -10,14 +10,17 @@
 
 $ErrorActionPreference = 'Stop'
 
-try {
+try
+{
     $checks = Test-TrinixSystem
-} catch {
+}
+catch
+{
     # A self-test that cannot run is a failure, and the reason is worth more
     # than the verdict. Reaching here means the module did not load, which
     # means something is wrong with .NET or with the image itself.
     Write-Output "TRINIX-SELFTEST-False"
-    Write-Output "  self-test could not run: $($_.Exception.Message)"
+    Write-Output "  self-test could not run: $( $_.Exception.Message )"
     exit 1
 }
 
@@ -28,8 +31,10 @@ Write-Output "TRINIX-SELFTEST-$ok"
 # Detail only when something is wrong. A healthy boot should cost one line;
 # a broken one should say everything it can, because the console may be the
 # only place anyone can read it.
-if (-not $ok) {
-    foreach ($check in $checks) {
+if (-not $ok)
+{
+    foreach ($check in $checks)
+    {
         Write-Output ("  {0}: {1} ({2})" -f $check.Component, $check.Ok, $check.Detail)
     }
     exit 1

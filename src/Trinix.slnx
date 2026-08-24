@@ -1,10 +1,10 @@
 <Solution>
-  <Project Path="Trinix.Apps.Hello/Trinix.Apps.Hello.csproj" />
-  <Project Path="Trinix.Bundle/Trinix.Bundle.csproj" />
-  <Project Path="Trinix.Bundle.Tool/Trinix.Bundle.Tool.csproj" />
-  <Project Path="Trinix.Compositor/Trinix.Compositor.csproj" />
-  <Project Path="Trinix.Daemon/Trinix.Daemon.csproj" />
-  <Project Path="Trinix.Gatekeeper/Trinix.Gatekeeper.csproj" />
-  <Project Path="Trinix.Interop/Trinix.Interop.csproj" />
-  <Project Path="Trinix.Management/Trinix.Management.csproj" />
+    <Project Path="Trinix.Apps.Hello/Trinix.Apps.Hello.csproj"/>
+    <Project Path="Trinix.Bundle/Trinix.Bundle.csproj"/>
+    <Project Path="Trinix.Bundle.Tool/Trinix.Bundle.Tool.csproj"/>
+    <Project Path="Trinix.Compositor/Trinix.Compositor.csproj"/>
+    <Project Path="Trinix.Daemon/Trinix.Daemon.csproj"/>
+    <Project Path="Trinix.Gatekeeper/Trinix.Gatekeeper.csproj"/>
+    <Project Path="Trinix.Interop/Trinix.Interop.csproj"/>
+    <Project Path="Trinix.Management/Trinix.Management.csproj"/>
 </Solution>

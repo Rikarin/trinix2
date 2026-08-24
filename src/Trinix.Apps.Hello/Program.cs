@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.InteropServices;
 
 // Hello — the reference Trinix application.
 //
@@ -16,16 +17,15 @@ using System.Globalization;
 
 Console.WriteLine("TRINIX-HELLO: starting");
 
-string? bundle = Environment.GetEnvironmentVariable("TRINIX_BUNDLE");
-string? identifier = Environment.GetEnvironmentVariable("TRINIX_BUNDLE_IDENTIFIER");
-string? resources = Environment.GetEnvironmentVariable("TRINIX_BUNDLE_RESOURCES");
+var bundle = Environment.GetEnvironmentVariable("TRINIX_BUNDLE");
+var identifier = Environment.GetEnvironmentVariable("TRINIX_BUNDLE_IDENTIFIER");
+var resources = Environment.GetEnvironmentVariable("TRINIX_BUNDLE_RESOURCES");
 
 Console.WriteLine($"TRINIX-HELLO: bundle={bundle ?? "(not launched by trinix-open)"}");
 Console.WriteLine($"TRINIX-HELLO: identifier={identifier ?? "(unknown)"}");
-Console.WriteLine($"TRINIX-HELLO: runtime={Environment.Version} on {System.Runtime.InteropServices.RuntimeInformation.OSArchitecture}");
+Console.WriteLine($"TRINIX-HELLO: runtime={Environment.Version} on {RuntimeInformation.OSArchitecture}");
 
-if (args.Length > 0)
-{
+if (args.Length > 0) {
     Console.WriteLine($"TRINIX-HELLO: arguments={string.Join(' ', args)}");
 }
 
@@ -33,16 +33,13 @@ if (args.Length > 0)
 // executable, because that is what the contract says an application should do —
 // and because AppContext.BaseDirectory would happen to work here and would stop
 // working for anything launched through a symlink.
-string greetingPath = resources is null
+var greetingPath = resources is null
     ? Path.Combine(AppContext.BaseDirectory, "..", "Resources", "greeting.txt")
     : Path.Combine(resources, "greeting.txt");
 
-if (File.Exists(greetingPath))
-{
+if (File.Exists(greetingPath)) {
     Console.WriteLine($"TRINIX-HELLO: greeting={File.ReadAllText(greetingPath).Trim()}");
-}
-else
-{
+} else {
     Console.WriteLine($"TRINIX-HELLO: greeting is missing at {greetingPath}");
     return 1;
 }

@@ -1,31 +1,31 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Hello.app — the reference application.
+    <!--
+      Hello.app — the reference application.
+  
+      It exists to be built, signed, packaged, installed and launched, which is
+      the Phase 6 exit criterion end to end. It is deliberately not a Vixen app:
+      Vixen is not finished, and a phase about the *format* of applications should
+      not be gated on the framework that will eventually fill them. When Vixen
+      lands, its applications use this same bundle, this same signature and this
+      same .tdi — nothing here is a placeholder except what the program prints.
+  
+      Framework-dependent, like every other Trinix .NET component, and for the
+      same reason: NativeAOT cannot cross-compile between architectures, and one
+      container serving both targets is the property the whole tree is organised
+      around. That also makes this a genuine test of the apphost path — an
+      installed bundle finding the runtime through /etc/dotnet/install_location.
+  
+      References nothing. An application that needed Trinix.Bundle to start would
+      say something misleading about how much of the platform an application has
+      to know about.
+    -->
 
-    It exists to be built, signed, packaged, installed and launched, which is
-    the Phase 6 exit criterion end to end. It is deliberately not a Vixen app:
-    Vixen is not finished, and a phase about the *format* of applications should
-    not be gated on the framework that will eventually fill them. When Vixen
-    lands, its applications use this same bundle, this same signature and this
-    same .tdi — nothing here is a placeholder except what the program prints.
-
-    Framework-dependent, like every other Trinix .NET component, and for the
-    same reason: NativeAOT cannot cross-compile between architectures, and one
-    container serving both targets is the property the whole tree is organised
-    around. That also makes this a genuine test of the apphost path — an
-    installed bundle finding the runtime through /etc/dotnet/install_location.
-
-    References nothing. An application that needed Trinix.Bundle to start would
-    say something misleading about how much of the platform an application has
-    to know about.
-  -->
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>hello</AssemblyName>
-    <RootNamespace>Trinix.Apps.Hello</RootNamespace>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>hello</AssemblyName>
+        <RootNamespace>Trinix.Apps.Hello</RootNamespace>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
 
 </Project>

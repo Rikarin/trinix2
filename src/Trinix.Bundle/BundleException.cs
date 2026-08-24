@@ -1,17 +1,16 @@
 namespace Trinix.Bundle;
 
 /// <summary>
-/// Why a bundle was refused.
+///     Why a bundle was refused.
 /// </summary>
 /// <remarks>
-/// Enumerated rather than left to the exception message, because the launcher
-/// has to tell a person what went wrong in one line and the difference between
-/// "this was tampered with" and "this was signed by someone we do not know" is
-/// the entire content of that line. It is also the difference between an
-/// incident and a configuration mistake.
+///     Enumerated rather than left to the exception message, because the launcher
+///     has to tell a person what went wrong in one line and the difference between
+///     "this was tampered with" and "this was signed by someone we do not know" is
+///     the entire content of that line. It is also the difference between an
+///     incident and a configuration mistake.
 /// </remarks>
-public enum BundleFailure
-{
+public enum BundleFailure {
     /// <summary>Nothing is wrong.</summary>
     None = 0,
 
@@ -49,18 +48,24 @@ public enum BundleFailure
     MalformedImage,
 
     /// <summary>The operation needs privileges the caller does not have.</summary>
-    NotPermitted,
+    NotPermitted
 }
 
 /// <summary>An error with a reason the caller can act on.</summary>
-public sealed class BundleException : Exception
-{
+public sealed class BundleException : Exception {
+    /// <summary>Why the bundle was refused.</summary>
+    public BundleFailure Failure { get; } = BundleFailure.None;
+
     /// <summary>Create one with a reason.</summary>
-    public BundleException(BundleFailure failure, string message) : base(message) => Failure = failure;
+    public BundleException(BundleFailure failure, string message) : base(message) {
+        Failure = failure;
+    }
 
     /// <summary>Create one with a reason and an underlying cause.</summary>
     public BundleException(BundleFailure failure, string message, Exception innerException)
-        : base(message, innerException) => Failure = failure;
+        : base(message, innerException) {
+        Failure = failure;
+    }
 
     /// <summary>Required by the exception guidelines; never thrown by Trinix itself.</summary>
     public BundleException() { }
@@ -70,7 +75,4 @@ public sealed class BundleException : Exception
 
     /// <summary>Required by the exception guidelines; never thrown by Trinix itself.</summary>
     public BundleException(string message, Exception innerException) : base(message, innerException) { }
-
-    /// <summary>Why the bundle was refused.</summary>
-    public BundleFailure Failure { get; } = BundleFailure.None;
 }

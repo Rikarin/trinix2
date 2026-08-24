@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Trinix.Bundle;
 using Trinix.Bundle.Tool;
@@ -14,22 +15,19 @@ using Trinix.Bundle.Tool;
 
 const int ExitOk = 0;
 const int ExitUsage = 1;
-const int ExitRejected = 2;     // the thing was read, and refused
-const int ExitFailed = 3;       // the operation could not be attempted
+const int ExitRejected = 2; // the thing was read, and refused
+const int ExitFailed = 3; // the operation could not be attempted
 
-if (args.Length == 0 || args[0] is "--help" or "-h" or "help")
-{
+if (args.Length == 0 || args[0] is "--help" or "-h" or "help") {
     Usage();
     return args.Length == 0 ? ExitUsage : ExitOk;
 }
 
-string verb = args[0];
-string[] rest = args[1..];
+var verb = args[0];
+var rest = args[1..];
 
-try
-{
-    return verb switch
-    {
+try {
+    return verb switch {
         "pki" => await Pki(rest).ConfigureAwait(false),
         "seal" => await Seal(rest).ConfigureAwait(false),
         "pack" => await Pack(rest).ConfigureAwait(false),
@@ -38,40 +36,31 @@ try
         "uninstall" => Uninstall(rest),
         "list" => List(),
         "info" => await Info(rest).ConfigureAwait(false),
-        _ => Unknown(verb),
+        _ => Unknown(verb)
     };
-}
-catch (UsageException e)
-{
+} catch (UsageException e) {
     Console.Error.WriteLine($"trinix-bundle {verb}: {e.Message}");
     return ExitUsage;
-}
-catch (BundleException e)
-{
+} catch (BundleException e) {
     Console.Error.WriteLine($"trinix-bundle: {e.Message}");
     return e.Failure is BundleFailure.NotPermitted ? ExitFailed : ExitRejected;
-}
-catch (IOException e)
-{
+} catch (IOException e) {
     Console.Error.WriteLine($"trinix-bundle: {e.Message}");
     return ExitFailed;
-}
-catch (UnauthorizedAccessException e)
-{
+} catch (UnauthorizedAccessException e) {
     Console.Error.WriteLine($"trinix-bundle: {e.Message}");
     return ExitFailed;
 }
 
-int Unknown(string name)
-{
+int Unknown(string name) {
     Console.Error.WriteLine($"trinix-bundle: unknown command '{name}'");
     Usage();
     return ExitUsage;
 }
 
-void Usage()
-{
-    Console.WriteLine("""
+void Usage() {
+    Console.WriteLine(
+        """
         trinix-bundle — Trinix application bundles, signatures and distribution images
 
         Building and signing (needs a private key):
@@ -93,31 +82,39 @@ void Usage()
           info          <bundle.app | image.tdi>
 
         --trust defaults to /usr/share/trinix/pki/roots, which the system image carries.
-        """);
+        """
+    );
 }
 
 // --- pki --------------------------------------------------------------------
 
-async Task<int> Pki(string[] arguments)
-{
+async Task<int> Pki(string[] arguments) {
     await Task.CompletedTask.ConfigureAwait(false);
 
-    if (arguments.Length == 0) { throw new UsageException("expected init, identity or show"); }
+    if (arguments.Length == 0) {
+        throw new UsageException("expected init, identity or show");
+    }
 
-    switch (arguments[0])
-    {
-        case "init":
-        {
-            CommandLine line = CommandLine.Parse(
+    switch (arguments[0]) {
+        case "init": {
+            var line = CommandLine.Parse(
                 arguments[1..],
-                new HashSet<string>(StringComparer.Ordinal) { "certificate", "key", "name", "organisation", "not-before" },
-                new HashSet<string>(StringComparer.Ordinal));
+                new HashSet<string>(StringComparer.Ordinal) {
+                    "certificate",
+                    "key",
+                    "name",
+                    "organisation",
+                    "not-before"
+                },
+                new HashSet<string>(StringComparer.Ordinal)
+            );
 
-            DateTimeOffset notBefore = ParseTime(line.Value("not-before")) ?? DateTimeOffset.UtcNow.AddDays(-1);
-            using X509Certificate2 root = DeveloperPki.CreateRoot(
+            var notBefore = ParseTime(line.Value("not-before")) ?? DateTimeOffset.UtcNow.AddDays(-1);
+            using var root = DeveloperPki.CreateRoot(
                 line.Value("name") ?? "Trinix Development Root",
                 line.Value("organisation") ?? "Trinix",
-                notBefore);
+                notBefore
+            );
 
             DeveloperPki.Save(root, line.Required("certificate"), line.Required("key"));
             Console.WriteLine($"trinix-bundle: created {root.Subject}");
@@ -127,24 +124,30 @@ async Task<int> Pki(string[] arguments)
             return ExitOk;
         }
 
-        case "identity":
-        {
-            CommandLine line = CommandLine.Parse(
+        case "identity": {
+            var line = CommandLine.Parse(
                 arguments[1..],
-                new HashSet<string>(StringComparer.Ordinal)
-                {
-                    "root-certificate", "root-key", "certificate", "key", "name", "organisation", "not-before",
+                new HashSet<string>(StringComparer.Ordinal) {
+                    "root-certificate",
+                    "root-key",
+                    "certificate",
+                    "key",
+                    "name",
+                    "organisation",
+                    "not-before"
                 },
-                new HashSet<string>(StringComparer.Ordinal));
+                new HashSet<string>(StringComparer.Ordinal)
+            );
 
-            using X509Certificate2 root = DeveloperPki.Load(line.Required("root-certificate"), line.Required("root-key"));
-            DateTimeOffset notBefore = ParseTime(line.Value("not-before")) ?? DateTimeOffset.UtcNow.AddDays(-1);
+            using var root = DeveloperPki.Load(line.Required("root-certificate"), line.Required("root-key"));
+            var notBefore = ParseTime(line.Value("not-before")) ?? DateTimeOffset.UtcNow.AddDays(-1);
 
-            using X509Certificate2 identity = DeveloperPki.CreateIdentity(
+            using var identity = DeveloperPki.CreateIdentity(
                 root,
                 line.Value("name") ?? "Trinix Developer",
                 line.Value("organisation") ?? "Trinix",
-                notBefore);
+                notBefore
+            );
 
             DeveloperPki.Save(identity, line.Required("certificate"), line.Required("key"));
             Console.WriteLine($"trinix-bundle: issued {identity.Subject}");
@@ -153,24 +156,29 @@ async Task<int> Pki(string[] arguments)
             return ExitOk;
         }
 
-        case "show":
-        {
-            CommandLine line = CommandLine.Parse(
+        case "show": {
+            var line = CommandLine.Parse(
                 arguments[1..],
                 new HashSet<string>(StringComparer.Ordinal),
-                new HashSet<string>(StringComparer.Ordinal));
+                new HashSet<string>(StringComparer.Ordinal)
+            );
 
             using var certificate = X509Certificate2.CreateFromPem(
-                await File.ReadAllTextAsync(line.PositionalAt(0, "a certificate")).ConfigureAwait(false));
+                await File.ReadAllTextAsync(line.PositionalAt(0, "a certificate")).ConfigureAwait(false)
+            );
             Console.WriteLine($"subject      {certificate.Subject}");
             Console.WriteLine($"issuer       {certificate.Issuer}");
             Console.WriteLine($"serial       {certificate.SerialNumber}");
             Console.WriteLine($"valid        {certificate.NotBefore:u} .. {certificate.NotAfter:u}");
-            Console.WriteLine($"sha256       {Convert.ToHexStringLower(certificate.GetCertHash(System.Security.Cryptography.HashAlgorithmName.SHA256))}");
-            foreach (X509Extension extension in certificate.Extensions)
-            {
-                Console.WriteLine($"extension    {extension.Oid?.FriendlyName ?? extension.Oid?.Value}{(extension.Critical ? " (critical)" : "")}");
+            Console.WriteLine(
+                $"sha256       {Convert.ToHexStringLower(certificate.GetCertHash(HashAlgorithmName.SHA256))}"
+            );
+            foreach (var extension in certificate.Extensions) {
+                Console.WriteLine(
+                    $"extension    {extension.Oid?.FriendlyName ?? extension.Oid?.Value}{(extension.Critical ? " (critical)" : "")}"
+                );
             }
+
             return ExitOk;
         }
 
@@ -181,21 +189,23 @@ async Task<int> Pki(string[] arguments)
 
 // --- seal -------------------------------------------------------------------
 
-async Task<int> Seal(string[] arguments)
-{
-    CommandLine line = CommandLine.Parse(
+async Task<int> Seal(string[] arguments) {
+    var line = CommandLine.Parse(
         arguments,
         new HashSet<string>(StringComparer.Ordinal) { "certificate", "key", "architecture", "signed-at" },
-        new HashSet<string>(StringComparer.Ordinal));
+        new HashSet<string>(StringComparer.Ordinal)
+    );
 
-    string bundlePath = line.PositionalAt(0, "a bundle directory");
-    using X509Certificate2 identity = DeveloperPki.Load(line.Required("certificate"), line.Required("key"));
+    var bundlePath = line.PositionalAt(0, "a bundle directory");
+    using var identity = DeveloperPki.Load(line.Required("certificate"), line.Required("key"));
 
-    BundleManifest manifest = await BundleSealer.SealAsync(
-        bundlePath,
-        identity,
-        line.Value("architecture") ?? "any",
-        ParseTime(line.Value("signed-at")) ?? DateTimeOffset.UtcNow).ConfigureAwait(false);
+    var manifest = await BundleSealer.SealAsync(
+            bundlePath,
+            identity,
+            line.Value("architecture") ?? "any",
+            ParseTime(line.Value("signed-at")) ?? DateTimeOffset.UtcNow
+        )
+        .ConfigureAwait(false);
 
     Console.WriteLine($"trinix-bundle: sealed {Path.GetFileName(Path.TrimEndingDirectorySeparator(bundlePath))}");
     Console.WriteLine($"  identity    {manifest.Identifier} {manifest.Version} ({manifest.Architecture})");
@@ -207,32 +217,34 @@ async Task<int> Seal(string[] arguments)
 
 // --- pack -------------------------------------------------------------------
 
-async Task<int> Pack(string[] arguments)
-{
-    CommandLine line = CommandLine.Parse(
+async Task<int> Pack(string[] arguments) {
+    var line = CommandLine.Parse(
         arguments,
         new HashSet<string>(StringComparer.Ordinal) { "output", "certificate", "key", "build-time" },
-        new HashSet<string>(StringComparer.Ordinal) { "compress" });
+        new HashSet<string>(StringComparer.Ordinal) { "compress" }
+    );
 
-    string bundlePath = line.PositionalAt(0, "a bundle directory");
-    string output = line.Required("output");
-    using X509Certificate2 identity = DeveloperPki.Load(line.Required("certificate"), line.Required("key"));
+    var bundlePath = line.PositionalAt(0, "a bundle directory");
+    var output = line.Required("output");
+    using var identity = DeveloperPki.Load(line.Required("certificate"), line.Required("key"));
 
     // Packing an unsealed bundle would produce a distribution image that is
     // signed and contains something that is not, which is worse than either.
-    if (!File.Exists(Path.Combine(bundlePath, BundleLayout.ManifestPath)))
-    {
+    if (!File.Exists(Path.Combine(bundlePath, BundleLayout.ManifestPath))) {
         throw new BundleException(
             BundleFailure.NotSigned,
-            $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(bundlePath))} is not sealed — run `trinix-bundle seal` first");
+            $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(bundlePath))} is not sealed — run `trinix-bundle seal` first"
+        );
     }
 
-    DistributionImage.Footer footer = await DistributionImage.PackAsync(
-        bundlePath,
-        output,
-        identity,
-        ParseTime(line.Value("build-time")) ?? DateTimeOffset.UnixEpoch,
-        compress: line.Has("compress")).ConfigureAwait(false);
+    var footer = await DistributionImage.PackAsync(
+            bundlePath,
+            output,
+            identity,
+            ParseTime(line.Value("build-time")) ?? DateTimeOffset.UnixEpoch,
+            line.Has("compress")
+        )
+        .ConfigureAwait(false);
 
     Console.WriteLine($"trinix-bundle: packed {output}");
     Console.WriteLine($"  payload     {footer.PayloadLength} bytes of erofs");
@@ -243,27 +255,32 @@ async Task<int> Pack(string[] arguments)
 
 // --- verify -----------------------------------------------------------------
 
-async Task<int> Verify(string[] arguments)
-{
-    CommandLine line = CommandLine.Parse(
+async Task<int> Verify(string[] arguments) {
+    var line = CommandLine.Parse(
         arguments,
         new HashSet<string>(StringComparer.Ordinal) { "trust" },
-        new HashSet<string>(StringComparer.Ordinal));
+        new HashSet<string>(StringComparer.Ordinal)
+    );
 
-    string target = line.PositionalAt(0, "a bundle or a distribution image");
-    TrustStore trust = TrustStore.Load(line.Value("trust"));
+    var target = line.PositionalAt(0, "a bundle or a distribution image");
+    var trust = TrustStore.Load(line.Value("trust"));
 
-    VerificationResult result = target.EndsWith(BundleLayout.ImageExtension, StringComparison.Ordinal)
+    var result = target.EndsWith(BundleLayout.ImageExtension, StringComparison.Ordinal)
         ? await DistributionImage.VerifyAsync(target, trust).ConfigureAwait(false)
         : await BundleVerifier.VerifyAsync(target, trust).ConfigureAwait(false);
 
-    if (result.Ok)
-    {
+    if (result.Ok) {
         // A single grep-able line, because this is what the VM gate and any
         // future CI step actually assert on.
         Console.WriteLine($"BUNDLE-OK {result.Message}");
-        if (result.AnchorSubject is not null) { Console.WriteLine($"  anchored at {result.AnchorSubject}"); }
-        if (result.Manifest is not null) { Console.WriteLine($"  merkle root {result.Manifest.MerkleRoot}"); }
+        if (result.AnchorSubject is not null) {
+            Console.WriteLine($"  anchored at {result.AnchorSubject}");
+        }
+
+        if (result.Manifest is not null) {
+            Console.WriteLine($"  merkle root {result.Manifest.MerkleRoot}");
+        }
+
         return ExitOk;
     }
 
@@ -273,72 +290,79 @@ async Task<int> Verify(string[] arguments)
 
 // --- install ----------------------------------------------------------------
 
-async Task<int> Install(string[] arguments)
-{
-    CommandLine line = CommandLine.Parse(
+async Task<int> Install(string[] arguments) {
+    var line = CommandLine.Parse(
         arguments,
         new HashSet<string>(StringComparer.Ordinal) { "destination", "trust" },
-        new HashSet<string>(StringComparer.Ordinal) { "no-fs-verity" });
+        new HashSet<string>(StringComparer.Ordinal) { "no-fs-verity" }
+    );
 
-    string image = line.PositionalAt(0, "a .tdi distribution image");
-    TrustStore trust = TrustStore.Load(line.Value("trust"));
+    var image = line.PositionalAt(0, "a .tdi distribution image");
+    var trust = TrustStore.Load(line.Value("trust"));
 
-    BundleInstaller.InstallResult result = await BundleInstaller.InstallAsync(
-        image, trust, line.Value("destination"), enableFsVerity: !line.Has("no-fs-verity")).ConfigureAwait(false);
+    var result = await BundleInstaller.InstallAsync(image, trust, line.Value("destination"), !line.Has("no-fs-verity"))
+        .ConfigureAwait(false);
 
-    Console.WriteLine($"BUNDLE-INSTALLED {result.Receipt.Identifier} {result.Receipt.Version} -> {result.Receipt.Path}");
+    Console.WriteLine(
+        $"BUNDLE-INSTALLED {result.Receipt.Identifier} {result.Receipt.Version} -> {result.Receipt.Path}"
+    );
     Console.WriteLine($"  signed by   {result.Receipt.SignerSubject}");
     Console.WriteLine($"  merkle root {result.Receipt.MerkleRoot}");
-    if (result.Receipt.FsVerity is { } verity)
-    {
-        string detail = verity.Skipped == 0
+    if (result.Receipt.FsVerity is { } verity) {
+        var detail = verity.Skipped == 0
             ? $"{verity.Enabled} file(s) sealed by the kernel"
             : $"{verity.Enabled} sealed, {verity.Skipped} not ({verity.Reason})";
         Console.WriteLine($"  fs-verity   {detail}");
     }
+
     return ExitOk;
 }
 
-int Uninstall(string[] arguments)
-{
-    CommandLine line = CommandLine.Parse(
+int Uninstall(string[] arguments) {
+    var line = CommandLine.Parse(
         arguments,
         new HashSet<string>(StringComparer.Ordinal),
-        new HashSet<string>(StringComparer.Ordinal));
+        new HashSet<string>(StringComparer.Ordinal)
+    );
 
-    string bundlePath = line.PositionalAt(0, "an installed bundle");
+    var bundlePath = line.PositionalAt(0, "an installed bundle");
     BundleInstaller.Uninstall(bundlePath);
     Console.WriteLine($"trinix-bundle: removed {bundlePath}");
     return ExitOk;
 }
 
-int List()
-{
-    int count = 0;
-    foreach (InstallReceipt receipt in BundleInstaller.Installed())
-    {
-        Console.WriteLine(string.Create(CultureInfo.InvariantCulture,
-            $"{receipt.Identifier,-32} {receipt.Version,-10} {receipt.Path}"));
+int List() {
+    var count = 0;
+    foreach (var receipt in BundleInstaller.Installed()) {
+        Console.WriteLine(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{receipt.Identifier,-32} {receipt.Version,-10} {receipt.Path}"
+            )
+        );
         count++;
     }
-    if (count == 0) { Console.WriteLine("no applications installed"); }
+
+    if (count == 0) {
+        Console.WriteLine("no applications installed");
+    }
+
     return ExitOk;
 }
 
 // --- info -------------------------------------------------------------------
 
-async Task<int> Info(string[] arguments)
-{
-    CommandLine line = CommandLine.Parse(
+async Task<int> Info(string[] arguments) {
+    var line = CommandLine.Parse(
         arguments,
         new HashSet<string>(StringComparer.Ordinal),
-        new HashSet<string>(StringComparer.Ordinal));
+        new HashSet<string>(StringComparer.Ordinal)
+    );
 
-    string target = line.PositionalAt(0, "a bundle or a distribution image");
+    var target = line.PositionalAt(0, "a bundle or a distribution image");
 
-    if (target.EndsWith(BundleLayout.ImageExtension, StringComparison.Ordinal))
-    {
-        DistributionImage.Footer footer = DistributionImage.ReadFooter(target);
+    if (target.EndsWith(BundleLayout.ImageExtension, StringComparison.Ordinal)) {
+        var footer = DistributionImage.ReadFooter(target);
         Console.WriteLine($"distribution image  {Path.GetFileName(target)}");
         Console.WriteLine($"  payload           {footer.PayloadLength} bytes");
         Console.WriteLine($"  payload sha256    {Convert.ToHexStringLower(footer.PayloadSha256)}");
@@ -347,34 +371,41 @@ async Task<int> Info(string[] arguments)
         return ExitOk;
     }
 
-    BundleInfo info = await BundleSealer.ReadInfoAsync(target).ConfigureAwait(false);
+    var info = await BundleSealer.ReadInfoAsync(target).ConfigureAwait(false);
     Console.WriteLine($"application         {info.Name} {info.ShortVersion ?? info.Version}");
     Console.WriteLine($"  identifier        {info.Identifier}");
     Console.WriteLine($"  version           {info.Version}");
     Console.WriteLine($"  entry point       {info.EntryPoint}");
     Console.WriteLine($"  minimum system    {info.MinimumSystemVersion ?? "unspecified"}");
-    Console.WriteLine($"  permissions       {(info.Permissions.Count == 0 ? "none declared" : string.Join(", ", info.Permissions))}");
+    Console.WriteLine(
+        $"  permissions       {(info.Permissions.Count == 0 ? "none declared" : string.Join(", ", info.Permissions))}"
+    );
 
-    string manifestPath = Path.Combine(target, BundleLayout.ManifestPath);
+    var manifestPath = Path.Combine(target, BundleLayout.ManifestPath);
     Console.WriteLine($"  signature         {(File.Exists(manifestPath) ? "present" : "absent")}");
 
-    IReadOnlyList<string> problems = info.Validate();
-    foreach (string problem in problems) { Console.WriteLine($"  problem           {problem}"); }
+    var problems = info.Validate();
+    foreach (var problem in problems) {
+        Console.WriteLine($"  problem           {problem}");
+    }
+
     return problems.Count == 0 ? ExitOk : ExitRejected;
 }
 
 // ISO 8601, or @<unix seconds> — the second form because every caller here is a
 // build script, and a build script's notion of "now" is SOURCE_DATE_EPOCH.
-static DateTimeOffset? ParseTime(string? value)
-{
-    if (value is null) { return null; }
+static DateTimeOffset? ParseTime(string? value) {
+    if (value is null) {
+        return null;
+    }
 
-    if (value.StartsWith('@'))
-    {
-        return DateTimeOffset.FromUnixTimeSeconds(
-            long.Parse(value[1..], CultureInfo.InvariantCulture));
+    if (value.StartsWith('@')) {
+        return DateTimeOffset.FromUnixTimeSeconds(long.Parse(value[1..], CultureInfo.InvariantCulture));
     }
 
     return DateTimeOffset.Parse(
-        value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+        value,
+        CultureInfo.InvariantCulture,
+        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal
+    );
 }

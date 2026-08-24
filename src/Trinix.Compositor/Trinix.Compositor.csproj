@@ -1,39 +1,39 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Trinix.Compositor — the window server.
+    <!--
+      Trinix.Compositor — the window server.
+  
+      Framework-dependent, and this is the place where that decision costs
+      something. The Phase 4 plan asks for NativeAOT here: a compositor with a GC
+      pause on the frame path drops frames, and a compositor is exactly what AOT
+      is for. It is not AOT because NativeAOT cannot cross-compile between
+      architectures, and one build container producing both is the property this
+      entire tree is organised around — the same argument that decided trinixd,
+      but conceded far less cheerfully.
+  
+      What that costs is bounded and understood. The frame path does not run
+      here: wlroots composites and this process is woken only by input and by
+      window lifecycle events, so a collection between frames is invisible.
+      Server GC is off for the same reason it is off for a desktop application —
+      the heap is small and the latency, not the throughput, is what matters.
+  
+      When AOT becomes possible (a second publish pass on the target, or an
+      x86_64 leg in CI), this project flips with one property and the code does
+      not change: that is why the AOT analysers are on everywhere.
+    -->
 
-    Framework-dependent, and this is the place where that decision costs
-    something. The Phase 4 plan asks for NativeAOT here: a compositor with a GC
-    pause on the frame path drops frames, and a compositor is exactly what AOT
-    is for. It is not AOT because NativeAOT cannot cross-compile between
-    architectures, and one build container producing both is the property this
-    entire tree is organised around — the same argument that decided trinixd,
-    but conceded far less cheerfully.
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>trinix-compositor</AssemblyName>
+        <RootNamespace>Trinix.Compositor</RootNamespace>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <ServerGarbageCollection>false</ServerGarbageCollection>
+        <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+        <TieredPGO>true</TieredPGO>
+    </PropertyGroup>
 
-    What that costs is bounded and understood. The frame path does not run
-    here: wlroots composites and this process is woken only by input and by
-    window lifecycle events, so a collection between frames is invisible.
-    Server GC is off for the same reason it is off for a desktop application —
-    the heap is small and the latency, not the throughput, is what matters.
-
-    When AOT becomes possible (a second publish pass on the target, or an
-    x86_64 leg in CI), this project flips with one property and the code does
-    not change: that is why the AOT analysers are on everywhere.
-  -->
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>trinix-compositor</AssemblyName>
-    <RootNamespace>Trinix.Compositor</RootNamespace>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ServerGarbageCollection>false</ServerGarbageCollection>
-    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
-    <TieredPGO>true</TieredPGO>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../Trinix.Interop/Trinix.Interop.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Trinix.Interop/Trinix.Interop.csproj"/>
+    </ItemGroup>
 
 </Project>

@@ -1,6 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Hosting.Systemd;
 using Trinix.Daemon;
 
 // trinixd exists to answer one question: can a C# process be a well-behaved

@@ -4,8 +4,7 @@ using System.Text.Json.Serialization;
 namespace Trinix.Bundle;
 
 /// <summary>Format markers, so that a change of shape is never mistaken for corruption.</summary>
-public static class BundleSchema
-{
+public static class BundleSchema {
     /// <summary><c>Contents/Info.json</c>.</summary>
     public const string Info = "trinix.bundle/1";
 
@@ -17,8 +16,7 @@ public static class BundleSchema
 }
 
 /// <summary>One file, as the manifest records it.</summary>
-public sealed class ManifestEntry
-{
+public sealed class ManifestEntry {
     /// <summary>Bundle-relative, forward slashes, e.g. <c>Contents/Bin/hello</c>.</summary>
     [JsonPropertyName("path")]
     public required string Path { get; init; }
@@ -37,25 +35,24 @@ public sealed class ManifestEntry
 }
 
 /// <summary>
-/// <c>Contents/_Signature/manifest.json</c> — the document that is actually signed.
+///     <c>Contents/_Signature/manifest.json</c> — the document that is actually signed.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The signature covers this file's bytes and nothing else, which is the whole
-/// reason the file exists. Signing a directory means agreeing on how to
-/// serialise a directory, and every format that has tried has produced a
-/// canonicalisation bug. Here the signed object is a byte string that is
-/// written once and read back literally; everything else in the bundle is
-/// bound to it through hashes recorded in it.
-/// </para>
-/// <para>
-/// It follows that verification has an order that must not be rearranged:
-/// check the chain, check the signature over these exact bytes, and only then
-/// believe a single field in the parsed object.
-/// </para>
+///     <para>
+///         The signature covers this file's bytes and nothing else, which is the whole
+///         reason the file exists. Signing a directory means agreeing on how to
+///         serialise a directory, and every format that has tried has produced a
+///         canonicalisation bug. Here the signed object is a byte string that is
+///         written once and read back literally; everything else in the bundle is
+///         bound to it through hashes recorded in it.
+///     </para>
+///     <para>
+///         It follows that verification has an order that must not be rearranged:
+///         check the chain, check the signature over these exact bytes, and only then
+///         believe a single field in the parsed object.
+///     </para>
 /// </remarks>
-public sealed class BundleManifest
-{
+public sealed class BundleManifest {
     /// <summary>Format marker.</summary>
     [JsonPropertyName("schema")]
     public string Schema { get; init; } = BundleSchema.Manifest;
@@ -69,69 +66,67 @@ public sealed class BundleManifest
     public required string Version { get; init; }
 
     /// <summary>
-    /// The architecture this bundle's executables are built for
-    /// (<c>arm64</c>, <c>x86_64</c>), or <c>any</c> for a bundle with no
-    /// native code.
+    ///     The architecture this bundle's executables are built for
+    ///     (<c>arm64</c>, <c>x86_64</c>), or <c>any</c> for a bundle with no
+    ///     native code.
     /// </summary>
     [JsonPropertyName("architecture")]
     public required string Architecture { get; init; }
 
     /// <summary>
-    /// When it was signed, as claimed by the signer.
+    ///     When it was signed, as claimed by the signer.
     /// </summary>
     /// <remarks>
-    /// Inside the signature rather than beside it. An unauthenticated signing
-    /// time is worse than none: it looks like evidence and is not. This one is
-    /// still only the signer's claim — a timestamping authority is what would
-    /// make it more, and Trinix has no use for one until certificates start
-    /// expiring.
+    ///     Inside the signature rather than beside it. An unauthenticated signing
+    ///     time is worse than none: it looks like evidence and is not. This one is
+    ///     still only the signer's claim — a timestamping authority is what would
+    ///     make it more, and Trinix has no use for one until certificates start
+    ///     expiring.
     /// </remarks>
     [JsonPropertyName("signedAt")]
     public required DateTimeOffset SignedAt { get; init; }
 
-    /// <summary>Root of the Merkle tree over <see cref="Entries"/>, lowercase hex.</summary>
+    /// <summary>Root of the Merkle tree over <see cref="Entries" />, lowercase hex.</summary>
     [JsonPropertyName("merkleRoot")]
     public required string MerkleRoot { get; init; }
 
     /// <summary>
-    /// Every file in the bundle except the signature material itself, ordered
-    /// ordinally by path. The order is part of the Merkle root.
+    ///     Every file in the bundle except the signature material itself, ordered
+    ///     ordinally by path. The order is part of the Merkle root.
     /// </summary>
     [JsonPropertyName("entries")]
     public required IReadOnlyList<ManifestEntry> Entries { get; init; }
 
     /// <summary>
-    /// Recompute the Merkle root from <see cref="Entries"/>.
+    ///     Recompute the Merkle root from <see cref="Entries" />.
     /// </summary>
     /// <remarks>
-    /// Used both when sealing (to fill the field) and when verifying (to catch
-    /// a manifest whose recorded root disagrees with its own file list — which
-    /// a signer could produce by accident and an attacker could not produce at
-    /// all, but checking is a line of code and believing is a hole).
+    ///     Used both when sealing (to fill the field) and when verifying (to catch
+    ///     a manifest whose recorded root disagrees with its own file list — which
+    ///     a signer could produce by accident and an attacker could not produce at
+    ///     all, but checking is a line of code and believing is a hole).
     /// </remarks>
-    public byte[] ComputeMerkleRoot()
-    {
+    public byte[] ComputeMerkleRoot() {
         var leaves = new List<byte[]>(Entries.Count);
-        foreach (ManifestEntry entry in Entries)
-        {
+        foreach (var entry in Entries) {
             leaves.Add(MerkleTree.Leaf(entry.Path, entry.Size, entry.Executable, Convert.FromHexString(entry.Sha256)));
         }
+
         return MerkleTree.Root(leaves);
     }
 }
 
 /// <summary>
-/// <c>/var/lib/trinix/bundles/&lt;identifier&gt;.json</c> — what the installer
-/// recorded about a bundle it put on disk.
+///     <c>/var/lib/trinix/bundles/&lt;identifier&gt;.json</c> — what the installer
+///     recorded about a bundle it put on disk.
 /// </summary>
 /// <remarks>
-/// Not a trust anchor. Nothing in the launch path believes this file; it exists
-/// so that <c>trinix-bundle list</c> can answer without walking
-/// <c>/Applications</c>, and so that a future package manager knows which
-/// distribution image an installed application came from.
+///     Not a trust anchor. Nothing in the launch path believes this file; it exists
+///     so that <c>trinix-bundle list</c> can answer without walking
+///     <c>/Applications</c>, and so that a future package manager knows which
+///     distribution image an installed application came from.
 /// </remarks>
-public sealed class InstallReceipt
-{
+public sealed class InstallReceipt {
     /// <summary>Format marker.</summary>
     [JsonPropertyName("schema")]
     public string Schema { get; init; } = BundleSchema.Receipt;
@@ -165,16 +160,15 @@ public sealed class InstallReceipt
     public required DateTimeOffset InstalledAt { get; init; }
 
     /// <summary>
-    /// How many of the bundle's files fs-verity was enabled on, and why not
-    /// more.
+    ///     How many of the bundle's files fs-verity was enabled on, and why not
+    ///     more.
     /// </summary>
     [JsonPropertyName("fsVerity")]
     public FsVerityReport? FsVerity { get; init; }
 }
 
 /// <summary>What happened when the installer tried to enable fs-verity.</summary>
-public sealed class FsVerityReport
-{
+public sealed class FsVerityReport {
     /// <summary>Number of files now protected by the kernel.</summary>
     [JsonPropertyName("enabled")]
     public required int Enabled { get; init; }
@@ -189,15 +183,18 @@ public sealed class FsVerityReport
 }
 
 /// <summary>Hex helpers, kept in one place so the casing is decided once.</summary>
-internal static class Hex
-{
+static class Hex {
     internal static string Of(ReadOnlySpan<byte> bytes) => Convert.ToHexStringLower(bytes);
 
-    internal static async Task<byte[]> HashFileAsync(string path, CancellationToken cancellationToken)
-    {
+    internal static async Task<byte[]> HashFileAsync(string path, CancellationToken cancellationToken) {
         await using var stream = new FileStream(
-            path, FileMode.Open, FileAccess.Read, FileShare.Read,
-            bufferSize: 1 << 16, useAsync: true);
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            1 << 16,
+            true
+        );
         return await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
     }
 }

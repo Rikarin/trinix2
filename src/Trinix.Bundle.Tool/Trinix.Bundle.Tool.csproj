@@ -1,30 +1,30 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    trinix-bundle — the command line over Trinix.Bundle.
+    <!--
+      trinix-bundle — the command line over Trinix.Bundle.
+  
+      Runs on both sides of the build. On the Mac (inside the build container) it
+      creates the development PKI, seals bundles and packs .tdi images; on a
+      Trinix machine it verifies, installs and lists them. One tool rather than
+      two because the verbs share every concept, and a "packaging tool" that
+      cannot verify what it produced is a tool nobody checks their work with.
+  
+      No command-line parsing library. System.CommandLine is a NuGet package, and
+      this executable is in the signing path — see the note at the top of
+      Trinix.Bundle.csproj. The parser below is about sixty lines and handles what
+      these verbs need.
+    -->
 
-    Runs on both sides of the build. On the Mac (inside the build container) it
-    creates the development PKI, seals bundles and packs .tdi images; on a
-    Trinix machine it verifies, installs and lists them. One tool rather than
-    two because the verbs share every concept, and a "packaging tool" that
-    cannot verify what it produced is a tool nobody checks their work with.
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <AssemblyName>trinix-bundle</AssemblyName>
+        <RootNamespace>Trinix.Bundle.Tool</RootNamespace>
+        <!-- A CLI's help text is its documentation; the XML file is noise. -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
 
-    No command-line parsing library. System.CommandLine is a NuGet package, and
-    this executable is in the signing path — see the note at the top of
-    Trinix.Bundle.csproj. The parser below is about sixty lines and handles what
-    these verbs need.
-  -->
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <AssemblyName>trinix-bundle</AssemblyName>
-    <RootNamespace>Trinix.Bundle.Tool</RootNamespace>
-    <!-- A CLI's help text is its documentation; the XML file is noise. -->
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../Trinix.Bundle/Trinix.Bundle.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="../Trinix.Bundle/Trinix.Bundle.csproj"/>
+    </ItemGroup>
 
 </Project>

@@ -1,34 +1,34 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Trinix.Management — the distribution's administration cmdlets.
+    <!--
+      Trinix.Management — the distribution's administration cmdlets.
+  
+      A binary module in C# rather than a script module, because C# is the
+      language this distribution is written in and the admin surface should be
+      the first place that is true rather than the last.
+  
+      PowerShellStandard.Library is reference-only: it supplies the Cmdlet types
+      at compile time and contributes nothing at runtime, so the module loads
+      against whatever pwsh is hosting it instead of carrying a second copy of
+      the PowerShell engine.
+    -->
 
-    A binary module in C# rather than a script module, because C# is the
-    language this distribution is written in and the admin surface should be
-    the first place that is true rather than the last.
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <RootNamespace>Trinix.Management</RootNamespace>
+        <AssemblyName>Trinix.Management</AssemblyName>
+        <!-- Loaded reflectively by pwsh, so single-file analysis does not apply
+             and the AOT analyser has nothing useful to say about it. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+    </PropertyGroup>
 
-    PowerShellStandard.Library is reference-only: it supplies the Cmdlet types
-    at compile time and contributes nothing at runtime, so the module loads
-    against whatever pwsh is hosting it instead of carrying a second copy of
-    the PowerShell engine.
-  -->
+    <ItemGroup>
+        <PackageReference Include="PowerShellStandard.Library" Version="5.1.1" PrivateAssets="all"/>
+    </ItemGroup>
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>Trinix.Management</RootNamespace>
-    <AssemblyName>Trinix.Management</AssemblyName>
-    <!-- Loaded reflectively by pwsh, so single-file analysis does not apply
-         and the AOT analyser has nothing useful to say about it. -->
-    <IsAotCompatible>false</IsAotCompatible>
-    <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="PowerShellStandard.Library" Version="5.1.1" PrivateAssets="all" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="Trinix.Management.psd1" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+    <ItemGroup>
+        <None Include="Trinix.Management.psd1" CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
 
 </Project>
