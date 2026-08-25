@@ -134,6 +134,34 @@ real one gets set:
 
 The boot menu carries a rescue entry for the same reason, and `Ctrl-a x` quits.
 
+### Seeing it
+
+The console is a serial line, so none of the above shows you a desktop. QEMU is
+headless because it runs in a container and a container has no display to open a
+window on — the guest has always had a virtio-gpu with nothing looking at it.
+
+`-Vnc` attaches something to it:
+
+```bash
+./scripts/run-vm.ps1 -Arch arm64 -Vnc
+```
+
+```bash
+open vnc://localhost:5900
+```
+
+macOS has a VNC client built in, so this still needs nothing installed. The port
+is published on loopback only — QEMU's VNC server here has no password.
+
+Then, in the serial console, log in and start an application:
+
+```bash
+systemctl start trinix-helloui.service
+```
+
+Expect it to be slow: the frame is composited in software by the guest, emulated
+without an accelerator, and then encoded for VNC.
+
 Once logged in:
 
 ```powershell

@@ -46,6 +46,22 @@
         launch the application inside it, tamper with the installed bundle and
         assert that it stops launching. The Phase 6 exit criterion as a test.
 
+    .PARAMETER Vnc
+        Serve the guest's display over VNC on localhost:5900, and publish the port
+        from the QEMU container.
+
+        This is the only way to see what the compositor draws. QEMU is headless
+        otherwise — it runs in a container, which has no display to open a window on
+        — so the guest has always had a virtio-gpu with nothing looking at it.
+
+        macOS has a VNC client built in, so this needs nothing installed:
+
+            ./scripts/run-vm.ps1 -Arch arm64 -Vnc
+            open vnc://localhost:5900
+
+        Expect it to be slow. The frame is composited in software by the guest,
+        emulated by QEMU without an accelerator, and then encoded for VNC.
+
     .PARAMETER Timeout
         Seconds to wait in -Check mode before giving up. Default: the per-architecture
         value in image/scripts/run-qemu.sh.
@@ -75,6 +91,7 @@ param(
     [switch]$LoginCheck,
     [switch]$GraphicsCheck,
     [switch]$AppCheck,
+    [switch]$Vnc,
     [int]$Timeout = 0,
 
     [string]$ImageDir = 'out',
@@ -144,7 +161,14 @@ if ($unattended) {
     $dockerArgs += @('--interactive', '--tty')
 }
 
+# Published on loopback only. The VM has no credentials worth reaching and QEMU's
+# VNC server here has no password, so it must not be a port on the network.
+if ($Vnc) { $dockerArgs += @('--publish', '127.0.0.1:5900:5900') }
+
 $dockerArgs += @('--volume', "${imageDirPath}:/images", $vmImage, $Arch)
+
+# Before the mode word, which is what run-qemu expects.
+if ($Vnc) { $dockerArgs += '--vnc' }
 
 if ($AppCheck) {
     $dockerArgs += '--app-check'

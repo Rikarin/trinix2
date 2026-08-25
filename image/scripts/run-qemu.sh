@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# run-qemu <arm64|x86_64> [--check | --login-check | --graphics-check | --app-check [seconds]] [qemu args...]
+# run-qemu <arm64|x86_64> [--vnc] [--check | --login-check | --graphics-check | --app-check [seconds]] [qemu args...]
 #
 # Boots a Trinix disk image. Runs inside the vm container (docker/vm.Dockerfile),
 # with the image directory bind-mounted at /images.
 #
 # Five modes:
 #   interactive       serial console on stdio — this is `run-vm.ps1 -Arch arm64`
+#
+# --vnc adds a VNC server on 5900 to any of them, which is the only way to see
+# what the compositor draws: the guest's display device exists in every mode and
+# nothing is attached to it otherwise.
 #   --check           boot unattended and assert that a login prompt appeared.
 #                     The Phase 2 exit criterion as a test.
 #   --login-check     everything --check does, then log in and drive the
@@ -29,6 +33,15 @@ login_check=0
 graphics_check=0
 app_check=0
 timeout_s=0
+vnc=0
+
+# --vnc before the mode, because it applies to the interactive one and the mode
+# words are all that follow it.
+if [ "${1:-}" = '--vnc' ]; then
+    vnc=1
+    shift
+fi
+
 case "${1:-}" in
     --check)          check=1; shift ;;
     --login-check)    check=1; login_check=1; shift ;;
@@ -138,12 +151,32 @@ args=(
     # the compositor's entire input path goes untested.
     -device virtio-keyboard-pci
     -device virtio-tablet-pci
-    # -display none keeps QEMU headless; the device above still exists, and
     # -vga none stops x86_64's q35 adding a second, emulated adapter that the
-    # guest would have to choose between.
-    -display none
+    # guest would have to choose between. What happens to the picture is
+    # decided below.
     "${extra_display[@]}"
 )
+
+# ---------------------------------------------------------------------------
+# Where the picture goes.
+# ---------------------------------------------------------------------------
+#
+# Headless by default, and not only because of the checks: QEMU runs in a
+# container, and a container has no display to open a window on. The guest still
+# has a virtio-gpu to modeset — the compositor needs one to run at all — and
+# ordinarily nothing looks at what it draws.
+#
+# --vnc is how to look. QEMU serves the same framebuffer over VNC, the container
+# publishes the port, and macOS has a VNC client built in — so seeing the
+# desktop still needs nothing installed on the Mac, which is the promise the
+# whole VM tier is built on. Bound to 0.0.0.0 rather than localhost because
+# "localhost" inside a container is the container.
+if [ "$vnc" -eq 1 ]; then
+    args+=(-display vnc=0.0.0.0:0)
+    echo '==> VNC on port 5900 — connect with: open vnc://localhost:5900'
+else
+    args+=(-display none)
+fi
 
 if [ "$check" -eq 1 ]; then
     [ "$timeout_s" -gt 0 ] || timeout_s="$default_timeout"
