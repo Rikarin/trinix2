@@ -48,6 +48,34 @@ the recipe list does not have them. That is a prerequisite for this pane, for do
 recording, for per-app volume and for doc 11's media applications, and it is on the critical path
 for more things than its size suggests.
 
+⚠ **It is also more than twice the size this document first said**, established 2026-08-25 by reading
+upstream's `meson.build` and inventorying the build container rather than by estimating. Current
+stable is PipeWire **1.6.8** and WirePlumber **0.5.15** — note 1.5.x is a *development* series and
+WirePlumber 0.6 does not exist. Seven recipes are missing, not two:
+
+| Missing | Cost |
+|---|---|
+| `alsa-lib`, `pcre2`, `lua` | Cheap. ⚠ `pcre2` is **already pinned in `sources.json` with no recipe**; Lua ships no shared library, no install layout and **no `.pc` file**, and WirePlumber finds it through pkg-config, so all three get hand-written |
+| **`glib`** (target) | **The expensive one, and it arrives in a from-scratch base image solely because the session manager is written against it** |
+| **`glib-host`** (`RECIPE_HOST_ONLY`) | Not optional: meson's gnome module resolves `glib-mkenums` and friends as *build-machine* tools, and the container has none of them. `wayland-scanner` and `expat-host` are the precedent for not solving this with an apt package |
+| `pipewire`, `wireplumber` | Moderate; ~25 meson options each to answer explicitly |
+
+Four traps, each of which produces a build that works and is wrong:
+
+1. **Both projects fetch from the network by default.** PipeWire's `-Dsession-managers` defaults to cloning WirePlumber **master, unpinned**, as a subproject; WirePlumber's `system-lua` defaults to false and fetches Lua at configure time. `-Dsession-managers=[]` and `-Dsystem-lua=true`. Both fail loudly in a network-less container, which is the good kind.
+2. **GLib reads seven cross properties through `meson.get_external_property()` *with fallbacks*.** `have_c99_vsnprintf`, `have_c99_snprintf` and `have_unix98_printf` all default **false**, so an undeclared cross build silently compiles gnulib's printf instead of glibc's. Declare them — following `mesa`'s `llvm-cross.ini` precedent, in a glib-specific cross file rather than the shared one.
+3. **There is no `systemd --user`.** `-Dpam=disabled` means `pam_systemd` never registers a session and `user@1000.service` never starts, so upstream's user units are inert. The answer is Trinix-owned system units with a hardcoded `XDG_RUNTIME_DIR`, exactly as `trinix-compositor.service` already does — integration work, not recipe work.
+4. ⚠ **The kernel cannot do sound and the VM has no audio device.** `base/recipes/linux/config/trinix.config` contains **no `CONFIG_SND` at all** — grep for `SND`, `SOUND` or `AUDIO` returns nothing — and `run-qemu.sh` passes no audio device. So a perfect recipe would land on a machine with nothing to talk to and nothing to test against.
+
+⚠ **Screen recording with audio is not budgeted anywhere.** Doc 03 costs the capture UI; the pipe from
+wlroots' screencopy into PipeWire, plus `xdg-desktop-portal`, is **≥1.0 EM** on top and belongs to
+whoever schedules doc 03's recording line.
+
+⚠ **This takes the base from 57 recipes to 63**, against `base/recipes/README.md`'s stated ceiling of
+~40–60 and its rule that unusual machinery is a signal to ask whether something belongs in the base
+image or in an app bundle. It probably is the right call — the alternative to GLib is writing a
+session manager — but it is a budget decision and should be taken as one rather than absorbed.
+
 Devices in and out, per-application volume (free: each sandboxed app already has its own PipeWire
 node, doc 04), input level and monitoring, sample rate, and Bluetooth audio codec selection. Spatial
 audio is post-1.0 and needs a real reason beyond the brief listing it.
@@ -112,10 +140,10 @@ and that a user will open constantly.
 |---|---|
 | Settings shell: sidebar, search, deep links, pane host, schema binding | 2.0 |
 | Network: `iwd` recipe, networkd/iwd façade, Wi-Fi/Ethernet/VPN/DNS/firewall panes | 3.0 |
-| Sound: PipeWire + WirePlumber recipes, façade, pane | 1.5 |
+| Sound: PipeWire + WirePlumber — recipes, façade, pane. **Measured 2026-08-25 as ~3.5**, see § Sound | 3.5 |
 | Displays, power, storage panes (over doc 03 / `trinixd`) | 1.5 |
 | Bluetooth: BlueZ recipe + façade + pane | 1.5 |
 | Keyboard (incl. the Command-key mapping UI), mouse, trackpad | 1.0 |
 | Printing: CUPS recipe, driverless discovery, pane, the print dialog in the SDK | 2.0 |
 | Users, Privacy & Security, Applications, Time & Language, About, Developer | 2.0 |
-| **Total** | **14.5** |
+| **Total** | **16.5** |

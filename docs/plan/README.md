@@ -91,7 +91,7 @@ of its assumptions changed what got planned, and each is argued where it lands.
    out of 1.0 with the reasoning, ships the protocol plumbing (CalDAV, CardDAV, IMAP) as SDK
    libraries so they can arrive later without an architecture change, and spends the time on Files,
    Search, Settings and the Store instead.
-5. **Scale.** Roughly **190 engineer-months** from Phase 6 to a 1.0 a person could use as their only
+5. **Scale.** Roughly **192 engineer-months** from Phase 6 to a 1.0 a person could use as their only
    computer — about two fifths of it the shell and the applications, and about a twelfth
    compatibility. That is four years for four people and sixteen for one, which doc 17 states out
    loud and doc 18 ranks first among the risks. Cross-device clipboard, phone integration and Nearby

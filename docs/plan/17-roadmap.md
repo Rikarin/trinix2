@@ -22,11 +22,11 @@ below, at their real size rather than as a bullet.
 | 8 | **Authority** | Doc 04 in full: transient units, the broker, portals, consent, audit mode, the escape suite. Doc 05: accounts, PAM host, keychain, TPM, the Secret Service face. The rest of doc 02: notifications, clipboard, device brokering | 24.0 |
 | 9 | **The desktop** | Doc 03 in full: window management, snapping, workspaces, the overview, displays, the shell process, panel, dock, control centre, screenshots. Doc 12: Terminal, and `Trinix.Management` onto the contracts | 27.0 |
 | 10 | **Your files** | Doc 07: Files, the job queue, volumes, network, tags, Glance and its fourteen providers. Doc 06: Beacon, the index, extractors, ranking, actions | 24.5 |
-| 11 | **A computer you can configure** | Doc 08: Settings and every service under it — network, sound, Bluetooth, printing, power. Doc 11's small applications: System Monitor, Disk Utility, Console, Text Edit, Preview, Calculator, Archive, Clock | 26.0 |
+| 11 | **A computer you can configure** | Doc 08: Settings and every service under it — network, sound, Bluetooth, printing, power. Doc 11's small applications: System Monitor, Disk Utility, Console, Text Edit, Preview, Calculator, Archive, Clock | 28.0 |
 | 12 | **Distribution** | Doc 09: repositories, `tpkg`, the Store, install lifecycle. Doc 10: A/B updates, dm-verity, chunking, recovery, Btrfs and Rewind. The Setup Assistant. Doc 16's remaining gates: `CheckApi`, `CheckAot`, goldens, latency, determinism | 27.5 |
 | 13 | **The rest of the world** | Doc 13: the runtime bundles, Flatpak, XWayland, Wine, Zen and VS Code. Doc 15: the AT-SPI bridge, the compositor's accessibility, the gates, Orca | 22.5 |
 | 14 | **The last mile** | Doc 14: automation. Doc 11's remaining applications: Notes, Photos, Music/Video | 17.0 |
-| | **Total** | | **190** |
+| | **Total** | | **192** |
 
 ### Exit criteria
 
@@ -56,7 +56,7 @@ The four points at which the thing is worth showing someone.
 
 ## Parallelism, and the honest arithmetic
 
-190 engineer-months is **sixteen years for one person and about four years for four**, and that is
+192 engineer-months is **sixteen years for one person and about four years for four**, and that is
 the most important number in this document. Every plan of this shape fails by not saying it.
 
 What can genuinely run in parallel, given the dependencies:
