@@ -90,7 +90,20 @@ controls, markup, styling and text**, and doc 01 explicitly forbids forking them
 - The specific Vixen gaps this plan is exposed to are named where they land: accessibility (doc 15),
   localisation (doc 01 § Open), CSS Grid, and variable-height virtualisation for Files' list view.
 
-## R6 — Vixen has no accessibility tree at all, and this entry said "unaudited"
+## R6 — ✅ Landed upstream. Vixen has an accessibility tree
+
+**2026-08-26.** `Core/Vixen.Ui/Accessibility.cs` exists in Vixen's `master` — commit `ecf25aa3`,
+*"An element carries a role, a name, a value and a state, and the ones a control already knows are
+computed rather than stored"*. The ask in [Vixen's doc 46](../../../Vixen/docs/plan/46-what-an-application-needs.md)
+was made and answered.
+
+⚠ **Trinix cannot see it yet.** `vendor/vixen/` is **81 commits behind** and the pinned `Vixen.Ui.dll`
+contains none of those symbols, so everything doc [15](15-accessibility.md) says about a greenfield
+remains true *of this repository* until the pin moves. The fix is a `scripts/update-vixen.ps1` bump,
+not an edit — and the bump is its own risk, since 81 commits can move `IPlatform` under
+`Trinix.Platform`.
+
+## R6 (historical) — how this entry was wrong twice
 
 Corrected 2026-08-25 by reading the code rather than the plan. There is **no accessibility surface in
 Vixen** — no `Role`, `AccessibleName`, `AutomationId` or accessibility namespace in any UI or platform

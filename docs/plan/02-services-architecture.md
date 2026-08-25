@@ -60,7 +60,7 @@ Small on purpose. Each line is a process, its lifetime, and why it is separate.
 
 | Daemon | Runs as | Lifetime | Why not folded into another |
 |---|---|---|---|
-| `trinixd` (exists) | root, system bus | boot → shutdown | The privileged half: mounts, power, updates, device policy. It is the only thing here that runs as root, and it stays small for exactly that reason |
+| `trinixd` (exists — ⚠️ **in name only**) | root, system bus | boot → shutdown | The privileged half: mounts, power, updates, device policy; the only thing here that runs as root, and small for exactly that reason. ⚠️ **None of that is true today.** The unit is `DynamicUser=yes`, `ProtectSystem=strict`, `RestrictAddressFamilies=AF_UNIX`; it has no project reference to anything and logs one line per boot. It is a hosting proof from Phase 3, not a privileged daemon, and every row in this document that says "in `trinixd`" is a plan rather than a location |
 | `trinix-broker` | root, system bus | boot → shutdown | Doc 04. Must outlive and out-privilege every app it mediates, and must not share an address space with anything that parses untrusted input |
 | `trinix-secrets` | user | session | Doc 05. Holds key material; separate so that a crash dump of anything else does not contain it |
 | `trinix-shell` | user | session | Doc 03. The only one with a Vixen UI and therefore the only one with a garbage collector on a user-visible path |

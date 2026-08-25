@@ -31,7 +31,7 @@ a machine without Mail is a machine you read mail on the web with, which is what
 | **Screenshot** | Doc 03 — the capture UI and the annotation editor | (2.0) |
 | **Rewind** | Doc 10 — the backup browser | (1.5) |
 | **Console** | The log viewer. Developer Mode's window (doc 01), and the thing that turns "it broke" into a bug report | 1.0 |
-| **Installer / Setup Assistant** | First boot: language, keyboard, network, account, disk encryption, backup. The first thing anyone sees | 2.0 |
+| **Installer / Setup Assistant** | First boot: language, keyboard, network, account, ⚠️ *disk encryption — which nothing implements, see doc 21*, backup. The first thing anyone sees | 2.0 |
 | **Clock** | World clock, alarms, timers, stopwatch. Small, and its absence is conspicuous | 0.5 |
 | **Notes** | The one productivity application that ships, because it is where you put a thing while doing something else, and because it is the SDK's proof that a third party can write a real application. Rich text, checklists, attachments, tags, search integration. ⚠ **No sync in 1.0** | 3.0 |
 | **Music / Video** | One application, two modes: a local library with metadata and playlists, and a player with subtitles, tracks and speed. Over `Vixen.Audio.Codecs` and `Vixen.Video.Codecs`, which exist. ⚠ Hardware video decode does not, and neither does a GPU (doc 03 § Displays); 4K playback will not work until it does, and that must be said out loud rather than discovered | 3.0 |

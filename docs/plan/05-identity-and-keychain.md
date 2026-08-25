@@ -43,7 +43,7 @@ var token = await Keychain.GetAsync("github.com", "user");
 
 ### What it holds
 
-Passwords · API keys · OAuth tokens (with refresh, and the refresh happens *in* the keychain daemon
+⚠️ **Wi-Fi PSKs and the disk recovery key below are aspirational** — nothing in Trinix encrypts a disk (doc [21](21-what-systemd-does-not-do.md)), so there is no recovery key to escrow. Passwords · API keys · OAuth tokens (with refresh, and the refresh happens *in* the keychain daemon
 so a token-stealing app gets a short-lived access token rather than a refresh token) · SSH keys ·
 X.509 identities and their private keys · Wi-Fi PSKs · per-app opaque secrets · the disk's recovery
 key escrow if the user chooses.
