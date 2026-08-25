@@ -177,13 +177,53 @@ jobs:
           path: out/serial-${{ matrix.arch }}.log
           if-no-files-found: ignore
 
+  # ---------------------------------------------------------------------------
+  # The C# gate. src/ builds with the plain dotnet SDK — no toolchain
+  # dependency — so this runs independently of every stage above and stays fast
+  # enough to gate a pull request on its own. That independence is the point:
+  # a compile error or a broken unit test should be a ninety-second answer, not
+  # something discovered two hours into an image build.
+  #
+  # The steps are ordered cheapest-first, so the failure a person sees is the
+  # earliest one that explains the rest. Solution completeness comes before the
+  # restore because it is the check that decides what "the solution" even
+  # contains.
+  # ---------------------------------------------------------------------------
   dotnet:
-    # src/ builds with the plain dotnet SDK — no toolchain dependency, so this
-    # runs independently and stays fast.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           global-json-file: global.json
-      - run: dotnet build src/Trinix.slnx --configuration Release
+
+      # Every .csproj under src/ is in Trinix.slnx, or this fails and says which
+      # line to paste. Deliberately not a unit test: a test that checks "every
+      # project is in the solution" cannot run when its own project is the one
+      # left out. See the script's own .DESCRIPTION.
+      - name: Every project is in the solution
+        shell: pwsh
+        run: ./scripts/check-solution.ps1
+
+      # Restored once, explicitly, so that the three steps after it can each run
+      # --no-restore and the log attributes a package failure to package
+      # resolution rather than to whichever step happened to be first.
+      # Vixen comes from vendor/vixen via src/NuGet.config; nothing else here
+      # needs the network.
+      - name: Restore
+        run: dotnet restore src/Trinix.slnx
+
+      # Before the build, because a formatting diff is not worth compiling for.
+      # .editorconfig at the repository root is what makes this meaningful —
+      # without it the tool applies the .NET defaults and disagrees with every
+      # file in the tree.
+      - name: Formatting
+        run: dotnet format src/Trinix.slnx --verify-no-changes --no-restore
+
+      # src/Directory.Build.props sets TreatWarningsAsErrors, EnforceCodeStyleInBuild
+      # and the trim/AOT analysers, so "build" here is already the analyser gate.
+      - name: Build
+        run: dotnet build src/Trinix.slnx --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test src/Trinix.slnx --configuration Release --no-build

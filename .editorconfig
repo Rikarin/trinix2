@@ -1,0 +1,101 @@
+# Trinix's C# formatting, written down.
+#
+# This file exists because `dotnet format --verify-no-changes` is a CI gate and,
+# without it, `dotnet format` has no idea what this repository looks like: it
+# falls back to the .NET defaults, which put the opening brace on its own line,
+# and then reports 646 "errors" against code that is not wrong. A format gate
+# that disagrees with every file in the tree is not a gate, it is a nuisance,
+# and the fix is to state the convention rather than to change the code to suit
+# a tool's defaults.
+#
+# ⚠ Everything here is *formatting*. No `dotnet_diagnostic` severities and no
+# IDExxxx rules are configured, deliberately: src/Directory.Build.props sets
+# EnforceCodeStyleInBuild together with TreatWarningsAsErrors, so any style rule
+# raised to warning here becomes a build error for the whole repository at once.
+# Tightening those is a separate decision that should be made one rule at a
+# time, with the diff it implies in front of whoever makes it.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
+
+[*.{yml,yaml,json,slnx,csproj,props,targets,psd1}]
+indent_size = 4
+
+[*.md]
+# Two trailing spaces are a line break in Markdown, and stripping them silently
+# rewrites the document.
+trim_trailing_whitespace = false
+
+[*.cs]
+indent_size = 4
+
+# --- Braces --------------------------------------------------------------
+# K&R: the brace stays on the line that opened the block. This is the single
+# convention the whole tree already follows and the one the .NET default
+# disagrees with.
+csharp_new_line_before_open_brace = none
+csharp_new_line_before_else = false
+csharp_new_line_before_catch = false
+csharp_new_line_before_finally = false
+csharp_new_line_before_members_in_object_initializers = false
+csharp_new_line_before_members_in_anonymous_types = false
+csharp_new_line_between_query_expression_clauses = true
+
+# --- Indentation ---------------------------------------------------------
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = false
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+
+# --- Spacing -------------------------------------------------------------
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_before_colon_in_inheritance_clause = true
+csharp_space_after_colon_in_inheritance_clause = true
+# ⚠ `ignore`, not `before_and_after`. The Roslyn formatter reads the `>` of a
+# relational pattern as a binary operator, so `(> 0, > 0) =>` in a positional
+# switch arm is "corrected" to `( > 0, > 0) =>`. Relaxing the rule costs almost
+# nothing — nobody writes `a+b` here — and the alternative was rewriting working
+# pattern matches to suit a formatter bug.
+csharp_space_around_binary_operators = ignore
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_declaration_empty_parameter_list_parentheses = false
+csharp_space_between_method_declaration_name_and_open_parenthesis = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_between_method_call_empty_parameter_list_parentheses = false
+csharp_space_between_method_call_name_and_opening_parenthesis = false
+csharp_space_between_parentheses = false
+csharp_space_between_square_brackets = false
+csharp_space_before_open_square_brackets = false
+csharp_space_after_comma = true
+csharp_space_before_comma = false
+csharp_space_after_dot = false
+csharp_space_before_dot = false
+csharp_space_after_semicolon_in_for_statement = true
+csharp_space_before_semicolon_in_for_statement = false
+
+# --- Wrapping ------------------------------------------------------------
+# `true`, so the formatter leaves a line that already holds several statements
+# alone rather than exploding it. The case that decided this is
+# src/Trinix.Platform/EvdevKeys.cs, where the evdev-to-Key table is written four
+# mappings to a line — `Map(183, Key.F13); Map(184, Key.F14); …` — because the
+# shape of the block is how you read a keymap. One statement per line would turn
+# twenty legible lines into eighty, and the tool has no way to know the
+# difference between that and someone crowding real logic onto one line.
+csharp_preserve_single_line_statements = true
+csharp_preserve_single_line_blocks = true
+
+# --- Usings --------------------------------------------------------------
+# System first, then the rest. ImplicitUsings is on, so the surviving explicit
+# usings are the ones a file genuinely needed to name.
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false

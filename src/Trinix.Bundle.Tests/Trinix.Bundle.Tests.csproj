@@ -1,0 +1,86 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Bundle.Tests — the assembly that decides whether code may run, put
+      under test.
+
+      Everything here runs on any host with the .NET SDK, in seconds, with no
+      root, no fs-verity, no mkfs.erofs and no network. That constraint shaped
+      what is covered: the PKI is generated in-process by DeveloperPki, bundles
+      are built in a temporary directory, and a signed .app is sealed and
+      verified end to end — so the tamper cases are real tampering against a
+      real signature rather than a hand-written fixture that only resembles one.
+
+      What is deliberately *not* covered: FsVerity (needs a filesystem with
+      verity enabled and CAP_SYS_ADMIN), DistributionImage.PackAsync (shells out
+      to mkfs.erofs) and BundleInstaller's privileged paths. Those belong to the
+      container and VM tiers in docs/plan/16-build-ci-and-testing.md, and
+      pretending to test them here would produce a suite that is green because it
+      skipped.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Bundle.Tests</RootNamespace>
+        <AssemblyName>Trinix.Bundle.Tests</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <!--
+          Three opt-outs from src/Directory.Build.props, each because the rule it
+          relaxes is about shipping and a test assembly does not ship.
+
+          The AOT and trim analysers would fire on xunit's reflective test
+          discovery, not on Trinix code — a warnings-as-errors build would then
+          be reporting a property of the test runner. The code under test keeps
+          both analysers, which is where they earn anything.
+        -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+
+        <!--
+          No XML documentation file, so CS1591 does not demand a <summary> on
+          every [Fact]. The classes below carry doc comments anyway, because the
+          *reason* a case exists is worth writing down; what would be worthless
+          is a mandatory sentence above each method restating its name.
+        -->
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+        <!--
+          CA1707 forbids underscores in member names. Test names here are
+          PascalCase sentences (RootOfOneLeafIsThatLeaf) rather than the
+          Method_State_Expectation convention, so the rule is satisfied rather
+          than suppressed — one fewer thing to argue about in review.
+        -->
+
+        <!--
+          ⚠ CA1416 warns that File.GetUnixFileMode and File.SetUnixFileMode are
+          unsupported on Windows. Trinix.Bundle guards its own calls, because it
+          is a library that could in principle be referenced from anywhere; these
+          tests are not. The executable bit *is* the thing under test in half of
+          them — it is inside the Merkle leaf, and a bundle whose mode bits are
+          not checked is a bundle whose data files can be made executable after
+          signing. There is nothing to assert on a platform without them, so the
+          alternative to suppressing this is an OperatingSystem.IsWindows() guard
+          around every call that would make those tests silently vacuous instead.
+        -->
+        <NoWarn>$(NoWarn);CA1416</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Bundle\Trinix.Bundle.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- xUnit v2 with the VSTest runner: what `dotnet new xunit` produces on
+             the SDK global.json pins, so `dotnet test` behaves the way anyone
+             arriving at this repository expects. -->
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+</Project>

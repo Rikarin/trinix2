@@ -61,13 +61,28 @@ public sealed class BundleInfo {
     ///     <para>
     ///         See <see cref="BundlePermissions" /> for the vocabulary.
     ///     </para>
+    ///     <para>
+    ///         ⚠ The getter coalesces rather than trusting the field initialiser, and
+    ///         the initialiser on its own was a bug that <c>Trinix.Bundle.Tests</c>
+    ///         found on the day it was written. <c>System.Text.Json</c> constructs a
+    ///         type with <c>required</c> members without running its field
+    ///         initialisers, so an <c>Info.json</c> that simply omits
+    ///         <c>"permissions"</c> — which is every application that asks for nothing
+    ///         — arrived here as <see langword="null" />, and <see cref="Validate" />
+    ///         threw a <see cref="NullReferenceException" /> out of
+    ///         <see cref="BundleVerifier" /> rather than returning a refusal. A crash
+    ///         in the component that decides whether code may run is strictly worse
+    ///         than a "no". The initialiser stays so that code constructing this
+    ///         directly still gets the documented default.
+    ///     </para>
     /// </remarks>
     [JsonPropertyName("permissions")]
-    public IReadOnlyList<string> Permissions { get; init; } = [];
+    public IReadOnlyList<string> Permissions { get => field ?? []; init; } = [];
 
     /// <summary>Free-form categories for a future app catalogue.</summary>
+    /// <remarks>Coalesced for the same reason as <see cref="Permissions" />.</remarks>
     [JsonPropertyName("categories")]
-    public IReadOnlyList<string> Categories { get; init; } = [];
+    public IReadOnlyList<string> Categories { get => field ?? []; init; } = [];
 
     /// <summary>
     ///     Everything wrong with this file, or an empty list.

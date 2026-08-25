@@ -28,6 +28,18 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!--
+          The parsing here — systemctl's key=value output, iproute2's JSON — is
+          internal because nothing outside the module has any business calling
+          it, and it is also the only part of the module that can be tested
+          without a running systemd. Widening it to public so that a test could
+          reach it would be letting the test dictate the API; this is the
+          narrower move.
+        -->
+        <InternalsVisibleTo Include="Trinix.Management.Tests"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <None Include="Trinix.Management.psd1" CopyToOutputDirectory="PreserveNewest"/>
     </ItemGroup>
 
