@@ -15,7 +15,7 @@ The C# side was one line — `dotnet build src/Trinix.slnx` — and as of **2026
 
 | | |
 |---|---|
-| `Trinix.Bundle.Tests` | 221 tests. Generates a PKI in process, seals a real `.app`, and then breaks it: a flipped byte, a file added, removed and renamed, a mode-bit change, an edited manifest, and — the one worth having — a manifest **re-signed by a trusted signer** naming `../../etc/passwd`. `.tdi` footers are assembled byte by byte to reach the bounds checks |
+| `Trinix.Bundle.Tests` | 241 tests. Generates a PKI in process, seals a real `.app`, and then breaks it: a flipped byte, a file added, removed and renamed, a mode-bit change, an edited manifest, and — the one worth having — a manifest **re-signed by a trusted signer** naming `../../etc/passwd`. `.tdi` footers are assembled byte by byte to reach the bounds checks |
 | `Trinix.Management.Tests` | 33 tests over `Cli` parsing, the `ip -json` shapes and service health |
 | `scripts/check-solution.ps1` | Asserts every `.csproj` under `src/` is in `Trinix.slnx`. **A script, not a test**, and deliberately: a test asserting "every project is in the solution" is the one assertion defeated by leaving its own project out of the solution. CI runs it before restore, so it does not depend on the state it checks |
 | `.editorconfig` | The repo had none, so `dotnet format` applied Allman defaults and reported 646 "errors" against correct code. Formatting only — no `dotnet_diagnostic` severities, because `EnforceCodeStyleInBuild` and `TreatWarningsAsErrors` together would turn any rule raised to warning into a tree-wide build failure |
@@ -98,6 +98,16 @@ between a slow build and a build that is quietly testing three-week-old inputs.
 
 ⚠ It also means a local build and CI can disagree indefinitely without anyone noticing, which is the
 more expensive version of the same fault.
+
+⚠️ **It happened a second time, which makes it a pattern rather than an incident.** The Btrfs work put
+`btrfs-progs` into `host-tools.Dockerfile` so that image assembly could call `mkfs.btrfs`. It could
+not: the chain is `image ← base ← toolchain ← host-tools`, `build-image.sh` runs *inside the base
+image*, and the cached toolchain was confirmed to carry `mkfs.ext4` and `mkfs.vfat` and no btrfs at
+all. `-Stage base` rebuilds host-tools, which again **looks** sufficient and is not — reaching image
+assembly meant a full toolchain rebuild, and therefore an LLVM rebuild, for one apt package.
+
+Two independent instances in one week, both costing hours, both invisible until something failed for
+an unrelated-looking reason. The gate below is not a nicety.
 
 ## What is still owed
 

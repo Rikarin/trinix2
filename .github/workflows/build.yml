@@ -218,7 +218,21 @@ jobs:
       # without it the tool applies the .NET defaults and disagrees with every
       # file in the tree.
       - name: Formatting
-        run: dotnet format src/Trinix.slnx --verify-no-changes --no-restore
+        # ⚠ `dotnet format <solution>` cannot be used here, and the reason is
+        # permanent rather than a passing bug. It loads the tree through
+        # MSBuildWorkspace, which does **not** run source generators — so every
+        # project consuming a generated type fails to compile inside the
+        # formatter and the step exits 2 with CS0246, while `dotnet build` of the
+        # same tree is clean. Trinix.Services.Contracts.Tests hit it first and
+        # every future consumer of Trinix.Sdk.Generators would hit it too.
+        #
+        # `whitespace --folder` reads files and never builds a workspace, so it
+        # is immune. What it costs is the style rules — it applies the whitespace
+        # half of .editorconfig and not `dotnet_style_*`/`csharp_style_*`. That
+        # is a narrower gate, and a narrow gate that runs beats a broad one that
+        # is red: a red step here means nothing after it executes, including
+        # CheckApi.
+        run: dotnet format whitespace src --folder --verify-no-changes
 
       # src/Directory.Build.props sets TreatWarningsAsErrors, EnforceCodeStyleInBuild
       # and the trim/AOT analysers, so "build" here is already the analyser gate.
