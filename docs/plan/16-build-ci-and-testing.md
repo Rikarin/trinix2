@@ -36,6 +36,28 @@ Vixen platform backend is compiled by the job that gates a pull request rather t
 to be rewritten because a case-insensitive filesystem made them pass for the wrong reason. CI is the first
 Linux run and should be read as a first run.
 
+## A gate that does not exist, found the hard way
+
+⚠ **`Assert-HostToolsCurrent` gives confidence it cannot deliver.** It rebuilds `host-tools` on every
+base build — but `docker/base.Dockerfile` starts `FROM ${TOOLCHAIN_IMAGE}`, so a fix to
+`host-tools.Dockerfile` **cannot reach the stage where recipes actually compile** without a toolchain
+rebuild. There is a staleness check for the image that is not used and none for the image that is.
+
+Measured 2026-08-25 on a development machine: `trinix/toolchain-arm64:dev` dated 2026-07-30 and
+`trinix/base-arm64:dev` dated 2026-08-02, against `c18da30` of 2026-08-24 — the commit that added
+`mako`, `yaml` and `packaging` precisely because mesa needs them. So mesa failed with
+`Python >= 3.10 not found`, which is a **misleading message the repository already documents**: mesa's
+probe walks candidate interpreters, `continue`s past any that cannot import those three modules, and
+then blames the version. Three weeks of a fix sitting in the tree unable to reach the place that needed
+it, and neither image is old enough to look obviously wrong.
+
+The gate: **a stage image must record the digest of the Dockerfile and the base image it was built
+from, and a build must refuse — or rebuild — when either has moved.** Cheap, and it is the difference
+between a slow build and a build that is quietly testing three-week-old inputs.
+
+⚠ It also means a local build and CI can disagree indefinitely without anyone noticing, which is the
+more expensive version of the same fault.
+
 ## What is still owed
 
 ⚠ This remains the highest-leverage work in the plan. Documents 01–15 add roughly 180 EM of C# to a
