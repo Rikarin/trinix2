@@ -1,0 +1,61 @@
+#nullable enable
+Trinix.Platform.MenuItemKind -> enum : uint
+Trinix.Platform.MenuItemKind.Checkbox = 3 -> Trinix.Platform.MenuItemKind
+Trinix.Platform.MenuItemKind.Item = 0 -> Trinix.Platform.MenuItemKind
+Trinix.Platform.MenuItemKind.MenuItemKind() -> void
+Trinix.Platform.MenuItemKind.Radio = 4 -> Trinix.Platform.MenuItemKind
+Trinix.Platform.MenuItemKind.Separator = 1 -> Trinix.Platform.MenuItemKind
+Trinix.Platform.MenuItemKind.Submenu = 2 -> Trinix.Platform.MenuItemKind
+Trinix.Platform.MenuItemState -> enum : uint
+Trinix.Platform.MenuItemState.Checked = 2 -> Trinix.Platform.MenuItemState
+Trinix.Platform.MenuItemState.Enabled = 1 -> Trinix.Platform.MenuItemState
+Trinix.Platform.MenuItemState.Hidden = 4 -> Trinix.Platform.MenuItemState
+Trinix.Platform.MenuItemState.MenuItemState() -> void
+Trinix.Platform.MenuItemState.None = 0 -> Trinix.Platform.MenuItemState
+Trinix.Platform.MenuModifiers -> enum : uint
+Trinix.Platform.MenuModifiers.Alt = 8 -> Trinix.Platform.MenuModifiers
+Trinix.Platform.MenuModifiers.Command = 64 -> Trinix.Platform.MenuModifiers
+Trinix.Platform.MenuModifiers.Control = 4 -> Trinix.Platform.MenuModifiers
+Trinix.Platform.MenuModifiers.MenuModifiers() -> void
+Trinix.Platform.MenuModifiers.None = 0 -> Trinix.Platform.MenuModifiers
+Trinix.Platform.MenuModifiers.Shift = 1 -> Trinix.Platform.MenuModifiers
+Trinix.Platform.TrinixMenu -> sealed class
+Trinix.Platform.TrinixMenu.Commit() -> void
+Trinix.Platform.TrinixMenu.Destroy() -> void
+Trinix.Platform.TrinixMenu.Dismissed -> System.Action?
+Trinix.Platform.TrinixMenu.Insert(uint id, string label, uint parent = 0, int index = -1, Trinix.Platform.MenuItemKind kind = Trinix.Platform.MenuItemKind.Item) -> void
+Trinix.Platform.TrinixMenu.ItemActivated -> System.Action<uint>?
+Trinix.Platform.TrinixMenu.Remove(uint id) -> void
+Trinix.Platform.TrinixMenu.SetAccelerator(uint id, uint keysym, Trinix.Platform.MenuModifiers modifiers) -> void
+Trinix.Platform.TrinixMenu.SubmenuOpening -> System.Action<uint>?
+Trinix.Platform.TrinixMenu.Update(uint id, string label, Trinix.Platform.MenuItemState state = Trinix.Platform.MenuItemState.Enabled) -> void
+Trinix.Platform.TrinixPlatform -> sealed class
+Trinix.Platform.TrinixPlatform : System.IDisposable
+Trinix.Platform.TrinixPlatform.Capabilities.get -> Vixen.Platform.PlatformCapabilities
+Trinix.Platform.TrinixPlatform.Clipboard.get -> Vixen.Platform.IClipboard
+Trinix.Platform.TrinixPlatform.CreateWindow(in Vixen.Platform.WindowOptions options) -> Vixen.Platform.IWindow
+Trinix.Platform.TrinixPlatform.Dialogs.get -> Vixen.Platform.INativeDialogs
+Trinix.Platform.TrinixPlatform.Displays.get -> Vixen.Platform.IDisplayInfo
+Trinix.Platform.TrinixPlatform.Dispose() -> void
+Trinix.Platform.TrinixPlatform.FileSystem.get -> Vixen.Platform.IFileSystemHost
+Trinix.Platform.TrinixPlatform.Input.get -> Vixen.Platform.IInputSource
+Trinix.Platform.TrinixPlatform.Lifecycle.get -> Vixen.Platform.ILifecycle
+Trinix.Platform.TrinixPlatform.Name.get -> string
+Trinix.Platform.TrinixPlatform.Power.get -> Vixen.Platform.IPowerInfo
+Trinix.Platform.TrinixPlatform.Processors.get -> Vixen.Platform.IProcessorTopology
+Trinix.Platform.TrinixPlatform.PumpEvents() -> System.ReadOnlySpan<Vixen.Platform.PlatformEvent>
+Trinix.Platform.TrinixPlatform.TextInput.get -> Vixen.Platform.ITextInput
+Trinix.Platform.TrinixPlatform.TrinixPlatform(Trinix.Platform.TrinixPlatformOptions options) -> void
+Trinix.Platform.TrinixPlatform.TryGetWindow(uint id, out Vixen.Platform.IWindow? window) -> bool
+Trinix.Platform.TrinixPlatform.TryOpenUrl(string url) -> bool
+Trinix.Platform.TrinixPlatform.Windows.get -> System.Collections.Generic.IReadOnlyList<Vixen.Platform.IWindow>
+Trinix.Platform.TrinixPlatformOptions -> sealed class
+Trinix.Platform.TrinixPlatformOptions.Application.get -> string
+Trinix.Platform.TrinixPlatformOptions.Application.set -> string
+Trinix.Platform.TrinixPlatformOptions.ApplicationId.get -> string
+Trinix.Platform.TrinixPlatformOptions.ApplicationId.set -> string
+Trinix.Platform.TrinixPlatformOptions.Organisation.get -> string
+Trinix.Platform.TrinixPlatformOptions.Organisation.set -> string
+Trinix.Platform.TrinixPlatformOptions.TrinixPlatformOptions() -> void
+static Trinix.Platform.TrinixMenu.ForApplication() -> Trinix.Platform.TrinixMenu?
+static Trinix.Platform.TrinixMenu.ForWindow(Vixen.Platform.IWindow window) -> Trinix.Platform.TrinixMenu?

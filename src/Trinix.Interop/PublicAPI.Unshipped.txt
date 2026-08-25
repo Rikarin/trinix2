@@ -1,0 +1,191 @@
+#nullable enable
+Trinix.Interop.WaylandClient -> static class
+Trinix.Interop.WaylandClient.Callbacks -> struct
+Trinix.Interop.WaylandClient.Callbacks.Callbacks() -> void
+Trinix.Interop.WaylandClient.Callbacks.ControlActivated -> delegate* unmanaged<nint, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.ControlHover -> delegate* unmanaged<nint, uint, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.Key -> delegate* unmanaged<nint, uint, byte, uint, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.MenuAboutToShow -> delegate* unmanaged<nint, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.MenuActivated -> delegate* unmanaged<nint, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.MenuClosed -> delegate* unmanaged<nint, void>
+Trinix.Interop.WaylandClient.Callbacks.OutputChanged -> delegate* unmanaged<nint, int, int, int, int, int, int, byte*, void>
+Trinix.Interop.WaylandClient.Callbacks.OutputRemoved -> delegate* unmanaged<nint, void>
+Trinix.Interop.WaylandClient.Callbacks.PointerButton -> delegate* unmanaged<nint, uint, byte, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.PointerLeft -> delegate* unmanaged<nint, void>
+Trinix.Interop.WaylandClient.Callbacks.PointerMotion -> delegate* unmanaged<nint, double, double, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.PointerScroll -> delegate* unmanaged<nint, double, double, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.ShadowApplied -> delegate* unmanaged<nint, int, int, int, int, void>
+Trinix.Interop.WaylandClient.Callbacks.Text -> delegate* unmanaged<nint, byte*, void>
+Trinix.Interop.WaylandClient.Callbacks.WindowCloseRequested -> delegate* unmanaged<nint, void>
+Trinix.Interop.WaylandClient.Callbacks.WindowConfigured -> delegate* unmanaged<nint, int, int, int, int, int, uint, void>
+Trinix.Interop.WaylandClient.Callbacks.WindowFocusChanged -> delegate* unmanaged<nint, byte, void>
+Trinix.Interop.WaylandClient.Control -> enum : uint
+Trinix.Interop.WaylandClient.Control.Close = 0 -> Trinix.Interop.WaylandClient.Control
+Trinix.Interop.WaylandClient.Control.Control() -> void
+Trinix.Interop.WaylandClient.Control.Minimise = 1 -> Trinix.Interop.WaylandClient.Control
+Trinix.Interop.WaylandClient.Control.Zoom = 2 -> Trinix.Interop.WaylandClient.Control
+Trinix.Interop.WaylandClient.Globals -> enum : uint
+Trinix.Interop.WaylandClient.Globals.DataDevice = 4 -> Trinix.Interop.WaylandClient.Globals
+Trinix.Interop.WaylandClient.Globals.Globals() -> void
+Trinix.Interop.WaylandClient.Globals.Menu = 2 -> Trinix.Interop.WaylandClient.Globals
+Trinix.Interop.WaylandClient.Globals.None = 0 -> Trinix.Interop.WaylandClient.Globals
+Trinix.Interop.WaylandClient.Globals.Shell = 1 -> Trinix.Interop.WaylandClient.Globals
+Trinix.Interop.WaylandClient.HoverState -> enum : uint
+Trinix.Interop.WaylandClient.HoverState.Entered = 1 -> Trinix.Interop.WaylandClient.HoverState
+Trinix.Interop.WaylandClient.HoverState.HoverState() -> void
+Trinix.Interop.WaylandClient.HoverState.Left = 0 -> Trinix.Interop.WaylandClient.HoverState
+Trinix.Interop.WaylandClient.HoverState.Pressed = 2 -> Trinix.Interop.WaylandClient.HoverState
+Trinix.Interop.WaylandClient.MenuKind -> enum : uint
+Trinix.Interop.WaylandClient.MenuKind.Checkbox = 3 -> Trinix.Interop.WaylandClient.MenuKind
+Trinix.Interop.WaylandClient.MenuKind.Item = 0 -> Trinix.Interop.WaylandClient.MenuKind
+Trinix.Interop.WaylandClient.MenuKind.MenuKind() -> void
+Trinix.Interop.WaylandClient.MenuKind.Radio = 4 -> Trinix.Interop.WaylandClient.MenuKind
+Trinix.Interop.WaylandClient.MenuKind.Separator = 1 -> Trinix.Interop.WaylandClient.MenuKind
+Trinix.Interop.WaylandClient.MenuKind.Submenu = 2 -> Trinix.Interop.WaylandClient.MenuKind
+Trinix.Interop.WaylandClient.MenuState -> enum : uint
+Trinix.Interop.WaylandClient.MenuState.Checked = 2 -> Trinix.Interop.WaylandClient.MenuState
+Trinix.Interop.WaylandClient.MenuState.Enabled = 1 -> Trinix.Interop.WaylandClient.MenuState
+Trinix.Interop.WaylandClient.MenuState.Hidden = 4 -> Trinix.Interop.WaylandClient.MenuState
+Trinix.Interop.WaylandClient.MenuState.MenuState() -> void
+Trinix.Interop.WaylandClient.MenuState.None = 0 -> Trinix.Interop.WaylandClient.MenuState
+Trinix.Interop.WaylandClient.Modifiers -> enum : uint
+Trinix.Interop.WaylandClient.Modifiers.Alt = 8 -> Trinix.Interop.WaylandClient.Modifiers
+Trinix.Interop.WaylandClient.Modifiers.Control = 4 -> Trinix.Interop.WaylandClient.Modifiers
+Trinix.Interop.WaylandClient.Modifiers.Logo = 64 -> Trinix.Interop.WaylandClient.Modifiers
+Trinix.Interop.WaylandClient.Modifiers.Modifiers() -> void
+Trinix.Interop.WaylandClient.Modifiers.None = 0 -> Trinix.Interop.WaylandClient.Modifiers
+Trinix.Interop.WaylandClient.Modifiers.Shift = 1 -> Trinix.Interop.WaylandClient.Modifiers
+Trinix.Interop.WaylandClient.ShadowStyle -> enum : uint
+Trinix.Interop.WaylandClient.ShadowStyle.Docked = 1 -> Trinix.Interop.WaylandClient.ShadowStyle
+Trinix.Interop.WaylandClient.ShadowStyle.Floating = 3 -> Trinix.Interop.WaylandClient.ShadowStyle
+Trinix.Interop.WaylandClient.ShadowStyle.None = 0 -> Trinix.Interop.WaylandClient.ShadowStyle
+Trinix.Interop.WaylandClient.ShadowStyle.ShadowStyle() -> void
+Trinix.Interop.WaylandClient.ShadowStyle.Window = 2 -> Trinix.Interop.WaylandClient.ShadowStyle
+Trinix.Interop.WaylandClient.WindowMode -> enum : uint
+Trinix.Interop.WaylandClient.WindowMode.Fullscreen = 3 -> Trinix.Interop.WaylandClient.WindowMode
+Trinix.Interop.WaylandClient.WindowMode.Maximised = 2 -> Trinix.Interop.WaylandClient.WindowMode
+Trinix.Interop.WaylandClient.WindowMode.Minimised = 1 -> Trinix.Interop.WaylandClient.WindowMode
+Trinix.Interop.WaylandClient.WindowMode.WindowMode() -> void
+Trinix.Interop.WaylandClient.WindowMode.Windowed = 0 -> Trinix.Interop.WaylandClient.WindowMode
+Trinix.Interop.Wlroots -> static class
+Trinix.Interop.Wlroots.Callbacks -> struct
+Trinix.Interop.Wlroots.Callbacks.Callbacks() -> void
+Trinix.Interop.Wlroots.Callbacks.InputAdded -> delegate* unmanaged<int, byte*, void>
+Trinix.Interop.Wlroots.Callbacks.Key -> delegate* unmanaged<uint, uint, byte, byte>
+Trinix.Interop.Wlroots.Callbacks.MenuBegin -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.MenuEnd -> delegate* unmanaged<nint, uint, void>
+Trinix.Interop.Wlroots.Callbacks.MenuItem -> delegate* unmanaged<nint, uint, uint, uint, uint, uint, uint, byte*, void>
+Trinix.Interop.Wlroots.Callbacks.MenuRemoved -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.OutputAdded -> delegate* unmanaged<nint, int, int, int, byte*, void>
+Trinix.Interop.Wlroots.Callbacks.OutputRemoved -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.PointerButton -> delegate* unmanaged<uint, byte, uint, void>
+Trinix.Interop.Wlroots.Callbacks.PointerMotion -> delegate* unmanaged<double, double, uint, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelAdded -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelControl -> delegate* unmanaged<nint, uint, int, int, int, int, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelDecorated -> delegate* unmanaged<nint, uint, int, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelMapped -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelRemoved -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelRequestMove -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelRequestResize -> delegate* unmanaged<nint, uint, void>
+Trinix.Interop.Wlroots.Callbacks.ToplevelUnmapped -> delegate* unmanaged<nint, void>
+Trinix.Interop.Wlroots.ControlHover -> enum : int
+Trinix.Interop.Wlroots.ControlHover.ControlHover() -> void
+Trinix.Interop.Wlroots.ControlHover.Entered = 1 -> Trinix.Interop.Wlroots.ControlHover
+Trinix.Interop.Wlroots.ControlHover.Left = 0 -> Trinix.Interop.Wlroots.ControlHover
+Trinix.Interop.Wlroots.ControlHover.Pressed = 2 -> Trinix.Interop.Wlroots.ControlHover
+Trinix.Interop.Wlroots.InputDeviceType -> enum : int
+Trinix.Interop.Wlroots.InputDeviceType.InputDeviceType() -> void
+Trinix.Interop.Wlroots.InputDeviceType.Keyboard = 0 -> Trinix.Interop.Wlroots.InputDeviceType
+Trinix.Interop.Wlroots.InputDeviceType.Other = 4 -> Trinix.Interop.Wlroots.InputDeviceType
+Trinix.Interop.Wlroots.InputDeviceType.Pointing = 1 -> Trinix.Interop.Wlroots.InputDeviceType
+Trinix.Interop.Wlroots.InputDeviceType.Tablet = 3 -> Trinix.Interop.Wlroots.InputDeviceType
+Trinix.Interop.Wlroots.InputDeviceType.Touch = 2 -> Trinix.Interop.Wlroots.InputDeviceType
+Trinix.Interop.Wlroots.LogLevel -> enum : int
+Trinix.Interop.Wlroots.LogLevel.Debug = 3 -> Trinix.Interop.Wlroots.LogLevel
+Trinix.Interop.Wlroots.LogLevel.Error = 1 -> Trinix.Interop.Wlroots.LogLevel
+Trinix.Interop.Wlroots.LogLevel.Info = 2 -> Trinix.Interop.Wlroots.LogLevel
+Trinix.Interop.Wlroots.LogLevel.LogLevel() -> void
+Trinix.Interop.Wlroots.LogLevel.Silent = 0 -> Trinix.Interop.Wlroots.LogLevel
+Trinix.Interop.Wlroots.MenuItemKind -> enum : int
+Trinix.Interop.Wlroots.MenuItemKind.Checkbox = 3 -> Trinix.Interop.Wlroots.MenuItemKind
+Trinix.Interop.Wlroots.MenuItemKind.Item = 0 -> Trinix.Interop.Wlroots.MenuItemKind
+Trinix.Interop.Wlroots.MenuItemKind.MenuItemKind() -> void
+Trinix.Interop.Wlroots.MenuItemKind.Radio = 4 -> Trinix.Interop.Wlroots.MenuItemKind
+Trinix.Interop.Wlroots.MenuItemKind.Separator = 1 -> Trinix.Interop.Wlroots.MenuItemKind
+Trinix.Interop.Wlroots.MenuItemKind.Submenu = 2 -> Trinix.Interop.Wlroots.MenuItemKind
+Trinix.Interop.Wlroots.MenuItemState -> enum : uint
+Trinix.Interop.Wlroots.MenuItemState.Checked = 2 -> Trinix.Interop.Wlroots.MenuItemState
+Trinix.Interop.Wlroots.MenuItemState.Enabled = 1 -> Trinix.Interop.Wlroots.MenuItemState
+Trinix.Interop.Wlroots.MenuItemState.Hidden = 4 -> Trinix.Interop.Wlroots.MenuItemState
+Trinix.Interop.Wlroots.MenuItemState.MenuItemState() -> void
+Trinix.Interop.Wlroots.MenuItemState.None = 0 -> Trinix.Interop.Wlroots.MenuItemState
+Trinix.Interop.Wlroots.Modifiers -> enum : uint
+Trinix.Interop.Wlroots.Modifiers.Alt = 8 -> Trinix.Interop.Wlroots.Modifiers
+Trinix.Interop.Wlroots.Modifiers.Caps = 2 -> Trinix.Interop.Wlroots.Modifiers
+Trinix.Interop.Wlroots.Modifiers.Ctrl = 4 -> Trinix.Interop.Wlroots.Modifiers
+Trinix.Interop.Wlroots.Modifiers.Logo = 64 -> Trinix.Interop.Wlroots.Modifiers
+Trinix.Interop.Wlroots.Modifiers.Modifiers() -> void
+Trinix.Interop.Wlroots.Modifiers.None = 0 -> Trinix.Interop.Wlroots.Modifiers
+Trinix.Interop.Wlroots.Modifiers.Shift = 1 -> Trinix.Interop.Wlroots.Modifiers
+Trinix.Interop.Wlroots.WindowControl -> enum : int
+Trinix.Interop.Wlroots.WindowControl.Close = 0 -> Trinix.Interop.Wlroots.WindowControl
+Trinix.Interop.Wlroots.WindowControl.Minimise = 1 -> Trinix.Interop.Wlroots.WindowControl
+Trinix.Interop.Wlroots.WindowControl.None = -1 -> Trinix.Interop.Wlroots.WindowControl
+Trinix.Interop.Wlroots.WindowControl.WindowControl() -> void
+Trinix.Interop.Wlroots.WindowControl.Zoom = 2 -> Trinix.Interop.Wlroots.WindowControl
+static Trinix.Interop.WaylandClient.AvailableGlobals(nint client) -> Trinix.Interop.WaylandClient.Globals
+static Trinix.Interop.WaylandClient.BeginMove(nint window) -> void
+static Trinix.Interop.WaylandClient.BeginResize(nint window, uint edges) -> void
+static Trinix.Interop.WaylandClient.CommitMenu(nint menu) -> void
+static Trinix.Interop.WaylandClient.Connect(in Trinix.Interop.WaylandClient.Callbacks callbacks, nint userData) -> nint
+static Trinix.Interop.WaylandClient.CreateApplicationMenu(nint client) -> nint
+static Trinix.Interop.WaylandClient.CreateWindow(nint client, string title, string appId, int width, int height, bool resizable) -> nint
+static Trinix.Interop.WaylandClient.CreateWindowMenu(nint window) -> nint
+static Trinix.Interop.WaylandClient.Destroy(nint client) -> void
+static Trinix.Interop.WaylandClient.DestroyMenu(nint menu) -> void
+static Trinix.Interop.WaylandClient.DestroyWindow(nint window) -> void
+static Trinix.Interop.WaylandClient.Display(nint client) -> nint
+static Trinix.Interop.WaylandClient.InsertMenuItem(nint menu, uint id, uint parent, int index, Trinix.Interop.WaylandClient.MenuKind kind, string label) -> void
+static Trinix.Interop.WaylandClient.Pump(nint client) -> bool
+static Trinix.Interop.WaylandClient.ReadString(byte* value) -> string?
+static Trinix.Interop.WaylandClient.RemoveMenuItem(nint menu, uint id) -> void
+static Trinix.Interop.WaylandClient.Roundtrip(nint client) -> bool
+static Trinix.Interop.WaylandClient.SetControl(nint window, Trinix.Interop.WaylandClient.Control control, int x, int y, int width, int height) -> void
+static Trinix.Interop.WaylandClient.SetCornerRadius(nint window, int radius) -> void
+static Trinix.Interop.WaylandClient.SetDragRegion(nint window, int x, int y, int width, int height) -> void
+static Trinix.Interop.WaylandClient.SetMaximumSize(nint window, int width, int height) -> void
+static Trinix.Interop.WaylandClient.SetMenuAccelerator(nint menu, uint id, uint keysym, Trinix.Interop.WaylandClient.Modifiers modifiers) -> void
+static Trinix.Interop.WaylandClient.SetMinimumSize(nint window, int width, int height) -> void
+static Trinix.Interop.WaylandClient.SetMode(nint window, Trinix.Interop.WaylandClient.WindowMode mode) -> void
+static Trinix.Interop.WaylandClient.SetResizeInset(nint window, int inset) -> void
+static Trinix.Interop.WaylandClient.SetShadow(nint window, Trinix.Interop.WaylandClient.ShadowStyle style) -> void
+static Trinix.Interop.WaylandClient.SetTitle(nint window, string title) -> void
+static Trinix.Interop.WaylandClient.Surface(nint window) -> nint
+static Trinix.Interop.WaylandClient.UnsetControl(nint window, Trinix.Interop.WaylandClient.Control control) -> void
+static Trinix.Interop.WaylandClient.UpdateMenuItem(nint menu, uint id, string label, Trinix.Interop.WaylandClient.MenuState state) -> void
+static Trinix.Interop.Wlroots.Create(in Trinix.Interop.Wlroots.Callbacks callbacks, Trinix.Interop.Wlroots.LogLevel logLevel) -> nint
+static Trinix.Interop.Wlroots.CursorPosition(nint server, out double x, out double y) -> void
+static Trinix.Interop.Wlroots.Destroy(nint server) -> void
+static Trinix.Interop.Wlroots.MenuSendAboutToShow(nint menu, uint id) -> void
+static Trinix.Interop.Wlroots.MenuSendActivated(nint menu, uint id) -> void
+static Trinix.Interop.Wlroots.MenuSendClosed(nint menu) -> void
+static Trinix.Interop.Wlroots.OutputSize(nint output, out int width, out int height) -> void
+static Trinix.Interop.Wlroots.PointerPassthrough(nint server, uint timeMsec) -> void
+static Trinix.Interop.Wlroots.ReadString(byte* value) -> string?
+static Trinix.Interop.Wlroots.Run(nint server) -> void
+static Trinix.Interop.Wlroots.SocketName(nint server) -> string
+static Trinix.Interop.Wlroots.Start(nint server, string? socketName) -> bool
+static Trinix.Interop.Wlroots.Terminate(nint server) -> void
+static Trinix.Interop.Wlroots.ToplevelAppId(nint toplevel) -> string?
+static Trinix.Interop.Wlroots.ToplevelAt(nint server, double x, double y) -> nint
+static Trinix.Interop.Wlroots.ToplevelClose(nint toplevel) -> void
+static Trinix.Interop.Wlroots.ToplevelControlAt(nint toplevel, int x, int y) -> Trinix.Interop.Wlroots.WindowControl
+static Trinix.Interop.Wlroots.ToplevelFocus(nint toplevel) -> void
+static Trinix.Interop.Wlroots.ToplevelGetBox(nint toplevel, out int x, out int y, out int width, out int height) -> void
+static Trinix.Interop.Wlroots.ToplevelInDragRegion(nint toplevel, int x, int y) -> bool
+static Trinix.Interop.Wlroots.ToplevelMenu(nint toplevel) -> nint
+static Trinix.Interop.Wlroots.ToplevelSendControlActivated(nint toplevel, Trinix.Interop.Wlroots.WindowControl control) -> void
+static Trinix.Interop.Wlroots.ToplevelSendControlHover(nint toplevel, Trinix.Interop.Wlroots.WindowControl control, Trinix.Interop.Wlroots.ControlHover state) -> void
+static Trinix.Interop.Wlroots.ToplevelSetPosition(nint toplevel, int x, int y) -> void
+static Trinix.Interop.Wlroots.ToplevelSetSize(nint toplevel, int width, int height) -> void
+static Trinix.Interop.Wlroots.ToplevelTitle(nint toplevel) -> string?

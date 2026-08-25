@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# pack-apps.sh <arm64|x86_64> <destdir> — build, sign and package Trinix's applications.
+# pack-apps.sh [--seal-only] <arm64|x86_64> <destdir> — build, sign and package
+# Trinix's applications.
 #
 # Produces one signed .tdi per application in $destdir, plus the .app tree it
 # was built from (kept because it is what a developer inspects when a signature
@@ -17,8 +18,21 @@
 
 set -euo pipefail
 
-arch="${1:?usage: pack-apps.sh <arm64|x86_64> <destdir>}"
-destdir="${2:?usage: pack-apps.sh <arm64|x86_64> <destdir>}"
+# --seal-only stops after the .app trees are built and sealed, before any .tdi is
+# built. It exists for scripts/check-determinism.ps1, which builds the same source
+# twice and compares the two sealed manifests — and which has to run on a
+# developer's machine, where mkfs.erofs (the one thing `pack` needs and nothing
+# else here does) is not installed. Nothing else changes: the same publish, the
+# same file list, the same seal, so what the gate compares is what a real build
+# would have put in the image.
+seal_only=0
+if [ "${1:-}" = '--seal-only' ]; then
+    seal_only=1
+    shift
+fi
+
+arch="${1:?usage: pack-apps.sh [--seal-only] <arm64|x86_64> <destdir>}"
+destdir="${2:?usage: pack-apps.sh [--seal-only] <arm64|x86_64> <destdir>}"
 srcdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 : "${TRINIX_SIGNING_CERTIFICATE:?pack-apps.sh: TRINIX_SIGNING_CERTIFICATE is not set}"
@@ -91,6 +105,12 @@ pack_app() {
         --key "$TRINIX_SIGNING_KEY" \
         --architecture "$arch"
 
+    # An `if` rather than `[ … ] && return`, which under `set -e` is a line whose
+    # safety depends on a bash exemption nobody should have to look up.
+    if [ "$seal_only" -eq 1 ]; then
+        return 0
+    fi
+
     "$bundle_tool" pack "$app" \
         --output "$destdir/$name.tdi" \
         --certificate "$TRINIX_SIGNING_CERTIFICATE" \
@@ -114,5 +134,10 @@ pack_app "$srcdir/Trinix.Apps.HelloUi/Trinix.Apps.HelloUi.csproj" \
          'HelloUi'
 
 echo
-echo "==> packaged:"
-ls -l "$destdir"/*.tdi
+if [ "$seal_only" -eq 1 ]; then
+    echo "==> sealed (no .tdi, --seal-only):"
+    ls -d "$destdir"/*.app
+else
+    echo "==> packaged:"
+    ls -l "$destdir"/*.tdi
+fi

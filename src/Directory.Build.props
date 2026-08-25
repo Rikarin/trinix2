@@ -50,7 +50,15 @@
         <Deterministic>true</Deterministic>
         <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <ArtifactsPath>$(MSBuildThisFileDirectory)../out/dotnet</ArtifactsPath>
+        <!--
+          Conditional so that an ArtifactsPath in the environment wins. That is not a
+          convenience: scripts/check-determinism.ps1 builds this tree twice and compares
+          the results, and two builds sharing one obj/ would find everything up to date
+          the second time and compare a directory with itself. The condition is what
+          lets the gate give each run its own intermediates without either run being a
+          special kind of build.
+        -->
+        <ArtifactsPath Condition="'$(ArtifactsPath)' == ''">$(MSBuildThisFileDirectory)../out/dotnet</ArtifactsPath>
     </PropertyGroup>
 
 </Project>
