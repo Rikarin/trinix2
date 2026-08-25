@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# run-qemu <arm64|x86_64> [--vnc] [--check | --login-check | --graphics-check | --app-check [seconds]] [qemu args...]
+# run-qemu <arm64|x86_64> [--vnc] [--check | --login-check | --graphics-check | --app-check | --data-check [seconds]] [qemu args...]
 #
 # Boots a Trinix disk image. Runs inside the vm container (docker/vm.Dockerfile),
 # with the image directory bind-mounted at /images.
 #
-# Five modes:
+# Six modes:
 #   interactive       serial console on stdio — this is `run-vm.ps1 -Arch arm64`
 #
 # --vnc adds a VNC server on 5900 to any of them, which is the only way to see
@@ -22,6 +22,11 @@
 #   --app-check       install a signed .tdi, launch the application it contains,
 #                     then tamper with it and assert that it stops launching.
 #                     The Phase 6 exit criterion as a test.
+#   --data-check      read the /data layout back off a running system —
+#                     filesystem type, subvolumes, mount options, the
+#                     ~/Library/Containers symlink — and then take a snapshot,
+#                     delete the file it captured, and read the file back out
+#                     of the snapshot. docs/plan/10 § Rewind as a test.
 
 set -euo pipefail
 
@@ -32,6 +37,7 @@ check=0
 login_check=0
 graphics_check=0
 app_check=0
+data_check=0
 timeout_s=0
 vnc=0
 
@@ -47,6 +53,7 @@ case "${1:-}" in
     --login-check)    check=1; login_check=1; shift ;;
     --graphics-check) check=1; graphics_check=1; shift ;;
     --app-check)      check=1; app_check=1; shift ;;
+    --data-check)     check=1; data_check=1; shift ;;
 esac
 if [ "$check" -eq 1 ]; then
     case "${1:-}" in
@@ -497,6 +504,171 @@ if [ "$check" -eq 1 ]; then
                 if [ "$(grep -ac 'TRINIX-HELLO-OK' "$serial_log" 2>/dev/null || echo 0)" -gt 1 ]; then
                     verdict="$verdict tampered-bundle-launched"
                 fi
+            else
+                verdict="$verdict root-shell"
+            fi
+        else
+            verdict="$verdict root-password-prompt"
+        fi
+    fi
+
+    if [ "$reached" -eq 1 ] && [ "$data_check" -eq 1 ]; then
+        # docs/plan/10 § Rewind, read back off a running kernel rather than off
+        # the image. image-sanity.sh already asserts the subvolumes exist in the
+        # root tree of the partition; what it cannot say is whether /etc/fstab
+        # mounted them, whether the kernel accepted the mount options, or
+        # whether a snapshot can actually be taken and read. That last one is
+        # the whole point of the change and nothing had ever done it.
+        #
+        # ⚠ Two constraints shape every line typed below.
+        #
+        # There is no grep, sed or awk in the base image — the Phase 2 set is
+        # coreutils, bash and util-linux — so nothing filters in the guest
+        # beyond bash's own `case`. The guest prints facts; the assertions are
+        # made here, on the host, against the console log.
+        #
+        # And a serial console echoes what is typed at it, so `await` matching
+        # a marker that appears in the command would pass without the guest
+        # doing anything at all. Two ways out are used. Where the fact is
+        # already a string the command does not contain — a mount option, a
+        # subvolume path, a stat result — it is asserted directly. Where a
+        # boolean is wanted, the marker is assembled from a variable — the
+        # guest runs `w=REWIND; echo "${w}-PROBE-CONTENT"`, so the literal
+        # REWIND-PROBE-CONTENT only ever exists in the output.
+        echo '==> logging in as root to read back the /data layout'
+        type_line 'root'
+
+        if await 'Password' 120; then
+            type_line "${TRINIX_ROOT_PASSWORD:-trinix}"
+
+            if await 'root@trinix' 240; then
+                # --- Is it Btrfs, and did the options take? -----------------
+                # /proc/self/mounts is the kernel's own account of what it
+                # mounted and with what, which is a stronger statement than
+                # /etc/fstab's intent — an option the kernel did not understand
+                # would have failed the mount, and one it silently dropped
+                # would be missing here.
+                # Single-quoted deliberately: $m and friends are the guest
+                # shell's variables, and expanding them here would send the
+                # host's empty ones down the wire instead.
+                # shellcheck disable=SC2016
+                type_line 'while read -r d m t o r; do case "$m" in /data|/data/*) echo "MNT $m $t $o";; esac; done < /proc/self/mounts'
+
+                if ! await '/data btrfs rw,noatime' 60; then
+                    verdict="$verdict data-is-btrfs-noatime"
+                fi
+                if ! await 'compress=zstd:1' 30; then
+                    verdict="$verdict compression"
+                fi
+                if ! await 'discard=async' 30; then
+                    verdict="$verdict discard"
+                fi
+
+                # Each subvolume at the mount point image/README.md says it
+                # belongs at. The subvol= option is what distinguishes them, so
+                # matching on it is matching on the thing that could be wrong.
+                local_missing=''
+                for sv in '/@home' '/@apps' '/@var' '/@containers'; do
+                    await "subvol=$sv" 30 || local_missing="$local_missing $sv"
+                done
+                [ -z "$local_missing" ] || verdict="$verdict subvol-mounts($local_missing )"
+
+                # --- Do the subvolumes exist, .snapshots included? ----------
+                # .snapshots is never mounted — it is reached through the top
+                # level, which is why /data is mounted subvolid=5 — so the
+                # mount check above cannot see it and this is the only place it
+                # is observed on a running system.
+                type_line 'btrfs subvolume list /data'
+                for sv in '@home' '@apps' '@var' '@containers' '.snapshots'; do
+                    await "path $sv" 30 || verdict="$verdict subvolume($sv)"
+                done
+
+                # --- Do the symlinks land in the right subvolume? -----------
+                # `stat -c %m` prints the mount point a path resolves onto,
+                # which is exactly the question: /var is a symlink into /data,
+                # and what matters is not that it resolves but that it resolves
+                # into @var rather than into the top level. The last one is the
+                # awkward case from image/README.md — ~/Library/Containers is a
+                # symlink out of @home into @containers, so a snapshot of the
+                # home directory carries a link rather than gigabytes of app
+                # state.
+                # ⚠ -L is not optional. GNU stat does not dereference by
+                # default, so without it /Applications and
+                # ~/Library/Containers — both symlinks in their final component
+                # — would report the mount point the *link* sits on rather than
+                # the one it points into, and this check would pass on a system
+                # where every symlink was broken.
+                type_line "stat -L -c '%m %n' /var/log /Applications /home/$TRINIX_LOGIN_USER /home/$TRINIX_LOGIN_USER/Library/Containers"
+
+                if ! await '/data/var /var/log' 60; then
+                    verdict="$verdict var-on-@var"
+                fi
+                if ! await '/data/Applications /Applications' 30; then
+                    verdict="$verdict applications-on-@apps"
+                fi
+                if ! await "/data/home /home/$TRINIX_LOGIN_USER" 30; then
+                    verdict="$verdict home-on-@home"
+                fi
+                if ! await "/data/containers /home/$TRINIX_LOGIN_USER/Library/Containers" 30; then
+                    verdict="$verdict containers-symlink"
+                fi
+
+                # --- The snapshot, which is the entire point ----------------
+                # Write a file, snapshot the subvolume holding it, delete the
+                # file, and read it back out of the snapshot. If this does not
+                # work then nothing else in this check matters: the layout
+                # would be correct and useless.
+                #
+                # REWIND-PROBE-CONTENT is assembled from $w so that the literal
+                # exists only in the file and in what cat prints — never in the
+                # echoed command line. That is what lets the same string be
+                # awaited twice, once before the snapshot and once from inside
+                # it, with await_count telling the two apart.
+                type_line "w=REWIND; echo \"\${w}-PROBE-CONTENT\" > /data/home/$TRINIX_LOGIN_USER/rewind-probe.txt; cat /data/home/$TRINIX_LOGIN_USER/rewind-probe.txt"
+                if ! await 'REWIND-PROBE-CONTENT' 60; then
+                    verdict="$verdict probe-file-write"
+                fi
+
+                # -r, a read-only snapshot: that is what a backup is, and it
+                # also makes the next assertion possible. The source is named
+                # through the top-level mount (/data/@home) rather than through
+                # /data/home, because `btrfs subvolume snapshot` wants the
+                # subvolume's own root and /data/home is a mount point.
+                type_line 'btrfs subvolume snapshot -r /data/@home /data/.snapshots/probe'
+                type_line 'btrfs subvolume list /data'
+                if ! await 'path .snapshots/probe' 60; then
+                    verdict="$verdict snapshot-create"
+                fi
+
+                type_line "g=GONE; rm -f /data/home/$TRINIX_LOGIN_USER/rewind-probe.txt; [ -e /data/home/$TRINIX_LOGIN_USER/rewind-probe.txt ] || echo \"\${g}-FROM-LIVE\""
+                if ! await 'GONE-FROM-LIVE' 60; then
+                    verdict="$verdict probe-file-delete"
+                fi
+
+                # The second occurrence. The first was the cat above, before
+                # the snapshot existed; this one can only have come out of the
+                # snapshot, because the live copy no longer exists.
+                type_line 'cat /data/.snapshots/probe/'"$TRINIX_LOGIN_USER"'/rewind-probe.txt'
+                if ! await_count 'REWIND-PROBE-CONTENT' 2 60; then
+                    verdict="$verdict snapshot-read-back"
+                fi
+
+                # A read-only snapshot that accepts writes is not a backup.
+                type_line "r=RO; touch /data/.snapshots/probe/$TRINIX_LOGIN_USER/rewind-probe.txt 2>/dev/null || echo \"\${r}-SNAPSHOT-IS-READONLY\""
+                if ! await 'RO-SNAPSHOT-IS-READONLY' 60; then
+                    verdict="$verdict snapshot-not-readonly"
+                fi
+
+                # And that it can be removed again, which is the half of
+                # docs/plan/10's retention policy that reclaims space. A
+                # snapshot regime that cannot thin itself fills the disk.
+                # shellcheck disable=SC2016  # $d is the guest's, as above
+                type_line 'd=DEL; btrfs subvolume delete /data/.snapshots/probe > /dev/null 2>&1 && [ ! -d /data/.snapshots/probe ] && echo "${d}-SNAPSHOT-OK"'
+                if ! await 'DEL-SNAPSHOT-OK' 60; then
+                    verdict="$verdict snapshot-delete"
+                fi
+
+                type_line 'exit'
             else
                 verdict="$verdict root-shell"
             fi

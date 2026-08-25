@@ -46,6 +46,15 @@
         launch the application inside it, tamper with the installed bundle and
         assert that it stops launching. The Phase 6 exit criterion as a test.
 
+    .PARAMETER DataCheck
+        Everything -Check does, and then log in as root and read the /data layout
+        back off the running kernel: is it Btrfs, are @home, @apps, @var,
+        @containers and .snapshots there, did the compression and noatime options
+        take, does ~/Library/Containers land in @containers. Then take a snapshot
+        of @home, delete the file it captured, and read the file back out of the
+        snapshot — which is docs/plan/10 § Rewind reduced to the one thing it
+        cannot do without.
+
     .PARAMETER Vnc
         Serve the guest's display over VNC on localhost:5900, and publish the port
         from the QEMU container.
@@ -91,6 +100,7 @@ param(
     [switch]$LoginCheck,
     [switch]$GraphicsCheck,
     [switch]$AppCheck,
+    [switch]$DataCheck,
     [switch]$Vnc,
     [int]$Timeout = 0,
 
@@ -149,7 +159,7 @@ Invoke-TrinixDocker @buildArgs
 
 # --- Boot ------------------------------------------------------------------
 
-$unattended = $Check -or $LoginCheck -or $GraphicsCheck -or $AppCheck
+$unattended = $Check -or $LoginCheck -or $GraphicsCheck -or $AppCheck -or $DataCheck
 
 $dockerArgs = @('run', '--rm')
 
@@ -170,7 +180,9 @@ $dockerArgs += @('--volume', "${imageDirPath}:/images", $vmImage, $Arch)
 # Before the mode word, which is what run-qemu expects.
 if ($Vnc) { $dockerArgs += '--vnc' }
 
-if ($AppCheck) {
+if ($DataCheck) {
+    $dockerArgs += '--data-check'
+} elseif ($AppCheck) {
     $dockerArgs += '--app-check'
 } elseif ($GraphicsCheck) {
     $dockerArgs += '--graphics-check'
@@ -181,7 +193,9 @@ if ($AppCheck) {
 }
 if ($unattended -and $Timeout -gt 0) { $dockerArgs += "$Timeout" }
 
-if ($AppCheck) {
+if ($DataCheck) {
+    Write-Host "Booting trinix-$Arch.img and reading back the /data subvolume layout and a snapshot..." -ForegroundColor Cyan
+} elseif ($AppCheck) {
     Write-Host "Booting trinix-$Arch.img and installing, launching and tampering with a signed application..." -ForegroundColor Cyan
 } elseif ($GraphicsCheck) {
     Write-Host "Booting trinix-$Arch.img and running a Wayland client under the compositor..." -ForegroundColor Cyan
