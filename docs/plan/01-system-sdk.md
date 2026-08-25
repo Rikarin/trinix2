@@ -18,30 +18,123 @@ adding anything to `Trinix.Sdk`, check this table:
 
 | The brief asks for | Vixen has | Where |
 |---|---|---|
-| Declarative UI | `.vxml` markup compiled by a Roslyn generator; `@if`/`@for`/`@switch`, slots, two-way `bind:`, `on:`/`change:` | `Vixen.Ui.Markup` |
+| Declarative UI | `.vxml` markup compiled by a Roslyn generator; `@if`/`@for`/`@switch`, slots, two-way `bind:`, `on:`/`change:` | the generator, in **`Vixen.Ui`** — see below |
 | Reactivity | `Signal<T>`, `Computed<T>`, `Effect`, drained once per frame by the document | `Vixen.Ui.Reactive` |
 | Styling and theming | `.vcss` with a real cascade, transitions, `@keyframes`, Oklab, plus a Tailwind-shaped utility generator over a token file | `Vixen.Ui.Styling`, `.Utilities` |
 | Layout | Flexbox (Yoga algorithm), block, and the grid work in Vixen doc 43 | `Vixen.Ui.Layout` |
 | Text | HarfBuzz shaping, MSDF atlas, bidi, line breaking, wrapping, decorations from the font's own metrics | `Vixen.Ui.Text` |
 | Buttons, menus, toolbars, sidebars, lists, tabs, dialogs, text fields, sliders, toggles, context menus | ~40 controls on a real theme, 259 tests | `Vixen.Ui.Controls` |
-| Tables, trees, docking, property grids, code editing, colour pickers, timelines | 11 advanced controls, 313 tests | `Vixen.Ui.Controls.Advanced` — ⚠ **not in [`vendor/vixen/`](../../vendor/vixen/)**, see below |
+| Tables, trees, docking, property grids, code editing, colour pickers, timelines | 11 advanced controls, 313 tests | `Vixen.Ui.Controls.Advanced` — pinned since 2026-08-26, see below |
 | Virtualisation | `VirtualizingPanel`, `VirtualizingGrid` | `Vixen.Ui.Controls` |
-| Hot reload | State-preserving, file-watched | `Vixen.Ui.HotReload` |
-| UI testing without a screen | A headless document and an assertion library | `Vixen.Ui.Testing` |
+| Hot reload | State-preserving, file-watched | `Vixen.Ui.HotReload` — ⚠ **not in [`vendor/vixen/`](../../vendor/vixen/)** |
+| UI testing without a screen | A headless document and an assertion library | `Vixen.Ui.Testing` — pinned since 2026-08-26 |
 | Windows, input, clipboard, DPI | `IPlatform`, implemented for Trinix already | `Vixen.Platform`, `Trinix.Platform` |
-| Images, audio, video decode | Imaging, `Vixen.Audio.Codecs`, `Vixen.Video.Codecs` | `Vixen.Core.Imaging`, `Vixen.Audio`, `Vixen.Video` |
+| Images, audio, video decode | Imaging, `Vixen.Audio.Codecs`, `Vixen.Video.Codecs` | `Vixen.Core.Imaging`; ⚠ `Vixen.Audio` and `Vixen.Video` **not in [`vendor/vixen/`](../../vendor/vixen/)** |
 
-⚠ **Two of these are not actually vendored.** Checked 2026-08-25: the 41-package pin in
-[`vendor/vixen/`](../../vendor/vixen/) contains neither **`Vixen.Ui.Controls.Advanced`** nor
-**`Vixen.Ui.Markup`**. So the rows above that read as settled are, today, unavailable — and three
-documents lean on them: doc 07's Files needs `DataGrid`/`TreeView` for its list and column views, doc
-11's System Monitor is a table, and both doc 07 § Glance and doc 11's Text Edit call `CodeEditor`
-"free", which it is not until the package is pinned. Markup's absence is the larger one, since doc 01
-says the shell and the real applications are `.vxml`.
+### The pin, and what was wrong with the last note about it
 
-Adding them to the pin is a `scripts/update-vixen.ps1` run rather than a project — but it is a
-*decision* about closure size and trim surface that nobody has taken, and it must happen before
-Phase 10 rather than being discovered by the first application that wants a list.
+⚠ **Corrected 2026-08-26.** The note that stood here on 2026-08-25 said the 41-package pin contained
+neither `Vixen.Ui.Controls.Advanced` nor `Vixen.Ui.Markup`, and that *"Markup's absence is the larger
+one, since doc 01 says the shell and the real applications are `.vxml`"*. **The first half was right
+and the second half was wrong.** `.vxml` compiled the entire time, and the reason is worth stating
+precisely, because getting it wrong twice is easy:
+
+- **The VXML compiler is a Roslyn generator that ships inside the `Vixen.Ui` package**, in
+  `analyzers/dotnet/cs/Vixen.Ui.Markup.Generators.dll`, alongside
+  `buildTransitive/Vixen.Ui.targets` — `buildTransitive/` and not `build/`, precisely so that it
+  reaches a project that gets `Vixen.Ui` transitively, which every Vixen application does and none
+  of them by name. That `.targets` supplies the `**/*.vxml` glob that makes markup compiler input.
+  `Trinix.Apps.HelloUi` references `Vixen.Ui.Desktop`, so it has had both since the first pin.
+- **The `Vixen.Ui.Markup` package is a different artefact**: the parser, binder and emitter as a
+  *runtime* library, which tooling and hot reload call. Pinning it does not make markup compile.
+  Not pinning it never stopped it.
+
+Verified rather than reasoned: a `.vxml` added to `Trinix.Apps.HelloUi` against the **old** 41-package
+pin produced `Vixen.Ui.Markup.Generators.VxmlGenerator/…g.cs` and built with zero warnings.
+[`Greeting.vxml`](../../src/Trinix.Apps.HelloUi/Greeting.vxml) is that file, kept. ⚠ The C# `Greeting`
+it replaced carried a remark saying markup was avoided because it "brings the VXML compiler and the
+generated utility stylesheet" — neither was true when it was written; `Vixen.Ui.Styling.Utilities` was
+already in the closure too.
+
+The advanced controls were the real gap, and three documents did lean on them: doc 07's Files needs
+`DataGrid`/`TreeView`, doc 11's System Monitor is a table, and doc 07 § Glance and doc 11's Text Edit
+both call `CodeEditor` free.
+
+### What the 2026-08-26 pin cost
+
+The decision nobody had taken has been taken: the pin moved to `0.1.0-trinix.a17fb05016a2` and the
+closure gained three roots. `scripts/update-vixen.ps1` now lists its roots explicitly, each with the
+reason it is one — adding a root is a decision, adding a dependency of one is not.
+
+| | before | after |
+|---|---|---|
+| Vixen commit | `6e46eee4180a` (2026-08-24) | `a17fb05016a2` (2026-08-25), 81 commits on |
+| Packages | 41 | 46 |
+| `vendor/vixen/` | 5,323,418 bytes (5.08 MiB) | 5,898,519 bytes (5.63 MiB), **+562 KiB** |
+| Closure roots | `Vixen.Ui.Desktop` | + `.Controls.Advanced`, `.Markup`, `.Testing` |
+
+⚠ **The 81 commits added no package by themselves.** `Vixen.Ui.Desktop`'s closure is the same 41
+projects at both commits, so every one of the five is a root or a root's dependency:
+
+| Added | Why | Rides along |
+|---|---|---|
+| `Vixen.Ui.Controls.Advanced` | The row above. A second package on purpose, so an application that is one window of buttons does not link a virtualiser — which is also why nothing reached it transitively | `Vixen.Core.Yaml`, because a docking layout is a YAML document — and with it **`YamlDotNet` 18.1.0** from nuget.org, ~293 KiB, the first third-party assembly Vixen has put in a Trinix application |
+| `Vixen.Ui.Markup` | The runtime parser, for tooling. **Not** what compiles markup | `Vixen.Core.Syntax` |
+| `Vixen.Ui.Testing` | Doc 16's UI test tier: a headless document and an assertion library | nothing — its whole dependency set was already here |
+
+**Trim and AOT surface: nothing new trips.** With `IsAotCompatible` and the trim analyser forced back
+on for `Trinix.Apps.HelloUi`, including a probe that calls `DockLayout.Load`/`Save` — the YAML path,
+which is where a reflection-shaped dependency would show — the build is **0 warnings**. A full
+`PublishTrimmed` self-contained publish is **0 IL warnings**, and the trimmer removes `Vixen.Core.Yaml`
+and `YamlDotNet` from the output entirely, because nothing in the application saves a layout.
+[`Trinix.Platform`](../../src/Trinix.Platform/) is untouched by any of this: `Core/Vixen.Platform` has
+a **zero-byte diff across all 81 commits**, which is
+[the platform contract](../../docs/vixen-platform-contract.md) doing exactly the job it was written
+for.
+
+The cost lands where the application actually ships — framework-dependent and untrimmed, per
+[`src/pack-apps.sh`](../../src/pack-apps.sh): **+662.5 KiB** in `HelloUi.app` (Advanced 300 KiB, Yaml
+70 KiB, YamlDotNet 293 KiB). Trimmed, the same change is +164 KiB. ⚠ An application that never
+docks pays the 293 KiB anyway; that is the argument for `PublishTrimmed` on applications, and it is
+doc 17's to make, not this one's.
+
+⚠ **What the bump brought for free, and it is the part worth noticing:** `Vixen.Ui` gained
+`Accessibility.cs` (the WAI-ARIA 1.2 role vocabulary, ~870 lines) and `Strings.cs` (`StringId`, the
+declaration-site source text that makes localisation not a retrofit). Both are in a package that was
+already vendored, so they cost nothing and no row above had to change — but doc 04's accessibility
+work and any localisation story now have a foundation that did not exist on 2026-08-24.
+
+⚠ **The old pin shipped a package whose contents depended on somebody's `bin/`, and the new one
+found out.** `Vixen.Ui.Styling.Utilities` packs the `Vixen.StyleGen` tool into its `tools/` by *path*
+— a ProjectReference would be a layer violation — and every one of those pack items is guarded by
+`Condition="Exists(…)"`, so packing before the tool is built produces a valid package that is simply
+missing it. The 2026-08-24 pin had the tool only because the container mounted a live checkout that
+happened to hold `Tools/Vixen.StyleGen/bin/Release/`. Exporting the commit with `git archive` — which
+has no `bin/` — turned that invisible accident into a 927 KiB hole, and `scripts/update-vixen.ps1`
+now builds the prerequisite first, in both the container and the `-Local` path.
+
+⚠ **This is the trap that would have been sprung by `Trinix.Sdk.Theme` and nothing earlier.** The
+utility step is skipped entirely for a project with no `vixen.ui.vcss` and no named token source,
+which is every Trinix project today — so the hole is invisible until the first one has a palette.
+[The design language below](#the-design-language) generates `trinix.utilities` from `tokens.yaml`,
+which is exactly that project; without the tool in the package the build stops with an error telling
+a Trinix developer to add a `ProjectReference` to a Vixen project that is not in this repository.
+
+⚠ **This pin is provisional and [`vendor/vixen/README.md`](../../vendor/vixen/README.md) says so.**
+It was packed with the SDK on the development Mac rather than in the build container, because the
+container was busy for hours. Measured: an *unchanged* project at the same commit produces a
+different assembly hash host versus container. Nothing in the gates compares them, which is why it
+needs saying out loud. A container re-pack at the same commit is the follow-up.
+
+⚠ **`a17fb05016a2` was chosen for being current, not for being right.** Vixen's `master` was being
+committed to while this ran — `HEAD` moved between two `git log` calls minutes apart — so the script
+gained a `-Ref` parameter and the tree was frozen with `git archive`. If Vixen is mid-flight on
+something, an earlier or later commit may be the better pin, and that is a call for whoever knows
+what is in flight.
+
+Three rows above are still unbacked: `Vixen.Ui.HotReload`, `Vixen.Audio` and `Vixen.Video` are
+projects in Vixen and are not in the pin. Each is one root in `scripts/update-vixen.ps1` away, and
+each should be added when something needs it rather than in advance.
 
 ⚠ **This table is the SDK's scope control.** A proposal to add a control, a layout mode, a styling
 feature or a text capability to `Trinix.Sdk` is a proposal to fork Vixen, and the answer is a pull

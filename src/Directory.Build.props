@@ -41,7 +41,7 @@
           spells the version as $(VixenVersion) so that moving the pin is one
           line rather than one line per project.
         -->
-        <VixenVersion>0.1.0-trinix.6e46eee4180a</VixenVersion>
+        <VixenVersion>0.1.0-trinix.a17fb05016a2</VixenVersion>
     </PropertyGroup>
 
     <PropertyGroup>
