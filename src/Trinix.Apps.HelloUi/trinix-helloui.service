@@ -36,10 +36,15 @@ Group=trinix
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=WAYLAND_DISPLAY=wayland-0
 
-# --frames is Vixen's own argument, passed through by the launcher to the
-# application: it draws that many and exits, which is what makes this a check
-# rather than a window somebody has to close.
-ExecStart=/usr/bin/trinix-open /Applications/HelloUi.app --frames 10
+# ⚠ --wait, which is the difference between a unit and a shell. Typed at a
+# prompt, `open` launches the application into a session of its own and returns
+# — that is what open means. A service manager has to be able to watch what it
+# started, so here the launcher becomes the application instead.
+#
+# --frames is Vixen's own argument, passed through by the launcher: it draws
+# that many and exits, which is what makes this a check rather than a window
+# somebody has to close.
+ExecStart=/usr/bin/open --wait /Applications/HelloUi.app --frames 10
 
 StandardOutput=journal+console
 StandardError=journal+console

@@ -389,6 +389,31 @@ if [ "$check" -eq 1 ]; then
                     verdict="$verdict vixen-install"
                 fi
 
+                # ⚠ The idiom, which is the point of all of it: an application is
+                # launched by typing `open Something.app` in a shell. Not
+                # `systemctl start`, and not a path into /usr/lib — a macOS-like
+                # system that had the mechanism and not the idiom would have
+                # copied the wrong half.
+                #
+                # Driven through `pwsh -Login` rather than typed at a PowerShell
+                # prompt because an interactive one cannot be driven down a
+                # scripted serial line at all — see the login check's own note on
+                # why it never types into one. -Login is what makes this the real
+                # thing anyway: it sources /etc/profile, which is where
+                # profile.d/trinix-session.sh hands the shell the compositor's
+                # session. Without that file this line fails with no display.
+                #
+                # As the trinix user, because that is whose session it is. root
+                # has no /run/user/0 and no display, here as on a Mac.
+                type_line 'systemd-run --quiet --wait --collect --uid=trinix --pipe /usr/bin/pwsh -Login -Command "open /Applications/HelloUi.app --frames 10"'
+                if ! await 'BUNDLE-LAUNCHED io.trinix.helloui' 600; then
+                    verdict="$verdict open-from-a-shell"
+                fi
+
+                # And the frames, from the unit, which takes the other path:
+                # `open --wait`, so that a service manager has something to
+                # watch. The line above proves the launch; this proves what was
+                # launched draws.
                 type_line 'systemctl start trinix-helloui.service; journalctl -u trinix-helloui -o cat --no-pager'
                 if ! await 'TRINIX-VIXEN: window' 600; then
                     verdict="$verdict vixen-window"
@@ -432,16 +457,21 @@ if [ "$check" -eq 1 ]; then
                     verdict="$verdict fs-verity"
                 fi
 
-                # The launcher verifies, then execs. TRINIX-HELLO-OK is printed
-                # by the application itself, which means the whole chain held:
-                # signature, Merkle tree, erofs round trip, apphost, runtime.
-                type_line 'trinix-open /Applications/Hello.app'
+                # ⚠ --wait, so the launcher becomes the application instead of
+                # launching it and returning. Typed at a prompt `open` detaches,
+                # which is right for a person and wrong for a check: the output
+                # this asserts on would be racing the shell prompt.
+                #
+                # TRINIX-HELLO-OK is printed by the application itself, which
+                # means the whole chain held: signature, Merkle tree, erofs round
+                # trip, apphost, runtime.
+                type_line 'trinix-open --wait /Applications/Hello.app'
                 if ! await 'TRINIX-HELLO-OK' 300; then
                     verdict="$verdict launch"
                 fi
 
                 # And that the bundle location reached the application through
-                # execve, which is the one part of the launch contract that
+                # the exec, which is the one part of the launch contract that
                 # nothing else would notice the absence of.
                 if ! await 'bundle=/Applications/Hello.app' 60; then
                     verdict="$verdict bundle-environment"
@@ -453,7 +483,7 @@ if [ "$check" -eq 1 ]; then
                 # about the signature. A new file is something the kernel has no
                 # opinion about and the signed manifest does.
                 type_line 'echo tampered > /Applications/Hello.app/Contents/Resources/extra.txt'
-                type_line 'trinix-open /Applications/Hello.app'
+                type_line 'trinix-open --wait /Applications/Hello.app'
                 if ! await 'refused to launch' 300; then
                     verdict="$verdict tamper-detected"
                 fi

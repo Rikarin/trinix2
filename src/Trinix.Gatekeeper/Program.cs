@@ -4,7 +4,7 @@ using System.Globalization;
 using Trinix.Bundle;
 using Trinix.Gatekeeper;
 
-// trinix-open — verify an application bundle, then become it.
+// open — verify an application bundle, then launch it.
 //
 // This is Trinix's Gatekeeper: the one place where "is this allowed to run" is
 // asked. Everything about the answer is deliberate.
@@ -30,21 +30,28 @@ const int ExitFailed = 3;
 if (args.Length == 0 || args[0] is "--help" or "-h") {
     Console.WriteLine(
         """
-        trinix-open — verify and launch a Trinix application
+        open — verify and launch a Trinix application
 
-          trinix-open <Application.app | identifier> [arguments...]
-          trinix-open --verify-only <Application.app>
+          open <Application.app | identifier> [arguments...]
+          open --wait <Application.app> [arguments...]
+          open --verify-only <Application.app>
 
         Options, which must come before the bundle:
+          --wait          Replace this process with the application and share its
+                          terminal, instead of launching it and returning.
           --verify-only   Check the bundle and report, but do not launch it.
           --trust DIR     Trust store to check against.
                           Default: /usr/share/trinix/pki/roots
+
+        Also installed as trinix-open, which is the name to use in a script:
+        `open` is a word, and a script should not depend on whose PATH wins.
         """
     );
     return args.Length == 0 ? ExitUsage : ExitOk;
 }
 
 var verifyOnly = false;
+var wait = false;
 string? trustDirectory = null;
 var index = 0;
 
@@ -55,9 +62,14 @@ while (index < args.Length && args[index].StartsWith("--", StringComparison.Ordi
             index++;
             break;
 
+        case "--wait":
+            wait = true;
+            index++;
+            break;
+
         case "--trust":
             if (index + 1 >= args.Length) {
-                Console.Error.WriteLine("trinix-open: --trust needs a directory");
+                Console.Error.WriteLine("open: --trust needs a directory");
                 return ExitUsage;
             }
 
@@ -72,7 +84,7 @@ while (index < args.Length && args[index].StartsWith("--", StringComparison.Ordi
             goto done;
 
         default:
-            Console.Error.WriteLine($"trinix-open: unknown option {args[index]}");
+            Console.Error.WriteLine($"open: unknown option {args[index]}");
             return ExitUsage;
     }
 }
@@ -80,7 +92,7 @@ while (index < args.Length && args[index].StartsWith("--", StringComparison.Ordi
 done:
 
 if (index >= args.Length) {
-    Console.Error.WriteLine("trinix-open: no application given");
+    Console.Error.WriteLine("open: no application given");
     return ExitUsage;
 }
 
@@ -90,7 +102,7 @@ var applicationArguments = args[(index + 1)..];
 var bundlePath = Resolve(requested);
 if (bundlePath is null) {
     Console.Error.WriteLine(
-        $"trinix-open: no application '{requested}' — looked in {BundleInstaller.ApplicationsDirectory}"
+        $"open: no application '{requested}' — looked in {BundleInstaller.ApplicationsDirectory}"
     );
     return ExitFailed;
 }
@@ -102,7 +114,7 @@ try {
     // A missing trust store is a broken system, not a bad application, and
     // saying so is the difference between checking the image and blaming the
     // developer.
-    Console.Error.WriteLine($"trinix-open: {e.Message}");
+    Console.Error.WriteLine($"open: {e.Message}");
     return ExitFailed;
 }
 
@@ -110,27 +122,27 @@ VerificationResult result;
 try {
     result = await BundleVerifier.VerifyAsync(bundlePath, trust).ConfigureAwait(false);
 } catch (IOException e) {
-    Console.Error.WriteLine($"trinix-open: {bundlePath}: {e.Message}");
+    Console.Error.WriteLine($"open: {bundlePath}: {e.Message}");
     return ExitFailed;
 } catch (UnauthorizedAccessException e) {
-    Console.Error.WriteLine($"trinix-open: {bundlePath}: {e.Message}");
+    Console.Error.WriteLine($"open: {bundlePath}: {e.Message}");
     return ExitFailed;
 }
 
 if (!result.Ok) {
-    Console.Error.WriteLine($"trinix-open: refused to launch {Path.GetFileName(bundlePath)}");
+    Console.Error.WriteLine($"open: refused to launch {Path.GetFileName(bundlePath)}");
     Console.Error.WriteLine($"  {Explain(result.Failure)}");
     Console.Error.WriteLine($"  {result.Message}");
     return ExitRefused;
 }
 
-Console.WriteLine($"trinix-open: verified {result.Message}");
+Console.WriteLine($"open: verified {result.Message}");
 
 // Compatibility, checked after trust and reported differently: an application
 // that needs a newer system is in the wrong place, not suspicious.
 var systemVersion = SystemVersion.Current();
 if (!SystemVersion.Satisfies(systemVersion, result.Info!.MinimumSystemVersion)) {
-    Console.Error.WriteLine($"trinix-open: cannot launch {Path.GetFileName(bundlePath)}");
+    Console.Error.WriteLine($"open: cannot launch {Path.GetFileName(bundlePath)}");
     Console.Error.WriteLine(
         $"  It needs Trinix {result.Info.MinimumSystemVersion} or newer; this system is {systemVersion}."
     );
@@ -161,10 +173,33 @@ environment.Add($"TRINIX_BUNDLE={bundlePath}");
 environment.Add($"TRINIX_BUNDLE_IDENTIFIER={result.Info.Identifier}");
 environment.Add($"TRINIX_BUNDLE_RESOURCES={Path.Combine(bundlePath, BundleLayout.ResourcesDirectory)}");
 
+// ⚠ Launching and returning is the default, because that is what `open` means:
+// it is a request to the system to run something, not a way to run it here. A
+// window that closed when the terminal it was typed into closed would be a
+// window nobody could launch from a shell — which on a system whose shell is
+// the point would be most of them.
+//
+// --wait is the other half, and the unit files use it: something that has to
+// observe an application — a service manager, a check, a debugger — needs the
+// application to *be* this process rather than a sibling of it.
+if (!wait) {
+    var spawnError = Launcher.Spawn(entry, applicationArguments, environment, out var pid);
+    if (spawnError != 0) {
+        Console.Error.WriteLine(
+            $"open: could not launch {entry}: {new Win32Exception(spawnError).Message}"
+        );
+
+        return ExitFailed;
+    }
+
+    Console.WriteLine($"BUNDLE-LAUNCHED {result.Info.Identifier} {result.Info.Version} pid {pid}");
+    return ExitOk;
+}
+
 var errno = Launcher.Exec(entry, applicationArguments, environment);
 
 // Only reached if the exec failed.
-Console.Error.WriteLine($"trinix-open: could not execute {entry}: {new Win32Exception(errno).Message}");
+Console.Error.WriteLine($"open: could not execute {entry}: {new Win32Exception(errno).Message}");
 return ExitFailed;
 
 // --- helpers ----------------------------------------------------------------

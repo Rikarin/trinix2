@@ -304,12 +304,37 @@ recorded in the receipt rather than left to be guessed.
 
 ## 7. Launching
 
-`trinix-open /Applications/Hello.app [arguments...]` is Trinix's Gatekeeper. It
-verifies, then **`execve`s** — it does not stay alive as a parent. A launcher
-that started a child would put a .NET runtime between the session and every
-application: it would own the controlling terminal, it would have to forward
-every signal, and its exit code would have to be made to mean the child's.
-Replacing the process image makes all of those questions disappear.
+`open /Applications/Hello.app [arguments...]` is Trinix's Gatekeeper, and the
+name is the interface: on a system meant to feel like a Mac, launching an
+application is a word a user already knows. It is installed twice — as `open`,
+which is what to type, and as `trinix-open`, which is what to write in a script,
+because `open` is a common enough word that a script should not depend on whose
+`PATH` wins.
+
+It verifies, and then does one of two things.
+
+**By default it launches and returns**, through `posix_spawn` with
+`POSIX_SPAWN_SETSID`. That is what `open` means — a request to the system to run
+something, not a way to run it here — and the new session is the load-bearing
+part: without it the application stays in the shell's session, and closing the
+terminal it was typed into sends it a hangup. On a system whose shell is the
+point, an application that could not outlive its terminal would be most of them.
+
+`posix_spawn` rather than fork and exec, and the reason is that the launcher is
+a .NET process. A forked child of a multithreaded runtime may only reach
+`execve` through async-signal-safe calls, and nothing promises that of a managed
+frame: one allocation between the two, one lazy P/Invoke stub, and the child
+deadlocks holding a lock its thread does not exist to release. `posix_spawn`
+does the whole thing inside libc, from one call, on the calling thread.
+
+**`--wait` verifies and then `execve`s**, replacing this process with the
+application. That is for anything that has to observe what it started — a
+service manager, an unattended check, a debugger — and it is the older of the
+two behaviours for a reason that still holds: a launcher that stayed alive as a
+parent would put a .NET runtime between the session and the application, owning
+its controlling terminal, forwarding its signals, and translating its exit code.
+Replacing the process image makes all of those questions disappear. What it
+cannot do is return, which is why it is not the default.
 
 The application receives:
 
@@ -339,7 +364,7 @@ path is "fs-verity is on for every file in the manifest", not a timestamp.
 Refusals name the reason in one line, written for the person at the machine:
 
 ```
-trinix-open: refused to launch Hello.app
+open: refused to launch Hello.app
   Files have been added to or removed from the application since it was signed.
   the bundle does not contain the files it is signed for (added: Contents/Resources/extra.txt)
 ```
@@ -421,6 +446,16 @@ By hand, from a root shell in the VM:
 
 ```bash
 trinix-bundle install /usr/share/trinix/applications/Hello.tdi
-trinix-open /Applications/Hello.app
 trinix-bundle list
 ```
+
+And then as the user, in PowerShell, which is the way it is meant to be typed:
+
+```powershell
+open /Applications/Hello.app
+```
+
+⚠ As the *user*. The graphical session belongs to `trinix`, and
+`/etc/profile.d/trinix-session.sh` is what hands a login shell the
+`XDG_RUNTIME_DIR` that PAM would set on another system — Trinix has none. `open`
+as root finds no display and says so, here as on a Mac.

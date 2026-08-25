@@ -56,6 +56,7 @@ trinix_build() {
     _accounts
     _filesystems
     _console
+    _session_environment
     _powershell
     _units
 }
@@ -280,6 +281,55 @@ else
 fi
 export PS1
 EOF
+}
+
+# --- The session a login inherits -------------------------------------------
+_session_environment() {
+    # Why this file exists: on a system with PAM, pam_systemd sets
+    # XDG_RUNTIME_DIR at login and the session's variables come with it. Trinix
+    # has no PAM — see the shadow recipe — so the runtime directory is made by
+    # the compositor's own unit (RuntimeDirectory=user/1000) and a login shell
+    # has to go and find it.
+    #
+    # Without this, `open /Applications/Something.app` from a shell fails with
+    # no display to connect to, on a system where the display is right there.
+    #
+    # ⚠ Nothing is invented. Both variables are set only if the thing they name
+    # exists, so a text-only boot leaves them unset and an application that
+    # needs a display says so rather than hanging on a socket that was never
+    # there.
+    install -d "$DESTDIR/etc/profile.d"
+    cat > "$DESTDIR/etc/profile.d/trinix-session.sh" <<'EOF'
+# The graphical session, for a login shell that is in one.
+
+if [ -z "${XDG_RUNTIME_DIR:-}" ]; then
+    _trinix_runtime="/run/user/$(id -u)"
+    if [ -d "$_trinix_runtime" ]; then
+        XDG_RUNTIME_DIR="$_trinix_runtime"
+        export XDG_RUNTIME_DIR
+    fi
+    unset _trinix_runtime
+fi
+
+# The socket rather than a fixed name: the compositor takes wayland-0 when it
+# is free and the next one when it is not, and a login that assumed the first
+# would be talking to nothing on the second compositor of the day.
+if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    for _trinix_socket in "$XDG_RUNTIME_DIR"/wayland-*; do
+        case "$_trinix_socket" in
+            *.lock) continue ;;
+        esac
+
+        if [ -S "$_trinix_socket" ]; then
+            WAYLAND_DISPLAY="${_trinix_socket##*/}"
+            export WAYLAND_DISPLAY
+            break
+        fi
+    done
+    unset _trinix_socket
+fi
+EOF
+    chmod 644 "$DESTDIR/etc/profile.d/trinix-session.sh"
 }
 
 # --- The interactive shell --------------------------------------------------

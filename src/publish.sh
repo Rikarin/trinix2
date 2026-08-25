@@ -76,6 +76,13 @@ dotnet publish "$srcdir/Trinix.Gatekeeper/Trinix.Gatekeeper.csproj" "${common[@]
 ln -sfn ../lib/trinix/bundle/trinix-bundle "$destdir/usr/bin/trinix-bundle"
 ln -sfn ../lib/trinix/bundle/trinix-open   "$destdir/usr/bin/trinix-open"
 
+# ⚠ And as `open`, which is the name it is meant to be typed under. A macOS-like
+# system where launching an application is `trinix-open` is a system that has
+# the mechanism and not the idiom, and the idiom is most of what is being
+# copied. Both names, because `open` is a word: a unit file or a script wants
+# the one nobody else is likely to have claimed.
+ln -sfn ../lib/trinix/bundle/trinix-open   "$destdir/usr/bin/open"
+
 dotnet publish "$srcdir/Trinix.Management/Trinix.Management.csproj" "${common[@]}" --output "$module_out"
 
 # A published module directory is full of framework assemblies that pwsh

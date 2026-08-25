@@ -187,6 +187,15 @@ else
     fail 'HelloUi.tdi is missing — the app stage did not package the Vixen application'
 fi
 
+# The file that lets a login shell find the compositor's session. Without it
+# `open` works and the application it launches has no display to draw on, which
+# is a failure a long way from its cause.
+if [ -e "$ROOTFS/etc/profile.d/trinix-session.sh" ]; then
+    pass 'a login shell is given the graphical session'
+else
+    fail 'no /etc/profile.d/trinix-session.sh — `open` from a shell would find no display'
+fi
+
 # --- Vulkan, on a machine with no GPU --------------------------------------
 # The chain a Vixen application walks on its first frame, in order, because a
 # break anywhere in it looks identical from the application's side: "no Vulkan
@@ -253,9 +262,13 @@ for essential in usr/lib/trinix/bundle/trinix-bundle \
     [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
 done
 
-# The symlinks are what put the two on PATH; -L rather than -e, because they
+# The symlinks are what put the tools on PATH; -L rather than -e, because they
 # point at absolute paths that resolve against the build container's root.
-for link in usr/bin/trinix-bundle usr/bin/trinix-open; do
+#
+# `open` is on the list because it is the name the system is meant to be used
+# through: an application is launched by typing `open Something.app`, and a
+# missing symlink there is a mac-like system that is not one.
+for link in usr/bin/trinix-bundle usr/bin/trinix-open usr/bin/open; do
     [ -L "$ROOTFS/$link" ] && pass "$link" || fail "$link is not a symlink onto /usr/lib/trinix/bundle"
 done
 

@@ -157,20 +157,35 @@ makes QEMU offer VNC authentication as well, which is what Apple's client is
 looking for. `TRINIX_VNC_PASSWORD` overrides it; the port is published on
 loopback only either way.
 
-Then, in the serial console, log in as root and install an application:
+Then, in the serial console, log in as `root` and install an application once:
 
 ```bash
 trinix-bundle install /usr/share/trinix/applications/HelloUi.tdi
 ```
 
-```bash
-systemctl start trinix-helloui.service
+Log in as `trinix`, which lands you in PowerShell, and launch it the way the
+system is meant to be used:
+
+```powershell
+open /Applications/HelloUi.app
 ```
 
-That is the real path: a signed `.tdi` unpacked into `/Applications`, launched
-through `trinix-open`, which verifies the signature before it execs anything.
-The unit is a stand-in for a dock that does not exist yet — what it runs is the
-launcher, not a binary.
+That is the whole idiom, and it is deliberately the same one a Mac has. `open`
+verifies the bundle's signature against the trust store, then launches it in a
+session of its own and returns — so closing the terminal you typed it into does
+not close the window.
+
+Two things make it work from a shell, and both are worth knowing because their
+absence is confusing rather than loud. `/etc/profile.d/trinix-session.sh` hands
+a login shell the compositor's session — Trinix has no PAM, so nothing else
+would set `XDG_RUNTIME_DIR`, and an application would find no display. And it
+only does so for the user the session belongs to: `open` as root finds no
+display, here as on a Mac.
+
+`open --wait` is the other half, for something that has to watch what it
+started — a service manager, a check, a debugger. That is what
+`trinix-helloui.service` uses, and that unit exists only because there is no
+dock yet to launch from.
 
 Expect it to be slow: the frame is composited in software by the guest, emulated
 without an accelerator, and then encoded for VNC.
