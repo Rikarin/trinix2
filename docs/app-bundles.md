@@ -64,7 +64,7 @@ The plan offered either. JSON won on three counts, in order of weight:
   "shortVersion": "1.0",
   "entryPoint": "Contents/Bin/hello",
   "minimumSystemVersion": "0.3",
-  "permissions": ["files.home"],
+  "permissions": [],
   "categories": ["developer"]
 }
 ```
@@ -97,7 +97,15 @@ refactor; it is a format change that every bundle signed before it predates. The
 vocabulary was replaced exactly once, when the fourteen displaced five
 placeholders — `files.all`, `audio.input`, `audio.output`, `device.input`,
 `system.services` — and that was affordable because Trinix has two applications
-and between them they declare `display` and `files.home`, both of which survived.
+and between them they declared `display` and `files.home`, both of which survived.
+
+⚠ **`Hello` has since stopped declaring `files.home`, because it never used it.**
+`trinix-bundle doctor` found it on its first real run: `Hello` reads
+`Contents/Resources/greeting.txt` from inside its own signed bundle, which is
+what a *process* does — doc 04's test is whether an application could do the
+thing by being a process, and reading its own read-only resources passes that
+test. There was no honest `usageDescription` to write for it, which is how the
+false declaration was noticed at all.
 The five that vanished have no replacements: playing audio is something a process
 can do, and reaching Trinix's own services is scoped by the service to the
 caller's identity rather than by a mount, so neither was a permission under doc

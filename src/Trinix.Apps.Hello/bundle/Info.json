@@ -6,9 +6,7 @@
   "shortVersion": "1.0",
   "entryPoint": "Contents/Bin/hello",
   "minimumSystemVersion": "0.3",
-  "permissions": [
-    "files.home"
-  ],
+  "permissions": [],
   "categories": [
     "developer"
   ]
