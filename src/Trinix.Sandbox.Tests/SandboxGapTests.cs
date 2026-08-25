@@ -140,6 +140,23 @@ public class SandboxGapTests {
     }
 
     [Fact]
+    public void TenOfTheFourteenAreTheBrokersAndTheBrokerDoesNotExist() {
+        // ⚠ Quoted in docs/app-bundles.md § 1, and asserted here so the document
+        // cannot drift away from the code without something failing. Ten of the
+        // fourteen are enforced by a program that has not been written — the two
+        // files.* and the eight the default arm covers — and that is doc 04's design
+        // rather than a shortfall: the grant for those is the user picking a thing,
+        // which is a conversation and not a mount.
+        var unit = TestSandbox.Unit([.. BundlePermissions.Known]);
+
+        var brokered = unit.Gaps.Where(gap => gap.Kind == SandboxGapKind.Broker).Select(gap => gap.Subject);
+
+        Assert.Equal(10, brokered.Count());
+        Assert.Contains(BundlePermissions.FilesHome, brokered, StringComparer.Ordinal);
+        Assert.Contains(BundlePermissions.DevicesCamera, brokered, StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void SystemBackgroundIsTheSessionManagersRatherThanTheBrokers() {
         // Whether a unit outlives its last window, and whether it is started at
         // login, is not an ExecContext property and never will be.

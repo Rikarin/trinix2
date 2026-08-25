@@ -191,6 +191,38 @@ public sealed record SandboxLayout {
     }
 
     /// <summary>
+    ///     The ordinary layout for an installed application and a resolved user.
+    /// </summary>
+    /// <param name="info">The bundle's verified <c>Info.json</c>.</param>
+    /// <param name="bundlePath">Where the bundle is on the host.</param>
+    /// <param name="user">Who is launching it, from <see cref="SandboxUser" />.</param>
+    public static SandboxLayout For(BundleInfo info, string bundlePath, SandboxUser user) {
+        ArgumentNullException.ThrowIfNull(user);
+
+        return For(info, bundlePath, user.Name, user.UserId, user.Home, user.GroupName);
+    }
+
+    /// <summary>
+    ///     The layout for the user this process is running as.
+    /// </summary>
+    /// <param name="info">The bundle's verified <c>Info.json</c>.</param>
+    /// <param name="bundlePath">Where the bundle is on the host.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     There is no passwd entry for this process's uid.
+    /// </exception>
+    /// <remarks>
+    ///     ⚠ The one method in this file that touches the machine, and it is separate
+    ///     from <see cref="For(BundleInfo, string, string, uint, string, string?)" />
+    ///     rather than folded into it for the reason the type's own remarks give:
+    ///     discovery can fail, can differ between the machine a unit is built on and
+    ///     the one it runs on, and cannot be exercised from a unit test. Keeping it to
+    ///     one call means everything downstream of it is still a function of its
+    ///     arguments.
+    /// </remarks>
+    public static SandboxLayout ForCurrentUser(BundleInfo info, string bundlePath) =>
+        For(info, bundlePath, SandboxUser.Current());
+
+    /// <summary>
     ///     Everything wrong with this layout, or an empty list.
     /// </summary>
     /// <remarks>
