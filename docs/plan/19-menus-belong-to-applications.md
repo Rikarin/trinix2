@@ -76,6 +76,32 @@ Three consequences, in ascending order of seriousness.
    there is no toplevel to create the menu from. The protocol as written makes a normal, everyday
    macOS interaction structurally impossible, and no amount of shell policy can recover it.
 
+## ✅ Observed, 2026-08-25
+
+Booted arm64 in QEMU, one client with two windows, focus driven from the serial console:
+
+```
+menu bar for an application: 6 items [File, View]
+window mapped 'Trinix Wayland demo' 640x480 at 48,48
+menu bar shown: 6 items [File, View]
+window mapped 'Trinix Wayland demo window 2' 640x480 at 84,84
+```
+
+Both properties this document exists to produce are **observed rather than reasoned**: two windows
+yield **one** `menu bar for an application:` line, and switching focus between them changes nothing —
+no second `menu bar shown:` followed the map of window 2, and three further focus presses added zero
+lines. The pre-change format was `menu bar for 'Trinix Wayland demo'`, window-titled; it is now
+application-scoped.
+
+⚠ **The control is what makes the silence mean anything.** A second, separate client produced its own
+`menu bar for an application:` line, and three focus presses across the two clients produced **exactly
+two** new `menu bar shown:` lines. That proves the key injection reaches the compositor, so the null
+above is a real null rather than undelivered input — and two changes from three presses is one press
+that moved focus without moving the bar.
+
+Still reasoned, not observed: *which* press was the intra-client one. The counts are decisive; the
+per-press attribution comes from reading `CycleFocus`/`Raise`.
+
 ## The amendment
 
 ```

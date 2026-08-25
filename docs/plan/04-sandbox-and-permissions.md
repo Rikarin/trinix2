@@ -46,12 +46,49 @@ whole syscall-floor row above, plus two entries of the kernel-surfaces row, are 
 does not have. There is no `libseccomp` recipe either, so enabling it is two changes and a rebuild, not
 a flag.
 
-⚠ **And it is not yet known whether that is a hardened application or no application at all.** A unit
-*file* on disk ignores a property systemd was not built to implement — `trinixd.service` already
-carries `MemoryDenyWriteExecute=no` on this image and starts fine. Whether a **transient** unit over
-D-Bus ignores it or fails the call is untested, and the two answers are opposite: apps that run
-unprotected, or apps that do not run. **Settle this with one `systemd-run` in a booted VM before the
-wiring slice is written**; everything else in this document's schedule depends on which it is.
+✅ **Measured 2026-08-25 in a booted VM, and the answer is neither of the two this document
+predicted — it is both, split across the property set.**
+
+| Property | Transient unit over D-Bus | Enforced? |
+|---|---|---|
+| `SystemCallFilter=@system-service` | **fails the call** — *"Cannot set property SystemCallFilter, or unknown property"* | — |
+| `SystemCallArchitectures=native` | **fails the call** | — |
+| `MemoryDenyWriteExecute=` | accepted | untestable here — no program in the image maps W+X |
+| `RestrictRealtime=yes` | accepted | **no** — `chrt -r 1` succeeds inside the unit |
+| `RestrictSUIDSGID=yes` | accepted | **no** — `chmod u+s` leaves mode 4644 |
+
+Every other property the builder emits succeeded: `NoNewPrivileges`, the three `ProtectKernel*`,
+`ProtectProc=invisible`, `PrivatePIDs`, `PrivateTmp`, `PrivateDevices`, `DevicePolicy=closed`,
+`PrivateNetwork`, `MountAPIVFS`, `TemporaryFileSystem`, `MemoryMax`, `CPUWeight`, `TasksMax`.
+
+⚠ **The second row of that table is worse than the first, and this document did not consider it.**
+Emitting the syscall floor today yields *no application*, which is loud. The three that are accepted
+are recorded by `systemctl show` — `RestrictRealtime=yes` reads back exactly as it would on a
+seccomp-enabled system — and do nothing whatever. **Hardened on paper, and silent about it.** That was
+proven rather than assumed: the same harness confirms `PrivateNetwork=yes` *is* enforced, since
+`ip link show eth0` fails inside the unit and succeeds in the control, so the measurement can see
+enforcement when it is there.
+
+⚠ **`SandboxCapabilities.TrinixToday` gates on the wrong boundary.** As a set it launches, which is the
+right outcome by luck: it drops all five, and only two needed dropping. Three properties systemd would
+have accepted are being withheld.
+
+### Probing what the build supports — and the trap
+
+`systemctl --version` prints the feature string, and `-SECCOMP` is in it, so `TrinixToday` can stop
+being hand-derived from reading the recipe.
+
+⚠ **`systemctl show -p <name>` cannot answer this and will confidently lie.** It reports
+`SystemCallFilter=~` — a *value*, for the property the transient setter rejects — and only
+distinguishes known from unknown properties. A probe built on it concludes all five are available.
+Use the feature string.
+
+⚠ The same string reads `-PAM -AUDIT -SELINUX -ACL -OPENSSL -TPM2 -PCRE2 -BPF_FRAMEWORK`, and three of
+those are assumed elsewhere in this plan: doc [05](05-identity-and-keychain.md) builds authentication on
+PAM and disk/keychain sealing on TPM2, and doc [10](10-updates-recovery-and-backup.md) re-seals a TPM
+policy across updates. **systemd here can help with none of it.** That does not make those documents
+wrong — PAM and TPM2 are libraries and can be linked by Trinix's own components — but it does mean
+nothing comes for free from systemd, and no document had noticed.
 
 The same recipe sets `-Dpolkit=disabled`, which doc [05](05-identity-and-keychain.md) § Accounts and
 doc [08](08-settings-and-system-services.md) both assume when they say a privileged operation
