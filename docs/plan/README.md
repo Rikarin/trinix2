@@ -47,6 +47,7 @@ read the pair together; a ✅ means it has since been carried out.**
 | 17 | [Roadmap](17-roadmap.md) | Phases 7–14, exit criteria, sequencing, effort |
 | 18 | [Risks and Open Questions](18-risks-and-open-questions.md) | Ranked risks, and the five decisions that need a human |
 | 19 | [Menus Belong to Applications](19-menus-belong-to-applications.md) | ✅ Amends the platform contract § 5 and `trinix-menu-v1` — the menu is scoped to the `wl_client`, not to an `xdg_toplevel`, with a per-toplevel override for the rare window that differs. The anti-D-Bus argument survives the change; an application with no open windows could not have a menu bar at all under the old scoping |
+| 20 | [Localisation](20-localisation.md) | ⚠️ Extends 01 § Open, 11 and 15, and corrects 08 § Time, language, region — the invariant/ICU boundary is machine-facing versus human-facing, not services versus applications, and it is not implemented anywhere. Answers 18 R7: **English-only for 1.0, catalogued from the first string**, because the choices that cannot be reversed are the call sites, the stylesheet and one line in a lookup, not the translations. Vixen's markup needs no change to carry a translatable string; its layout engine already does RTL; its editor already has the catalogue, in the wrong assembly |
 
 ## The three rules these documents are written against
 
