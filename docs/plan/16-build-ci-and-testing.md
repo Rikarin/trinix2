@@ -11,30 +11,34 @@ builds the toolchain, builds the base system and a disk image for both arches, *
 logs in, checks PowerShell and .NET, and runs a Wayland client under the C# compositor. That is a
 better boot gate than most distributions have.
 
-The C# side is one line:
+The C# side was one line — `dotnet build src/Trinix.slnx` — and as of **2026-08-25** it is a floor:
 
-```yaml
-- run: dotnet build src/Trinix.slnx --configuration Release
-```
+| | |
+|---|---|
+| `Trinix.Bundle.Tests` | 221 tests. Generates a PKI in process, seals a real `.app`, and then breaks it: a flipped byte, a file added, removed and renamed, a mode-bit change, an edited manifest, and — the one worth having — a manifest **re-signed by a trusted signer** naming `../../etc/passwd`. `.tdi` footers are assembled byte by byte to reach the bounds checks |
+| `Trinix.Management.Tests` | 33 tests over `Cli` parsing, the `ip -json` shapes and service health |
+| `scripts/check-solution.ps1` | Asserts every `.csproj` under `src/` is in `Trinix.slnx`. **A script, not a test**, and deliberately: a test asserting "every project is in the solution" is the one assertion defeated by leaving its own project out of the solution. CI runs it before restore, so it does not depend on the state it checks |
+| `.editorconfig` | The repo had none, so `dotnet format` applied Allman defaults and reported 646 "errors" against correct code. Formatting only — no `dotnet_diagnostic` severities, because `EnforceCodeStyleInBuild` and `TreatWarningsAsErrors` together would turn any rule raised to warning into a tree-wide build failure |
+| The `dotnet` job | check-solution → restore → format → build → test, cheapest first, still independent of the toolchain and image stages |
 
-Three things are wrong with it, and each is checkable in a minute:
+The two projects missing from the solution — `Trinix.Platform` and `Trinix.Apps.HelloUi` — are in it, so the
+Vixen platform backend is compiled by the job that gates a pull request rather than only by an image build.
 
-1. **There are no test projects.** `find . -name '*Tests*'` returns nothing. Every C# component in the
-   repository — the bundle format and its signature verification, the Merkle tree, the EROFS writer,
-   the compositor's window manager, the Wayland client, the platform backend — is covered by a boot
-   test and nothing else.
-2. **Two projects are not in the solution.** `Trinix.slnx` lists eight projects;
-   [`Trinix.Platform`](../../src/Trinix.Platform/) and
-   [`Trinix.Apps.HelloUi`](../../src/Trinix.Apps.HelloUi/) are not among them. They are built by
-   [`src/pack-apps.sh`](../../src/pack-apps.sh) during the image stage, so they do compile — but the
-   fast `dotnet` job that gates every pull request never sees them, which means a compile error in the
-   Vixen platform backend is caught by a full image build rather than in ninety seconds.
-3. **`dotnet build` is not `dotnet test`, and there is no format, analyser or API gate**, although
-   [`Directory.Build.props`](../../src/Directory.Build.props) already sets
-   `TreatWarningsAsErrors`, `EnforceCodeStyleInBuild` and the trim/AOT analysers — so the standards
-   are declared and only half enforced.
+**Two bugs surfaced on the day the tests were written**, which is the argument for the whole exercise:
 
-⚠ This is the highest-leverage work in the entire plan. Documents 01–15 add roughly 180 EM of C# to a
+- `System.Text.Json` builds a type with `required` members without running field initialisers, so an
+  `Info.json` that simply omits `"permissions"` — every application that asks for nothing — arrived as
+  `null` and `Validate()` threw `NullReferenceException` out of `BundleVerifier`. **A crash in the
+  component that decides whether code may run, rather than a refusal.** Fixed.
+- `SystemVersion.Satisfies` disagrees with its own comment. See doc 18's decision list; pinned, not changed.
+
+⚠ **Nothing has yet run on Linux.** Everything above was measured on macOS/arm64, and two tests already had
+to be rewritten because a case-insensitive filesystem made them pass for the wrong reason. CI is the first
+Linux run and should be read as a first run.
+
+## What is still owed
+
+⚠ This remains the highest-leverage work in the plan. Documents 01–15 add roughly 180 EM of C# to a
 repository with no unit tests; the cost of adding them later grows with every one of those months.
 
 ## What to build, in order

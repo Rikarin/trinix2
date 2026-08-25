@@ -142,6 +142,31 @@ Flatpak's permissions in Trinix's vocabulary and the mapping is lossy, so a user
 promise than the application actually holds. The mitigation is the explicit label, and ⚠ it must not
 be softened into something reassuring during a design review.
 
+## R13 — `minimumSystemVersion` compares versions two different ways
+
+Found by `SystemVersionTests` on 2026-08-25, pinned rather than changed, because it decides which
+applications are allowed to launch.
+
+`Parse` splits on `.` and stops at the first component that is not purely numeric. So `"0.3-rc1"`
+becomes `["0", "3-rc1"]`, `"3-rc1"` does not parse, and the version reads as **`0`** — while
+`"0.3.1-rc1"` reads as `[0, 3]` because two components matched before the suffix was reached. A release
+candidate of 0.3 therefore **fails** a `minimumSystemVersion` of `0.3`, and a release candidate of 0.3.1
+**passes** it.
+
+`Parse`'s own comment says the opposite of what it does — *"`0.3-rc1` is at least `0.3`"* — so the
+intent is documented and unimplemented.
+
+**Decision needed**, and it is a versioning-policy question rather than a bug report:
+
+| Reading | `0.3-rc1` vs minimum `0.3` | Consequence |
+|---|---|---|
+| The comment's: a prerelease of X is at least X | satisfies | Testers on an rc can run applications built for the release |
+| Semver's: a prerelease of X precedes X | does not satisfy | An rc is treated as older than the thing it precedes, which is correct and means every application refuses to launch on it |
+
+⚠ **Whichever is chosen, the current asymmetry is indefensible** — the same suffix cannot mean different
+things at different component depths. And it costs nothing today, because no Trinix version has ever
+carried a suffix; the first `VERSION_ID` of `0.4-rc1` is when a machine stops launching applications.
+
 ## The five decisions
 
 | | Question | Recommendation |
@@ -150,4 +175,5 @@ be softened into something reassuring during a design review.
 | R7 | Localisation from the start, or English-only 1.0? | English-only, strings extractable, decided *now* rather than by default |
 | R9 | Who maintains the browser bundle? | Flathub's, until someone owns it |
 | R10 | Is there a Store, or a project repository? | A project repository. Call it that |
+| R13 | Does a prerelease satisfy the release it precedes? | Semver — an rc is older. Then fix the asymmetry, which is a bug under either answer |
 | — | Does automation ship in 1.0? | Doc 17's cut line 1 says no. It is the most interesting thing being cut, and that is a judgement call, not an analysis |
