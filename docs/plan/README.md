@@ -21,6 +21,10 @@ are not restated here.
 Read 00, 01 and 02 first. After that each file is the spec for its subsystem, and they are ordered
 by what depends on what, not by what a user sees first.
 
+Documents 19 and above amend or extend an earlier one rather than opening new ground; each says
+which, and the document it amends points back. **A ⚠️ means the amendment changes a decision, so
+read the pair together.**
+
 | # | Document | Scope |
 |---|---|---|
 | 00 | [Vision and Principles](00-vision-and-principles.md) | What "one operating system" commits us to, the non-negotiables, what Trinix is not |
@@ -42,6 +46,7 @@ by what depends on what, not by what a user sees first.
 | 16 | [Build, CI and Testing](16-build-ci-and-testing.md) | The gates Trinix does not have. Read this one early; it is the smallest and the most overdue |
 | 17 | [Roadmap](17-roadmap.md) | Phases 7–14, exit criteria, sequencing, effort |
 | 18 | [Risks and Open Questions](18-risks-and-open-questions.md) | Ranked risks, and the five decisions that need a human |
+| 19 | [Menus Belong to Applications](19-menus-belong-to-applications.md) | ⚠️ Amends the platform contract § 5 and `trinix-menu-v1` — the menu is scoped to the `wl_client`, not to an `xdg_toplevel`. The anti-D-Bus argument survives the change; an application with no open windows could not have a menu bar at all under the old scoping |
 
 ## The three rules these documents are written against
 

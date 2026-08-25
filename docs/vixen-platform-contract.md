@@ -131,6 +131,12 @@ protocol that is an enhancement.
 
 ### 5. Menus
 
+> ⚠️ **Amended by [`plan/19-menus-belong-to-applications.md`](plan/19-menus-belong-to-applications.md).**
+> The paragraph below beginning *"A menu belongs to a surface"* is wrong: on macOS — and now on
+> Trinix — a menu belongs to an **application**, and `trinix-menu-v1` scopes it to the `wl_client`
+> rather than to an `xdg_toplevel`. The rejection of D-Bus is unaffected and stands. Read the pair
+> together until the protocol change lands.
+
 An application does not draw menus on Trinix. It describes them once, updates
 them as its state changes, and the shell renders whichever window's menus
 belong to the active window, at the top of the screen.
