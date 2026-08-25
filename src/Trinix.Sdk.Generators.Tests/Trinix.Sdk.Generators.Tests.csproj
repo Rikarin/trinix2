@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Sdk.Generators.Tests — the generator, run over source and asserted on.
+
+      Everything here is a string in and a string out: a snippet of C# declaring a
+      contract goes in, and either generated source or a diagnostic id comes out.
+      No bus, no daemon, no filesystem, milliseconds per case.
+
+      That is on purpose and it is the half of the testing that the round-trip
+      suite in Trinix.Services.Contracts.Tests cannot do. A round trip proves the
+      two generated halves agree with *each other*; it cannot prove that a
+      contract which breaks doc 01's rules is refused, because a refused contract
+      never compiles and so never reaches a bus. The diagnostics are the enforcement
+      of those rules, so they need a test that can hold a broken contract.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Sdk.Generators.Tests</RootNamespace>
+        <AssemblyName>Trinix.Sdk.Generators.Tests</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <!-- The same three opt-outs Trinix.Bundle.Tests takes, for the same reason:
+             the rules they relax are about shipping, and a test assembly does not
+             ship. The code under test keeps both analysers. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Referenced as a library rather than as an analyzer: these tests drive
+             CSharpGeneratorDriver themselves, so they need the type, not the
+             compiler plugin. -->
+        <ProjectReference Include="..\Trinix.Sdk.Generators\Trinix.Sdk.Generators.csproj"/>
+        <!-- For the attribute definitions and Tmds' types, which the compilations
+             under test have to resolve. -->
+        <ProjectReference Include="..\Trinix.Services.Contracts\Trinix.Services.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+</Project>

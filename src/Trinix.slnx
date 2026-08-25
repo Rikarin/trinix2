@@ -19,4 +19,8 @@
     <Project Path="Trinix.Platform/Trinix.Platform.csproj"/>
     <Project Path="Trinix.Sandbox/Trinix.Sandbox.csproj"/>
     <Project Path="Trinix.Sandbox.Tests/Trinix.Sandbox.Tests.csproj"/>
+    <Project Path="Trinix.Sdk.Generators/Trinix.Sdk.Generators.csproj"/>
+    <Project Path="Trinix.Sdk.Generators.Tests/Trinix.Sdk.Generators.Tests.csproj"/>
+    <Project Path="Trinix.Services.Contracts/Trinix.Services.Contracts.csproj"/>
+    <Project Path="Trinix.Services.Contracts.Tests/Trinix.Services.Contracts.Tests.csproj"/>
 </Solution>

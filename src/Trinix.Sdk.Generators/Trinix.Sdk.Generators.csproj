@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Sdk.Generators — the Roslyn generator behind doc 01's service surface.
+
+      It takes a [TrinixService] interface and emits the client proxy, the server
+      dispatcher, the marshalling helpers and the D-Bus introspection XML. Doc 01
+      § How the proxies are generated gives the reasons, and the operative one is
+      not convenience: everything in Trinix builds with IsAotCompatible and the
+      trim analyser on, and a reflection-based bus binding fails that on the first
+      PublishAot — in the compositor's build, not in the SDK's.
+
+      ⚠ This assembly is the one place in src/ that does not target net10.0. A
+      Roslyn component is loaded into the compiler, which runs on netstandard2.0,
+      so the properties in ../Directory.Build.props that describe a *shipped*
+      Trinix component are turned off below one at a time rather than by not
+      inheriting them. Each one has a reason and none of them is "it was noisy".
+    -->
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <RootNamespace>Trinix.Sdk.Generators</RootNamespace>
+        <AssemblyName>Trinix.Sdk.Generators</AssemblyName>
+        <IsRoslynComponent>true</IsRoslynComponent>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+
+        <!-- The generator is a build-time tool. It never lands in an image, so the
+             deployment analysers have nothing to say about it, and IsAotCompatible
+             is not even valid before net8.0. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <RuntimeIdentifiers></RuntimeIdentifiers>
+
+        <!-- The compiler host decides its own globalization; asserting invariant
+             here would be a claim about a process this assembly does not own. -->
+        <InvariantGlobalization></InvariantGlobalization>
+
+        <!-- Nothing references this as a library: it is consumed as an analyzer,
+             so the compile output must not be packed as a lib/. -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!--
+          ⚠ Pinned to 4.8.0 rather than to whatever the SDK ships. An analyzer is
+          loaded by *the compiler that is running*, which here is the Roslyn 5.x
+          inside .NET SDK 10.0.400 but in an IDE could be older. Building against
+          the lowest Roslyn Trinix supports is what makes the generator load in
+          both; building against the newest would produce a component that throws
+          a MissingMethodException in an editor rather than failing a build.
+        -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- RS2008: an analyzer's diagnostic ids are a public surface, and the
+             release-tracking files are how a consumer's NoWarn keeps meaning what
+             it meant. See the file for why the rule is worth obeying rather than
+             suppressing. -->
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md"/>
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md"/>
+    </ItemGroup>
+
+</Project>
