@@ -145,6 +145,12 @@ Artifacts are exported with `--output type=local` — you get `trinix-<arch>.img
 
 **Exit criteria:** build → sign → package a Vixen app as `.tdi` on the Mac; install and launch it in the VM; tampered bundle refuses to launch.
 
+> **Phases 7 and 8 below are superseded by [`docs/plan/`](docs/plan/)**, which plans the rest of the
+> system — the SDK, the shell, the sandbox, search, Files, Settings, the Store, updates, backup,
+> compatibility and accessibility — at its real size. The package manager and updates become Phase 12
+> there; the polish items are distributed across its Phases 12–14. The two sections are kept here as
+> the record of what was originally intended.
+
 ### Phase 7 — Package manager + OS updates (medium)
 - `Trinix.Pkg` (C#), two personalities:
   - **Apps:** repository index (signed JSON feed) of `.tdi` images; install/uninstall/update = fetch, verify, copy/remove. CLI (`tpkg`) + PowerShell cmdlets + a Settings/App Store-ish UI later.

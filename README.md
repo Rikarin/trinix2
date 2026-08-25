@@ -5,8 +5,12 @@ one** — PowerShell as the interactive shell, C#/.NET as the primary language, 
 Wayland compositor, and a macOS-style app-bundle + signed-image model instead of a
 conventional package database.
 
-The full design, and the reasoning behind each decision, is in
-[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
+The design of what is built — the toolchain, the base system, the image, the
+compositor and the bundle format — is in
+[IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md). The design of what turns it into
+a full macOS replacement — the SDK, the shell, the sandbox, search, Files,
+Settings, the Store, updates and the rest — is in [docs/plan/](docs/plan/), which
+supersedes that document's Phases 7 and 8.
 
 **Status: Phase 6.** The base system cross-builds — kernel, glibc, systemd,
 shadow, coreutils and the rest — and assembles into an A/B-capable GPT disk
