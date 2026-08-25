@@ -46,16 +46,34 @@ existence. Trinix has three. Every month of delay makes audit mode longer and th
 is the strongest argument in the plan for doing Phase 8 early rather than after the desktop is
 pleasant.
 
-## R4 — The D-Bus stack under NativeAOT is unverified
+## R4 — ✅ Retired. The D-Bus stack works under NativeAOT
 
-Doc 01 pins `Tmds.DBus.Protocol` and notes it is unverified against NativeAOT on `linux-arm64`.
-Everything in doc 02 rests on it, and the compositor and `trinixd` are AOT.
+**Measured, 2026-08-25**, before any service contract was written, which is what the spike was for.
+A NativeAOT binary published for `linux-arm64` in a native `linux/arm64` container, against a real
+`dbus-daemon`, passes all four capabilities that doc 02 depends on: a method call and its reply, a
+signal, **receiving** an `h` file descriptor, and **sending** one. The fourth was extended to the case
+that actually matters — doc 02 § Devices hands over pipes and sockets rather than files, so one end of
+a `socketpair` was passed over the bus and read from. It also passes **on the system bus, as root,
+under a policy file**, which is `trinixd`'s real shape rather than a convenient one.
 
-**Retire this with a spike, in Phase 7, before the service contracts are written**: a NativeAOT
-`linux-arm64` binary that calls a method, receives a signal and passes an fd, published and run in the
-container tier. If it fails, the fallback is writing the marshaller — the D-Bus wire format is small,
-well specified and entirely deterministic, and it is a few hundred lines plus tests. That is a real
-fallback, which is why this is R4 and not R1.
+| | |
+|---|---|
+| `Tmds.DBus.Protocol` | **0.95.0** |
+| Trim/AOT warnings | **zero**, with `TrimmerSingleWarn=false` so ILC reports per call site |
+| `[RequiresUnreferencedCode]` / `[RequiresDynamicCode]` | **none**, across every member including non-public; the assembly is `IsTrimmable` |
+| `InvariantGlobalization=true` | works, and verified on rather than assumed |
+| Binary | 2.96 MiB arm64, single file, `ldd` shows only libc and libm |
+
+The zero-warning result was checked rather than believed: a `JsonSerializer.Serialize((object)…)`
+negative control in the same project produced IL2026/IL3050 from both Roslyn and ILC, so the pipeline
+demonstrably warns when there is something to warn about.
+
+**The marshaller fallback is off the table.** Two findings came out of the spike that are not risks but
+are load-bearing, and they live in doc 01 § How the proxies are generated: the *other* package
+(`Tmds.DBus`, the high-level one) is not AOT-safe and carries no `Requires*` annotation to say so, and
+`MessageWriter` being a `ref struct` constrains what our generator must emit.
+
+⚠ **Pin exactly.** Seven releases in 2026 and a renaming break at 0.93.0.
 
 ## R5 — Vixen is in development, and now two things depend on it rather than one
 

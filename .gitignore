@@ -35,3 +35,6 @@ artifacts/
 
 # macOS
 .DS_Store
+
+# Worktrees created for background agents — never part of the tree they branch from.
+.claude/worktrees/
