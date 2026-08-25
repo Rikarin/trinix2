@@ -25,6 +25,11 @@
 
     <ItemGroup>
         <ProjectReference Include="../Trinix.Bundle/Trinix.Bundle.csproj"/>
+        <!-- Trinix.Sandbox is the transient unit as data. It is referenced rather
+             than inlined so that the containment rules stay assertable without a
+             launcher, and so that `trinix doctor` and the Store's future permission
+             UI read the same construction this program runs. -->
+        <ProjectReference Include="../Trinix.Sandbox/Trinix.Sandbox.csproj"/>
     </ItemGroup>
 
 </Project>

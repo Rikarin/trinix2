@@ -96,6 +96,34 @@ public class SandboxRenderingTests {
     }
 
     [Fact]
+    public void TheUnitFileFormMarksThePropertiesThatEnforceNothing() {
+        // ⚠ The one respect in which this output is not what a unit file looks like,
+        // and it is deliberate. Somebody reads this to find out what an application is
+        // contained by; three lines that answer that question wrongly are worse than
+        // no output at all. It is also why it must never be written to disk and loaded
+        // back — which doc 04 forbids for an unrelated and stronger reason anyway.
+        var unit = TestSandbox.Unit(new SandboxOptions {
+            Capabilities = SandboxCapabilities.TrinixToday, Runtime = BundleRuntime.Native
+        });
+
+        var text = unit.ToUnitFile();
+
+        Assert.Contains("# ⚠ accepted by this systemd and enforcing nothing", text, StringComparison.Ordinal);
+        Assert.Contains(
+            "# ⚠ accepted by this systemd and enforcing nothing — see Gaps\nRestrictRealtime=yes\n",
+            text,
+            StringComparison.Ordinal
+        );
+
+        // The refused two are absent entirely rather than commented out: they are not
+        // in the unit at all, because setting them would fail the launch.
+        Assert.DoesNotContain("SystemCallFilter", text, StringComparison.Ordinal);
+
+        // And a property that does its job is rendered plainly.
+        Assert.Contains("\nPrivateNetwork=yes\n", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void RepeatedPropertiesAreKeptSeparateRatherThanJoined() {
         // BindReadOnlyPaths is emitted once per path. A single comma-joined value
         // would make one unreadable line out of five readable ones and would hide

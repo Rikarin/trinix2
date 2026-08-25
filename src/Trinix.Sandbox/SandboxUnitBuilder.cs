@@ -131,11 +131,11 @@ public static class SandboxUnitBuilder {
             // write permission on its inode, so a read-only bind of the Wayland
             // socket produces an application that starts, finds the socket, and gets
             // EACCES from connect() — which reads as a compositor bug.
-            properties.Add(new UnitProperty {
-                Name = "BindPaths",
-                Value = layout.WaylandSocket + ":" + layout.WaylandSocket,
-                Rationale = "display: the compositor's socket, at the same path inside"
-            });
+            properties.Add(UnitProperty.Enforced(
+                "BindPaths",
+                layout.WaylandSocket + ":" + layout.WaylandSocket,
+                "display: the compositor's socket, at the same path inside"
+            ));
         }
 
         Delegated(permissions, gaps);
@@ -168,75 +168,74 @@ public static class SandboxUnitBuilder {
         // changes between launches, so everything the application wrote last time
         // would belong to a user that no longer exists. Containment here is the
         // mount namespace's job, not the uid's.
-        properties.Add(new UnitProperty {
-            Name = "User", Value = layout.UserName, Rationale = "the logged-in user, not a dynamic one"
-        });
-
-        properties.Add(new UnitProperty {
-            Name = "Group", Value = layout.GroupName, Rationale = "the logged-in user, not a dynamic one"
-        });
+        properties.Add(UnitProperty.Enforced("User", layout.UserName, "the logged-in user, not a dynamic one"));
+        properties.Add(UnitProperty.Enforced("Group", layout.GroupName, "the logged-in user, not a dynamic one"));
 
         // Type=exec rather than simple: systemd reports the unit started only once
         // the exec succeeded, so a bundle whose entry point is missing or is not
         // executable fails the launch instead of producing a unit that was briefly
         // alive and is now gone.
-        properties.Add(new UnitProperty {
-            Name = "Type", Value = "exec", Rationale = "a failed exec must be a failed launch"
-        });
+        properties.Add(UnitProperty.Enforced("Type", "exec", "a failed exec must be a failed launch"));
     }
 
     static void Filesystem(List<UnitProperty> properties, SandboxLayout layout) {
-        properties.Add(new UnitProperty {
-            Name = "RootDirectory",
-            Value = layout.ComposedRoot,
-            Rationale = "cannot see the filesystem: a minimal composed root"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "RootDirectory",
+            layout.ComposedRoot,
+            "cannot see the filesystem: a minimal composed root"
+        ));
 
         // With RootDirectory= there is no /proc, /sys or /dev unless this asks for
         // them, and a .NET process without /proc does not get far — the GC reads
         // /proc/meminfo and the runtime reads /proc/self/maps.
-        properties.Add(new UnitProperty {
-            Name = "MountAPIVFS", Value = "yes", Rationale = "/proc, /sys and /dev inside the composed root"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "MountAPIVFS",
+            "yes",
+            "/proc, /sys and /dev inside the composed root"
+        ));
 
-        properties.Add(new UnitProperty {
-            Name = "WorkingDirectory",
-            Value = layout.HomeInside,
-            Rationale = "an application's working directory is its own container"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "WorkingDirectory",
+            layout.HomeInside,
+            "an application's working directory is its own container"
+        ));
 
         // /run has to exist and be writable for XDG_RUNTIME_DIR, and it must not be
         // the host's — that is where every other service's socket lives.
-        properties.Add(new UnitProperty {
-            Name = "TemporaryFileSystem",
-            Value = "/run:mode=0755",
-            Rationale = "an empty /run, so no other service's socket is reachable"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "TemporaryFileSystem",
+            "/run:mode=0755",
+            "an empty /run, so no other service's socket is reachable"
+        ));
 
-        properties.Add(new UnitProperty {
-            Name = "PrivateTmp", Value = "yes", Rationale = "/tmp and /var/tmp are the application's alone"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "PrivateTmp",
+            "yes",
+            "/tmp and /var/tmp are the application's alone"
+        ));
 
         foreach (var path in layout.RuntimePaths) {
-            properties.Add(new UnitProperty {
-                Name = "BindReadOnlyPaths", Value = path, Rationale = "the runtime: not a permission, a fact about a process"
-            });
+            properties.Add(UnitProperty.Enforced(
+                "BindReadOnlyPaths",
+                path,
+                "the runtime: not a permission, a fact about a process"
+            ));
         }
 
-        properties.Add(new UnitProperty {
-            Name = "BindReadOnlyPaths",
-            Value = layout.BundlePath,
-            Rationale = "the bundle, read-only and at the same path inside"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "BindReadOnlyPaths",
+            layout.BundlePath,
+            "the bundle, read-only and at the same path inside"
+        ));
 
         // The single largest simplification in doc 04: the app's $HOME *is* its
         // container, so every library that writes to $HOME/.config writes into
         // ~/Library/Containers/<id>/Data and nothing has to be patched.
-        properties.Add(new UnitProperty {
-            Name = "BindPaths",
-            Value = layout.ContainerData + ":" + layout.HomeInside,
-            Rationale = "the app's $HOME is its container"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "BindPaths",
+            layout.ContainerData + ":" + layout.HomeInside,
+            "the app's $HOME is its container"
+        ));
     }
 
     static void Network(
@@ -246,9 +245,15 @@ public static class SandboxUnitBuilder {
         List<SandboxGap> gaps
     ) {
         if (!permissions.HasAny(Permissions.NetworkClient | Permissions.NetworkServer)) {
-            properties.Add(new UnitProperty {
-                Name = "PrivateNetwork", Value = "yes", Rationale = "no network permission: no network stack at all"
-            });
+            // ✅ The one property on this image whose enforcement was proven rather
+            // than assumed: `ip link show eth0` fails inside the unit and succeeds in
+            // the control. That control is what makes the same harness credible when
+            // it reports that RestrictRealtime= does nothing.
+            properties.Add(UnitProperty.Enforced(
+                "PrivateNetwork",
+                "yes",
+                "no network permission: no network stack at all"
+            ));
 
             return;
         }
@@ -262,11 +267,11 @@ public static class SandboxUnitBuilder {
         // when NetworkNamespacePath= is set, so PrivateNetwork= is deliberately not
         // emitted alongside it rather than emitted as "no". If that reading is wrong
         // the failure is loud (systemd refuses the combination), not silent.
-        properties.Add(new UnitProperty {
-            Name = "NetworkNamespacePath",
-            Value = layout.NetworkNamespace,
-            Rationale = "network.*: a namespace shared only by applications that declared it"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "NetworkNamespacePath",
+            layout.NetworkNamespace,
+            "network.*: a namespace shared only by applications that declared it"
+        ));
 
         if (permissions.Has(Permissions.NetworkServer)) {
             gaps.Add(new SandboxGap {
@@ -280,24 +285,22 @@ public static class SandboxUnitBuilder {
     }
 
     static void Devices(List<UnitProperty> properties) {
-        properties.Add(new UnitProperty {
-            Name = "PrivateDevices", Value = "yes", Rationale = "no devices: everything arrives as an fd from trinixd"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "PrivateDevices",
+            "yes",
+            "no devices: everything arrives as an fd from trinixd"
+        ));
 
         // Doc 04's "DeviceAllow= empty" is spelled as the absence of any DeviceAllow
         // line: with DevicePolicy=closed the only nodes reachable are the harmless
         // set systemd always permits (null, zero, full, random, urandom, tty), and
         // an explicit empty DeviceAllow= over the bus is a value systemd-run may
         // well reject.
-        properties.Add(new UnitProperty {
-            Name = "DevicePolicy", Value = "closed", Rationale = "no devices beyond the harmless set"
-        });
+        properties.Add(UnitProperty.Enforced("DevicePolicy", "closed", "no devices beyond the harmless set"));
     }
 
     static void Processes(List<UnitProperty> properties, SandboxCapabilities capabilities) {
-        properties.Add(new UnitProperty {
-            Name = "ProtectProc", Value = "invisible", Rationale = "no other processes"
-        });
+        properties.Add(UnitProperty.Enforced("ProtectProc", "invisible", "no other processes"));
 
         // ⚠ ProcSubset=pid is the documented companion and is deliberately NOT set.
         // It hides /proc/meminfo, /proc/cpuinfo and /proc/sys, all of which the .NET
@@ -305,21 +308,32 @@ public static class SandboxUnitBuilder {
         // that runs with wrong memory heuristics, which is the kind of bug nobody
         // traces back to a sandbox property.
         if (capabilities.PrivatePids) {
-            properties.Add(new UnitProperty {
-                Name = "PrivatePIDs", Value = "yes", Rationale = "no other processes, in the strong form"
-            });
+            properties.Add(UnitProperty.Enforced("PrivatePIDs", "yes", "no other processes, in the strong form"));
         }
     }
 
     static void Floor(List<UnitProperty> properties, SandboxOptions options, List<SandboxGap> gaps) {
         // NoNewPrivileges is a prctl and needs no libseccomp, which is why it is
-        // here unconditionally while its neighbours are not.
-        properties.Add(new UnitProperty {
-            Name = "NoNewPrivileges", Value = "yes", Rationale = "syscall floor: no setuid binary can raise privilege"
-        });
+        // here unconditionally while its neighbours are not. It is also the single
+        // most valuable property in the row, so losing it alongside them — the easy
+        // mistake — would cost more than the two that are lost.
+        properties.Add(UnitProperty.Enforced(
+            "NoNewPrivileges",
+            "yes",
+            "syscall floor: no setuid binary can raise privilege"
+        ));
 
-        Seccomp(properties, options.Capabilities, gaps, "SystemCallFilter", "@system-service", "syscall floor");
-        Seccomp(properties, options.Capabilities, gaps, "SystemCallArchitectures", "native", "syscall floor");
+        Filtered(
+            properties, options.Capabilities, gaps,
+            "SystemCallFilter", "@system-service", "syscall floor",
+            "the transient setter answers \"Cannot set property SystemCallFilter, or unknown property\""
+        );
+
+        Filtered(
+            properties, options.Capabilities, gaps,
+            "SystemCallArchitectures", "native", "syscall floor",
+            "the transient setter fails the call, exactly as it does for SystemCallFilter"
+        );
 
         // ⚠ Doc 04's per-bundle exception. Off for a JIT, because the runtime maps a
         // page writable, writes machine code and remaps it executable — which is
@@ -327,13 +341,22 @@ public static class SandboxUnitBuilder {
         // only allowed to be wrong in the direction that does not crash the
         // application on its first compiled method.
         var deny = options.Runtime == BundleRuntime.Native;
-        Seccomp(
-            properties,
-            options.Capabilities,
-            gaps,
-            "MemoryDenyWriteExecute",
-            deny ? "yes" : "no",
-            "syscall floor: W^X, where the runtime allows it"
+        Filtered(
+            properties, options.Capabilities, gaps,
+            "MemoryDenyWriteExecute", deny ? "yes" : "no", "syscall floor: W^X, where the runtime allows it",
+
+            // ⚠ The one of the three whose inertness was inferred rather than seen.
+            // The measurement had no W+X program in the image to try, so the evidence
+            // is by neighbourhood: it is the same seccomp mechanism as the two that
+            // were watched failing to bite. Saying so is the difference between a
+            // record and a guess wearing a record's clothes.
+            "untested directly — the image has no program that maps W+X — but it is the same seccomp "
+            + "mechanism as RestrictRealtime= and RestrictSUIDSGID=, both of which were measured inert",
+
+            // ⚠ …and only theatre when it claims something. MemoryDenyWriteExecute=no
+            // restricts nothing by design, so recording it as an unenforced restriction
+            // would put a line in the journal that is true of every correct system.
+            asserts: deny
         );
 
         if (deny) {
@@ -355,65 +378,126 @@ public static class SandboxUnitBuilder {
     static void Kernel(List<UnitProperty> properties, SandboxCapabilities capabilities, List<SandboxGap> gaps) {
         // Mount and capability work, with a seccomp filter as a bonus rather than as
         // the mechanism — so these are emitted whether or not systemd has libseccomp.
-        properties.Add(new UnitProperty {
-            Name = "ProtectKernelTunables", Value = "yes", Rationale = "kernel surfaces"
-        });
+        properties.Add(UnitProperty.Enforced("ProtectKernelTunables", "yes", "kernel surfaces"));
+        properties.Add(UnitProperty.Enforced("ProtectKernelModules", "yes", "kernel surfaces"));
+        properties.Add(UnitProperty.Enforced("ProtectControlGroups", "yes", "kernel surfaces"));
 
-        properties.Add(new UnitProperty {
-            Name = "ProtectKernelModules", Value = "yes", Rationale = "kernel surfaces"
-        });
+        Filtered(
+            properties, capabilities, gaps,
+            "RestrictRealtime", "yes", "kernel surfaces",
+            "`chrt -r 1` succeeds inside a unit that sets it"
+        );
 
-        properties.Add(new UnitProperty {
-            Name = "ProtectControlGroups", Value = "yes", Rationale = "kernel surfaces"
-        });
-
-        Seccomp(properties, capabilities, gaps, "RestrictRealtime", "yes", "kernel surfaces");
-        Seccomp(properties, capabilities, gaps, "RestrictSUIDSGID", "yes", "kernel surfaces");
+        Filtered(
+            properties, capabilities, gaps,
+            "RestrictSUIDSGID", "yes", "kernel surfaces",
+            "`chmod u+s` inside a unit that sets it leaves the file at mode 4644"
+        );
     }
 
     static void Bounds(List<UnitProperty> properties, SandboxResourceBounds bounds) {
-        properties.Add(new UnitProperty {
-            Name = "MemoryMax", Value = bounds.MemoryMax, Rationale = "resource bounds, and doc 11's System Monitor"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "MemoryMax",
+            bounds.MemoryMax,
+            "resource bounds, and doc 11's System Monitor"
+        ));
 
-        properties.Add(new UnitProperty {
-            Name = "CPUWeight",
-            Value = bounds.CpuWeight.ToString(CultureInfo.InvariantCulture),
-            Rationale = "resource bounds, and doc 11's System Monitor"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "CPUWeight",
+            bounds.CpuWeight.ToString(CultureInfo.InvariantCulture),
+            "resource bounds, and doc 11's System Monitor"
+        ));
 
-        properties.Add(new UnitProperty {
-            Name = "TasksMax",
-            Value = bounds.TasksMax.ToString(CultureInfo.InvariantCulture),
-            Rationale = "resource bounds, and doc 11's System Monitor"
-        });
+        properties.Add(UnitProperty.Enforced(
+            "TasksMax",
+            bounds.TasksMax.ToString(CultureInfo.InvariantCulture),
+            "resource bounds, and doc 11's System Monitor"
+        ));
     }
 
     /// <summary>
-    ///     Emit a property that systemd only implements when it was built with
-    ///     libseccomp, or record its absence.
+    ///     Emit one of the five properties systemd implements as a seccomp filter,
+    ///     according to what this build actually does with it.
     /// </summary>
-    static void Seccomp(
+    /// <param name="properties">The unit under construction.</param>
+    /// <param name="capabilities">What this systemd can be asked for.</param>
+    /// <param name="gaps">Where an unenforced property is recorded.</param>
+    /// <param name="name">The systemd property name.</param>
+    /// <param name="value">Its value.</param>
+    /// <param name="rationale">Which doc 04 table row it came from.</param>
+    /// <param name="evidence">
+    ///     What the measurement of 2026-08-25 saw this property do — quoted into the
+    ///     gap, so a journal line carries its own proof rather than an assertion.
+    /// </param>
+    /// <param name="asserts">
+    ///     Whether <paramref name="value" /> claims a restriction at all. Only a value
+    ///     that claims one can be theatre.
+    /// </param>
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>The inert branch emits the property, and that is a decision rather
+    ///         than an oversight.</b> Withholding it would buy nothing — the enforcement
+    ///         is absent either way, since it is absent from the binary — while costing
+    ///         two things worth having: a unit that becomes correct the moment somebody
+    ///         adds the <c>libseccomp</c> recipe, with no code change and nothing to
+    ///         remember; and a <c>systemctl show</c> that agrees with what the launcher
+    ///         intended, so a divergence between the two means something.
+    ///     </para>
+    ///     <para>
+    ///         What withholding it would <i>look</i> like buying is honesty, and that is
+    ///         the trap: the dishonesty is not in the property, it is in the silence
+    ///         around it. So the property goes in and the silence is what gets fixed —
+    ///         <see cref="SandboxGapKind.Inert" />, one line, in the journal at every
+    ///         launch.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ The rejected branch does <b>not</b> emit, and must not: this is the one
+    ///         of the three states where emitting produces no application at all. Doc 04
+    ///         called that the worse outcome and the measurement showed it is the better
+    ///         one — a failed launch names its property in a D-Bus error, which is a
+    ///         thing somebody fixes.
+    ///     </para>
+    /// </remarks>
+    static void Filtered(
         List<UnitProperty> properties,
         SandboxCapabilities capabilities,
         List<SandboxGap> gaps,
         string name,
         string value,
-        string rationale
+        string rationale,
+        string evidence,
+        bool asserts = true
     ) {
-        if (capabilities.Seccomp) {
-            properties.Add(new UnitProperty {
-                Name = name, Value = value, Rationale = rationale, NeedsSeccomp = true
+        var enforcement = capabilities.EnforcementOf(name);
+
+        if (enforcement == PropertyEnforcement.Rejected) {
+            gaps.Add(new SandboxGap {
+                Subject = name,
+                Kind = SandboxGapKind.SystemCapability,
+                Reason = "omitted, because setting it would fail the launch: this systemd was built "
+                    + "without libseccomp (base/recipes/systemd/recipe.sh) and " + evidence
+                    + ". The application runs with no syscall floor and is no less contained than it "
+                    + "was before this library existed"
             });
 
             return;
         }
 
+        properties.Add(new UnitProperty {
+            Name = name, Value = value, Rationale = rationale, Enforcement = enforcement
+        });
+
+        if (enforcement != PropertyEnforcement.Inert || !asserts) {
+            return;
+        }
+
         gaps.Add(new SandboxGap {
             Subject = name,
-            Kind = SandboxGapKind.SystemCapability,
-            Reason = "omitted: this systemd was built without libseccomp, which is how it implements "
-                + "this property (see base/recipes/systemd/recipe.sh)"
+            Kind = SandboxGapKind.Inert,
+            Reason = "set to '" + value + "' and enforcing nothing: this systemd was built without "
+                + "libseccomp (base/recipes/systemd/recipe.sh), it accepts the property anyway, and "
+                + "`systemctl show` reads it back exactly as it would on a system that enforces it — "
+                + evidence
         });
     }
 

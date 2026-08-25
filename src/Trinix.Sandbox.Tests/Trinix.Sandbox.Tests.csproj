@@ -13,10 +13,22 @@
 
       ⚠ What this suite therefore does NOT prove, stated here because a green
       run is otherwise easy to over-read: that systemd accepts any of it. The
-      properties could be misspelled, could want a different value syntax, or
-      could not exist in the systemd this image builds — base/recipes/systemd
-      declines libseccomp, which is how systemd implements five of them. Only a
-      booted Trinix answers that, and docs/plan/16 puts it in the VM tier.
+      properties could be misspelled, or could want a different value syntax,
+      and every assertion here would still pass — PrivateNetworking=yes is a
+      string like any other. Only a booted Trinix answers that, and
+      docs/plan/16 puts it in the VM tier.
+
+      One half of that question has since been answered, in a booted VM on
+      2026-08-25, and it is why SandboxCapabilities now models three states
+      rather than two: of the five properties systemd implements with
+      libseccomp, two fail the D-Bus call and three are accepted while enforcing
+      nothing. SystemdFeaturesTests pins the parsing of the feature string that
+      distinguishes them, against a captured banner rather than a live systemd.
+      SandboxUnitSnapshotTests renders the whole unit so that the emitted text
+      can be compared against a real `open` with the print-unit flag, by eye.
+
+      ⚠ Still unexercised by anything here: SystemdProbe's process launch, and
+      every line of Trinix.Gatekeeper's Sandboxed.cs.
     -->
 
     <PropertyGroup>
