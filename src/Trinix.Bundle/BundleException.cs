@@ -48,7 +48,22 @@ public enum BundleFailure {
     MalformedImage,
 
     /// <summary>The operation needs privileges the caller does not have.</summary>
-    NotPermitted
+    NotPermitted,
+
+    /// <summary>
+    ///     The bundle asks for a permission this system does not define.
+    /// </summary>
+    /// <remarks>
+    ///     ⚠ Distinct from <see cref="MalformedInfo" />, and the distinction is the
+    ///     whole point: the manifest parsed, the signature was good, and the developer
+    ///     did nothing wrong. A bundle signed by a newer Trinix asking for authority
+    ///     this one has never heard of is a version problem, and the line the user
+    ///     reads should say so. Silently dropping the unknown string would run the
+    ///     application with less authority than it was designed for and than its
+    ///     consent screen described; guessing at an approximation would grant authority
+    ///     nobody wrote down. Both are worse than refusing.
+    /// </remarks>
+    UnknownPermission
 }
 
 /// <summary>An error with a reason the caller can act on.</summary>

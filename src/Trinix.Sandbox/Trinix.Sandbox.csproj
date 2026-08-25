@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Sandbox — the transient systemd unit an application runs inside.
+
+      Doc 04's central claim is that launching an application *is* constructing a
+      unit from the bundle's signed permissions. This assembly is that
+      construction and nothing else: it takes a verified BundleInfo and a set of
+      resolved paths and returns a data structure. It does not start anything,
+      it does not talk to D-Bus, and it does not shell out to systemd-run.
+
+      That split is deliberate and it is what makes the half of doc 04 that can
+      be tested on a developer's Mac testable. A library whose only observable
+      behaviour was "the application started" could be checked in a VM, once,
+      slowly, by someone with a VM. A library that returns properties can be
+      checked by asserting that a bundle with no network.client produces
+      PrivateNetwork=yes — which is the actual security property, stated
+      directly, in a test that runs in milliseconds.
+
+      ⚠ The corollary is the thing this assembly cannot know: whether systemd
+      accepts what it produced. See SandboxCapabilities for the properties whose
+      availability depends on how systemd was built, and base/recipes/systemd/
+      for how Trinix's was.
+
+      It references Trinix.Bundle for the permission vocabulary, and nothing
+      else. One vocabulary, in the assembly that already refuses an unknown one
+      at seal time, is what stops the packager and the launcher from disagreeing
+      about what a permission is.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Sandbox</RootNamespace>
+        <AssemblyName>Trinix.Sandbox</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Bundle\Trinix.Bundle.csproj"/>
+    </ItemGroup>
+
+</Project>
