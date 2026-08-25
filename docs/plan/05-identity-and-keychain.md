@@ -20,7 +20,7 @@ Trinix is a personal machine: one primary user, occasionally a second, no direct
 |---|---|---|
 | Password | yes | PAM, `pam_unix` with yescrypt |
 | FIDO2 / security key | yes | `pam_u2f`-shaped, in C# against `libfido2`. The one second factor that is genuinely usable on a laptop |
-| TPM-bound auto-unlock of the disk | yes | With PCR policy, and a recovery key the user must record — doc 10 § Recovery |
+| TPM-bound auto-unlock of the disk | ⚠️ **no — there is no disk encryption** | Corrected 2026-08-25 by [21](21-what-systemd-does-not-do.md). There is **no `cryptsetup` recipe, no pin, and no `CONFIG_DM_CRYPT`** — nothing in Trinix encrypts a disk, so there is nothing for a TPM to unlock. The TPM half is separately blocked: `run-qemu.sh` provides no TPM device and the kernel fragment sets no `CONFIG_TCG_*`, so this is untestable before it is unimplementable. ~1.5 EM for LUKS, ~0.75 for TPM |
 | Fingerprint | ⚠ no | `libfprint` supports a fraction of readers and the good ones are the ones on Macs, which we do not run on. Post-1.0, and only with a device to test against |
 | Smartcard, Yubikey PIV | post-1.0 | The plumbing is the same as FIDO2 |
 
@@ -52,7 +52,7 @@ key escrow if the user chooses.
 
 | Decision | Reason |
 |---|---|
-| One encrypted store per user, in `~/Library/Keychains/`, unlocked at login | A per-app store means no shared credentials — and "the browser and the mail client both know the Google password" is a feature, not a leak |
+| One encrypted store per user, in `~/Library/Keychains/`, unlocked at login | A per-app store means no shared credentials — and "the browser and the mail client both know the Google password" is a feature, not a leak. ⚠️ **There is no login.** [`trinix-compositor.service`](../../src/Trinix.Compositor/trinix-compositor.service) is `User=trinix`, `WantedBy=graphical.target`, started at boot — the graphical path has no authentication step at all, so "unlocked at login" has nothing to hook. A greeter is doc [03](03-shell-and-window-management.md) § Supervision's, and this document depends on it more than it says |
 | An item is `(service, account, kind, secret, acl, metadata)` | The mac shape, and it is right: `service` is a domain or a purpose, `account` is a user, and the pair is the key |
 | **The ACL is a list of bundle identities**, not "any app" | An item created by Mail is not readable by a downloaded application. The reader is identified the same way doc 04 identifies a caller, by the transient unit and hence the verified bundle |
 | A read by an identity not on the ACL prompts, once, and the answer is stored on the item | The mac model, and it works because it is rare — a well-behaved application only reads what it wrote |

@@ -56,7 +56,7 @@ lying about it would break the first time they hit a permission problem.
 | | Decision |
 |---|---|
 | Local volumes | Mounted under `/Volumes/<name>` by `trinixd` (doc 02), on a user action, never automatically for an unknown filesystem |
-| Encryption | LUKS volumes prompt, and the passphrase can go in the keychain (doc 05) |
+| Encryption | LUKS volumes prompt, and the passphrase can go in the keychain (doc 05). ⚠️ **Nothing supports LUKS today** — no `cryptsetup`, no `dm-crypt`; see [21](21-what-systemd-does-not-do.md) |
 | SMB, SFTP, WebDAV, NFS | Real kernel mounts where possible (`cifs`, `nfs`), **FUSE** for SFTP and WebDAV. ⚠ Each is a base recipe Trinix does not have — `cifs-utils`, `sshfs`/`libfuse`, a WebDAV client — and together they are about 0.5 EM of recipe work before a line of C# |
 | FTP | Cut. It is unencrypted, it is 2026, and the sidebar entry would be a liability |
 | Archives | Browsed in place as a directory (zip, tar.*, 7z), extracted or created from the context menu, with the operation on the same job queue. Backed by a C# implementation for zip/tar and `libarchive` for the rest |

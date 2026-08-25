@@ -72,7 +72,7 @@ A third, small slot on the disk holding a minimal Trinix that boots when both ro
 user asks at boot.
 
 What it can do: reinstall the current or previous system image · reset the user's password with a
-recovery key · unlock and repair `/data` · browse and restore from Rewind (below) · run a terminal ·
+recovery key · repair `/data` — ⚠️ *unlock* is struck, per [21](21-what-systemd-does-not-do.md): nothing encrypts it · browse and restore from Rewind (below) · run a terminal ·
 run Disk Utility. What it cannot do: reach the network without the user configuring it, and read the
 keychain.
 
