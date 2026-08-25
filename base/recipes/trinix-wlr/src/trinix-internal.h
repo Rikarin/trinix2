@@ -41,6 +41,28 @@ struct tx_menu_item {
     char *label;
 };
 
+/*
+ * One exported menu bar, and the thing it is scoped to.
+ *
+ * `client` is always set, because a menu is an application's; `toplevel` is
+ * set only on an override, which is trinix-menu-v1's second and rarer scope.
+ * Neither lives on tx_toplevel any more: a client's bar outlives every window
+ * that client ever opens, which is the whole reason it is a client's.
+ *
+ * ⚠ `toplevel` is cleared when the window it overrides is destroyed, and the
+ * record stays alive until the client destroys the resource. A detached
+ * override still accepts requests — a client that is slow to notice is not an
+ * error — but nothing resolves to it, so nothing it says is ever shown.
+ */
+struct tx_menu {
+    struct wl_list link;
+    struct tx_server *server;
+    struct wl_client *client;
+    struct tx_toplevel *toplevel;
+    struct wl_resource *resource;
+    struct wl_list items;
+};
+
 struct tx_server {
     struct wl_display *display;
     struct wlr_backend *backend;
@@ -58,6 +80,12 @@ struct tx_server {
     /* The two Trinix extensions. */
     struct wl_global *shell_global;
     struct wl_global *menu_global;
+
+    /* trinix-menu-v1's two scopes, kept in two lists rather than one list with
+     * a discriminator: every lookup asks exactly one of the two questions, and
+     * a list that answers only that question cannot answer it wrongly. */
+    struct wl_list client_menus;
+    struct wl_list toplevel_menus;
 
     struct wl_listener new_output;
     struct wl_listener new_input;
@@ -81,6 +109,12 @@ struct tx_server {
 struct tx_toplevel {
     struct tx_server *server;
     struct wlr_xdg_toplevel *xdg_toplevel;
+
+    /* The connection this window came in on, cached at creation because it is
+     * what a menu is scoped to and it is asked for on every focus change. It
+     * cannot change, and a window outlives its client by nothing. */
+    struct wl_client *client;
+
     struct wlr_scene_tree *scene_tree;
     struct wl_listener map;
     struct wl_listener unmap;
@@ -101,9 +135,8 @@ struct tx_toplevel {
     uint32_t shadow_style;
     int32_t corner_radius;
 
-    /* trinix-menu-v1. */
-    struct wl_resource *menu;
-    struct wl_list menu_items;
+    /* trinix-menu-v1 keeps nothing here. A window has no menu of its own; it
+     * has, at most, an override, and that is looked up on the server. */
 };
 
 /* Called from the core: set up and tear down the per-toplevel extension state,

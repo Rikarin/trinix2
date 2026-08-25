@@ -192,12 +192,14 @@ static unsafe class Program {
     ) =>
         WindowManager.WindowControlZone(toplevel, control, x, y, width, height);
 
+    // The handle these four carry is a menu, not a window: a menu bar belongs
+    // to the client, so the same one covers every window that client owns.
     [UnmanagedCallersOnly]
-    static void OnMenuBegin(IntPtr toplevel) => s_manager?.MenuBegin(toplevel);
+    static void OnMenuBegin(IntPtr menu) => s_manager?.MenuBegin(menu);
 
     [UnmanagedCallersOnly]
     static void OnMenuItem(
-        IntPtr toplevel,
+        IntPtr menu,
         uint id,
         uint parent,
         uint kind,
@@ -207,7 +209,7 @@ static unsafe class Program {
         byte* label
     ) =>
         s_manager?.MenuItem(
-            toplevel,
+            menu,
             new(
                 id,
                 parent,
@@ -220,11 +222,11 @@ static unsafe class Program {
         );
 
     [UnmanagedCallersOnly]
-    static void OnMenuEnd(IntPtr toplevel, uint itemCount) {
+    static void OnMenuEnd(IntPtr menu, uint itemCount) {
         _ = itemCount;
-        s_manager?.MenuEnd(toplevel);
+        s_manager?.MenuEnd(menu);
     }
 
     [UnmanagedCallersOnly]
-    static void OnMenuRemoved(IntPtr toplevel) => s_manager?.MenuRemoved(toplevel);
+    static void OnMenuRemoved(IntPtr menu) => s_manager?.MenuRemoved(menu);
 }

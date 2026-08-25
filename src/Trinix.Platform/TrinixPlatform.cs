@@ -87,6 +87,7 @@ public sealed class TrinixPlatform : IPlatform {
 
         s_current = this;
         DisplayHandle = WaylandClient.Display(client);
+        ClientHandle = client;
 
         var globals = WaylandClient.AvailableGlobals(client);
         Capabilities = PlatformCapabilities.Windowing
@@ -103,6 +104,16 @@ public sealed class TrinixPlatform : IPlatform {
     ///     window and needs the one display without holding the platform.
     /// </remarks>
     internal static IntPtr DisplayHandle { get; private set; }
+
+    /// <summary>The connection this process's menus belong to, or zero.</summary>
+    /// <remarks>
+    ///     Static for the same reason as <see cref="DisplayHandle" />, and needed for
+    ///     one thing in particular: a menu bar is scoped to the connection rather than
+    ///     to a window, so <see cref="TrinixMenu.ForApplication" /> has to name the
+    ///     connection and has no window to reach it through — which is the point, since
+    ///     an application may have none.
+    /// </remarks>
+    internal static IntPtr ClientHandle { get; private set; }
 
     /// <summary>The identifier the shell groups this application's windows by.</summary>
     internal string ApplicationId { get; }
@@ -239,6 +250,7 @@ public sealed class TrinixPlatform : IPlatform {
         if (ReferenceEquals(s_current, this)) {
             s_current = null;
             DisplayHandle = IntPtr.Zero;
+            ClientHandle = IntPtr.Zero;
         }
     }
 
@@ -246,6 +258,12 @@ public sealed class TrinixPlatform : IPlatform {
         windowsByHandle.Remove(handle);
         windowsById.Remove(window.Id);
         windows.Remove(window);
+
+        // A window that overrode the application's menus takes the override
+        // with it. The application's own bar is untouched — it belongs to the
+        // connection, which is still up, and it is what the shell falls back
+        // to the moment this window is gone.
+        TrinixMenu.ForgetWindow(handle);
     }
 
     /// <summary>Milliseconds since this platform was constructed.</summary>

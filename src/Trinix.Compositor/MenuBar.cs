@@ -2,7 +2,7 @@ using Trinix.Interop;
 
 namespace Trinix.Compositor;
 
-/// <summary>One entry in a window's menu bar.</summary>
+/// <summary>One entry in an application's menu bar.</summary>
 /// <param name="Id">The client's own identifier for it.</param>
 /// <param name="Parent">The containing submenu, or zero for a top-level menu.</param>
 /// <param name="Kind">Item, separator, submenu, checkbox or radio.</param>
@@ -21,9 +21,18 @@ readonly record struct MenuEntry(
 );
 
 /// <summary>
-///     The menu model a window exported, as the shell holds it.
+///     The menu model an application exported, as the shell holds it.
 /// </summary>
 /// <remarks>
+///     <para>
+///         An <i>application's</i>, not a window's. <c>trinix-menu-v1</c> scopes a menu
+///         bar to the connection, so one of these covers every window a client opens,
+///         outlives all of them, and exists while the client has none — which is what
+///         makes File ▸ New reachable from an application whose windows are all closed.
+///         The rare window that needs different menus exports an override, which is
+///         another one of these and is resolved ahead of its client's in
+///         <see cref="WindowManager" />.
+///     </para>
 ///     <para>
 ///         A flat list in tree order rather than a tree of objects, because that is the
 ///         shape it arrives in and the shape it is drawn in. The compositor emits
@@ -66,7 +75,7 @@ sealed class MenuBar {
         _pending = null;
     }
 
-    /// <summary>Forgets the model, for a window that withdrew its menu bar.</summary>
+    /// <summary>Forgets the model, for a client that withdrew its menu bar.</summary>
     internal void Clear() {
         _entries.Clear();
         _pending = null;

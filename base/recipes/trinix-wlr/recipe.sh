@@ -106,6 +106,7 @@ trinix_check() {
                   trinix_wlr_toplevel_control_at trinix_wlr_toplevel_in_drag_region \
                   trinix_wlr_toplevel_send_control_hover \
                   trinix_wlr_toplevel_send_control_activated \
+                  trinix_wlr_toplevel_menu \
                   trinix_wlr_menu_send_activated trinix_wlr_menu_send_about_to_show \
                   trinix_wlr_menu_send_closed; do
         grep -qx "$symbol" <<<"$symbols" || missing="$missing $symbol"

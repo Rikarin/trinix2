@@ -131,21 +131,40 @@ protocol that is an enhancement.
 
 ### 5. Menus
 
-> ⚠️ **Amended by [`plan/19-menus-belong-to-applications.md`](plan/19-menus-belong-to-applications.md).**
-> The paragraph below beginning *"A menu belongs to a surface"* is wrong: on macOS — and now on
-> Trinix — a menu belongs to an **application**, and `trinix-menu-v1` scopes it to the `wl_client`
-> rather than to an `xdg_toplevel`. The rejection of D-Bus is unaffected and stands. Read the pair
-> together until the protocol change lands.
-
 An application does not draw menus on Trinix. It describes them once, updates
-them as its state changes, and the shell renders whichever window's menus
-belong to the active window, at the top of the screen.
+them as its state changes, and the shell renders the active application's menus
+at the top of the screen.
+
+**A menu belongs to the application, which here is the `wl_client`.**
+`get_menu_bar` takes no toplevel, and what it returns covers every window that
+connection opens. Three consequences, and each is the behaviour being imitated
+rather than an implementation detail:
+
+- Moving between two windows of one application changes nothing the user can
+  see. There is one menu bar, it is already the right one, and the shell does
+  not rebuild it.
+- One tree, described once. An application with ten windows does not export ten
+  copies and does not have to apply every state change ten times.
+- An application whose windows are all closed still has a menu bar — which is
+  how the user opens a window again.
+
+The focused window does reach the menu, but only through item *state*: the
+application greys **Save** with `update` when the focused window cannot save.
+Trinix has no responder chain and is not growing one, so item state is the
+application's to decide and always was.
+
+`get_toplevel_menu_bar(id, toplevel)` overrides the bar for a single window —
+an inspector, a console, a document of another kind. It is shown in place of the
+client's while that window is active, it goes away with the window, and it is
+expected to be rare. Resolution in the compositor is the focused window's
+override, then that window's client's bar, then the shell's own.
 
 The model is a tree of client-numbered items, mutated incrementally and applied
 atomically by `commit` — the same discipline as surface state, and for the same
 reason: a half-built menu must never be one the user can click.
 
 ```
+get_menu_bar(id=…)                                   the application's, no toplevel
 insert(id=1, parent=0, index=-1, kind=submenu,  label="_File")
 insert(id=2, parent=1, index=-1, kind=item,     label="_New")
 set_accelerator(id=2, keysym=XKB_KEY_n, modifiers=logo)
@@ -159,17 +178,23 @@ Lazy population is first-class: describe the bar, and fill each menu in when
 and the protocol is shaped so it costs nothing extra.
 
 **Why this is not D-Bus.** Every previous global menu — Unity's, KDE's — put
-the model on the bus. A menu belongs to a *surface*, though, and D-Bus has no
-notion of one, so all of those designs ended up also needing a Wayland or X11
-protocol whose entire job was to say which bus name went with which window.
-That is two IPC mechanisms and two lifetimes for one feature, and it produces
-the failure everyone has seen: menus that outlive their window. Carrying the
-model on the Wayland connection makes the association structural. The cost is
-defining a menu model, which is the bulk of `trinix-menu-v1.xml`, and it is
-paid once.
+the model on the bus. A menu has to ride something whose lifetime and focus the
+compositor already tracks, though, and D-Bus has neither, so all of those
+designs ended up also needing a Wayland or X11 protocol whose entire job was to
+say which bus name went with which client. That is two IPC mechanisms and two
+lifetimes for one feature, and it produces the failure everyone has seen: menus
+that outlive their owner. A `wl_client` satisfies the requirement outright —
+the menu dies with the connection and arrives in order with the rest of that
+client's state — so carrying the model on the Wayland connection makes the
+association structural. The mistake those designs made was the bus, not the
+choice of object. The cost is defining a menu model, which is the bulk of
+`trinix-menu-v1.xml`, and it is paid once.
 
 Bridging toolkits that already speak `com.canonical.dbusmenu` is a translator
 sitting *over* this protocol, and deliberately not a second path through it.
+
+The reasoning behind the scoping, and what per-window scoping cost before it was
+changed, is [`plan/19-menus-belong-to-applications.md`](plan/19-menus-belong-to-applications.md).
 
 ## What Trinix guarantees
 

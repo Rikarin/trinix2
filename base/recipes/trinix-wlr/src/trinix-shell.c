@@ -34,7 +34,7 @@
 static const int tx_shadow_margin[] = { 0, 8, 24, 48 };
 
 static struct tx_toplevel *toplevel_from_shell_surface(struct wl_resource *resource);
-static struct tx_toplevel *toplevel_from_menu(struct wl_resource *resource);
+static struct tx_menu *menu_from_resource(struct wl_resource *resource);
 
 /* --- trinix_shell_surface_v1 -------------------------------------------- */
 
@@ -247,13 +247,13 @@ static void shell_bind(struct wl_client *client, void *data, uint32_t version, u
 
 /* --- trinix_menu_v1 ----------------------------------------------------- */
 
-static struct tx_toplevel *toplevel_from_menu(struct wl_resource *resource) {
+static struct tx_menu *menu_from_resource(struct wl_resource *resource) {
     return wl_resource_get_user_data(resource);
 }
 
-static struct tx_menu_item *menu_find(struct tx_toplevel *toplevel, uint32_t id) {
+static struct tx_menu_item *menu_find(struct tx_menu *menu, uint32_t id) {
     struct tx_menu_item *item;
-    wl_list_for_each(item, &toplevel->menu_items, link) {
+    wl_list_for_each(item, &menu->items, link) {
         if (item->id == id) {
             return item;
         }
@@ -269,25 +269,52 @@ static void menu_item_destroy(struct tx_menu_item *item) {
 
 /* Removing an item takes its children with it, which is the only sane reading
  * of "remove a submenu". */
-static void menu_remove_recursive(struct tx_toplevel *toplevel, uint32_t id) {
+static void menu_remove_recursive(struct tx_menu *menu, uint32_t id) {
     struct tx_menu_item *item, *next;
-    wl_list_for_each_safe(item, next, &toplevel->menu_items, link) {
+    wl_list_for_each_safe(item, next, &menu->items, link) {
         if (item->parent == id) {
-            menu_remove_recursive(toplevel, item->id);
+            menu_remove_recursive(menu, item->id);
         }
     }
 
-    item = menu_find(toplevel, id);
+    item = menu_find(menu, id);
     if (item != NULL) {
         menu_item_destroy(item);
     }
 }
 
-static void menu_clear(struct tx_toplevel *toplevel) {
+static void menu_clear(struct tx_menu *menu) {
     struct tx_menu_item *item, *next;
-    wl_list_for_each_safe(item, next, &toplevel->menu_items, link) {
+    wl_list_for_each_safe(item, next, &menu->items, link) {
         menu_item_destroy(item);
     }
+}
+
+/*
+ * The menu the shell should be showing for this window: its override if it has
+ * one, otherwise its client's bar, otherwise nothing.
+ *
+ * Two lookups and a fallthrough, which is all "resolution" amounts to — and it
+ * is a lookup, not a decision, which is why it lives here. What to put on the
+ * screen when this returns NULL is the shell's business and is decided in C#.
+ */
+static struct tx_menu *menu_for_toplevel(struct tx_toplevel *toplevel) {
+    struct tx_server *server = toplevel->server;
+    struct tx_menu *menu;
+
+    wl_list_for_each(menu, &server->toplevel_menus, link) {
+        if (menu->toplevel == toplevel) {
+            return menu;
+        }
+    }
+
+    wl_list_for_each(menu, &server->client_menus, link) {
+        if (menu->client == toplevel->client) {
+            return menu;
+        }
+    }
+
+    return NULL;
 }
 
 static void menu_handle_destroy(struct wl_client *client, struct wl_resource *resource) {
@@ -299,18 +326,18 @@ static void menu_handle_insert(struct wl_client *client, struct wl_resource *res
                                uint32_t id, uint32_t parent, int32_t index, uint32_t kind,
                                const char *label) {
     (void)client;
-    struct tx_toplevel *toplevel = toplevel_from_menu(resource);
-    if (toplevel == NULL) {
+    struct tx_menu *menu = menu_from_resource(resource);
+    if (menu == NULL) {
         return;
     }
 
-    if (id == 0 || menu_find(toplevel, id) != NULL) {
+    if (id == 0 || menu_find(menu, id) != NULL) {
         wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_BAD_ITEM,
                                "item id %u is zero or already in use", id);
         return;
     }
     if (parent != 0) {
-        struct tx_menu_item *container = menu_find(toplevel, parent);
+        struct tx_menu_item *container = menu_find(menu, parent);
         if (container == NULL || container->kind != TRINIX_MENU_V1_KIND_SUBMENU) {
             wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_BAD_PARENT,
                                    "item %u is not a submenu", parent);
@@ -337,7 +364,7 @@ static void menu_handle_insert(struct wl_client *client, struct wl_resource *res
     if (index >= 0) {
         int32_t seen = 0;
         struct tx_menu_item *sibling;
-        wl_list_for_each(sibling, &toplevel->menu_items, link) {
+        wl_list_for_each(sibling, &menu->items, link) {
             if (sibling->parent != parent) {
                 continue;
             }
@@ -351,19 +378,19 @@ static void menu_handle_insert(struct wl_client *client, struct wl_resource *res
     if (before != NULL) {
         wl_list_insert(before->link.prev, &item->link);
     } else {
-        wl_list_insert(toplevel->menu_items.prev, &item->link);
+        wl_list_insert(menu->items.prev, &item->link);
     }
 }
 
 static void menu_handle_update(struct wl_client *client, struct wl_resource *resource,
                                uint32_t id, const char *label, uint32_t state) {
     (void)client;
-    struct tx_toplevel *toplevel = toplevel_from_menu(resource);
-    if (toplevel == NULL) {
+    struct tx_menu *menu = menu_from_resource(resource);
+    if (menu == NULL) {
         return;
     }
 
-    struct tx_menu_item *item = menu_find(toplevel, id);
+    struct tx_menu_item *item = menu_find(menu, id);
     if (item == NULL) {
         wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_BAD_ITEM,
                                "no item %u", id);
@@ -378,12 +405,12 @@ static void menu_handle_update(struct wl_client *client, struct wl_resource *res
 static void menu_handle_set_accelerator(struct wl_client *client, struct wl_resource *resource,
                                         uint32_t id, uint32_t keysym, uint32_t modifiers) {
     (void)client;
-    struct tx_toplevel *toplevel = toplevel_from_menu(resource);
-    if (toplevel == NULL) {
+    struct tx_menu *menu = menu_from_resource(resource);
+    if (menu == NULL) {
         return;
     }
 
-    struct tx_menu_item *item = menu_find(toplevel, id);
+    struct tx_menu_item *item = menu_find(menu, id);
     if (item == NULL) {
         wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_BAD_ITEM,
                                "no item %u", id);
@@ -397,35 +424,34 @@ static void menu_handle_set_accelerator(struct wl_client *client, struct wl_reso
 static void menu_handle_remove(struct wl_client *client, struct wl_resource *resource,
                                uint32_t id) {
     (void)client;
-    struct tx_toplevel *toplevel = toplevel_from_menu(resource);
-    if (toplevel != NULL) {
-        menu_remove_recursive(toplevel, id);
+    struct tx_menu *menu = menu_from_resource(resource);
+    if (menu != NULL) {
+        menu_remove_recursive(menu, id);
     }
 }
 
 /* Emitted parent-first and in sibling order, so the receiver can build its own
  * tree in one pass without looking anything up. */
-static uint32_t menu_emit(struct tx_toplevel *toplevel, uint32_t parent) {
+static uint32_t menu_emit(struct tx_menu *menu, uint32_t parent) {
     uint32_t emitted = 0;
     struct tx_menu_item *item;
 
-    wl_list_for_each(item, &toplevel->menu_items, link) {
+    wl_list_for_each(item, &menu->items, link) {
         if (item->parent != parent) {
             continue;
         }
-        toplevel->server->cb.menu_item(toplevel, item->id, item->parent, item->kind,
-                                       item->state, item->keysym, item->modifiers,
-                                       item->label);
+        menu->server->cb.menu_item(menu, item->id, item->parent, item->kind, item->state,
+                                   item->keysym, item->modifiers, item->label);
         emitted++;
-        emitted += menu_emit(toplevel, item->id);
+        emitted += menu_emit(menu, item->id);
     }
     return emitted;
 }
 
 static void menu_handle_commit(struct wl_client *client, struct wl_resource *resource) {
     (void)client;
-    struct tx_toplevel *toplevel = toplevel_from_menu(resource);
-    if (toplevel == NULL || toplevel->server->cb.menu_item == NULL) {
+    struct tx_menu *menu = menu_from_resource(resource);
+    if (menu == NULL || menu->server->cb.menu_item == NULL) {
         return;
     }
 
@@ -435,13 +461,17 @@ static void menu_handle_commit(struct wl_client *client, struct wl_resource *res
      * half-rebuilt menu because the shell only ever reads what commit
      * publishes. Staging the mutations as well would buy nothing — a client
      * cannot observe the compositor's private list.
+     *
+     * What is published is the *menu*, not the window: a client's bar has no
+     * window, and one that did would be the wrong thing to name here anyway,
+     * because the same model is shown for every window that client owns.
      */
-    if (toplevel->server->cb.menu_begin != NULL) {
-        toplevel->server->cb.menu_begin(toplevel);
+    if (menu->server->cb.menu_begin != NULL) {
+        menu->server->cb.menu_begin(menu);
     }
-    uint32_t count = menu_emit(toplevel, 0);
-    if (toplevel->server->cb.menu_end != NULL) {
-        toplevel->server->cb.menu_end(toplevel, count);
+    uint32_t count = menu_emit(menu, 0);
+    if (menu->server->cb.menu_end != NULL) {
+        menu->server->cb.menu_end(menu, count);
     }
 }
 
@@ -455,16 +485,17 @@ static const struct trinix_menu_v1_interface menu_impl = {
 };
 
 static void menu_handle_resource_destroy(struct wl_resource *resource) {
-    struct tx_toplevel *toplevel = toplevel_from_menu(resource);
-    if (toplevel == NULL) {
+    struct tx_menu *menu = menu_from_resource(resource);
+    if (menu == NULL) {
         return;
     }
 
-    menu_clear(toplevel);
-    toplevel->menu = NULL;
-    if (toplevel->server->cb.menu_removed != NULL) {
-        toplevel->server->cb.menu_removed(toplevel);
+    menu_clear(menu);
+    wl_list_remove(&menu->link);
+    if (menu->server->cb.menu_removed != NULL) {
+        menu->server->cb.menu_removed(menu);
     }
+    free(menu);
 }
 
 /* --- trinix_menu_manager_v1 --------------------------------------------- */
@@ -475,51 +506,111 @@ static void menu_manager_handle_destroy(struct wl_client *client,
     wl_resource_destroy(resource);
 }
 
-static void menu_manager_handle_get_menu_bar(struct wl_client *client,
-                                             struct wl_resource *resource, uint32_t id,
-                                             struct wl_resource *toplevel_resource) {
-    struct wlr_xdg_toplevel *xdg_toplevel = wlr_xdg_toplevel_from_resource(toplevel_resource);
-    struct wlr_scene_tree *tree = xdg_toplevel == NULL ? NULL : xdg_toplevel->base->data;
-    struct tx_toplevel *toplevel = tree == NULL ? NULL : tree->node.data;
-
-    if (toplevel == NULL || toplevel->menu != NULL) {
-        wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_ALREADY_HAS_MENU,
-                               "the toplevel already exported a menu bar");
+/*
+ * The half both requests share: allocate the record, create the resource, and
+ * put it in the list the caller names. `toplevel` is NULL for a client's bar.
+ *
+ * Nothing here consults the other list. Whether a second menu bar is an error
+ * is a question about one scope, asked by the caller before it gets here.
+ */
+static void menu_create(struct tx_server *server, struct wl_client *client,
+                        struct wl_resource *manager, uint32_t id,
+                        struct tx_toplevel *toplevel, struct wl_list *list) {
+    struct tx_menu *menu = calloc(1, sizeof(*menu));
+    if (menu == NULL) {
+        wl_client_post_no_memory(client);
         return;
     }
 
     struct wl_resource *created = wl_resource_create(
-        client, &trinix_menu_v1_interface, wl_resource_get_version(resource), id);
+        client, &trinix_menu_v1_interface, wl_resource_get_version(manager), id);
     if (created == NULL) {
+        free(menu);
         wl_client_post_no_memory(client);
         return;
     }
-    wl_resource_set_implementation(created, &menu_impl, toplevel,
-                                   menu_handle_resource_destroy);
-    toplevel->menu = created;
+
+    menu->server = server;
+    menu->client = client;
+    menu->toplevel = toplevel;
+    menu->resource = created;
+    wl_list_init(&menu->items);
+    wl_list_insert(list, &menu->link);
+
+    wl_resource_set_implementation(created, &menu_impl, menu, menu_handle_resource_destroy);
+}
+
+static void menu_manager_handle_get_menu_bar(struct wl_client *client,
+                                             struct wl_resource *resource, uint32_t id) {
+    struct tx_server *server = wl_resource_get_user_data(resource);
+    struct tx_menu *menu;
+
+    wl_list_for_each(menu, &server->client_menus, link) {
+        if (menu->client == client) {
+            wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_ALREADY_HAS_MENU,
+                                   "this client already exported a menu bar");
+            return;
+        }
+    }
+
+    /* No toplevel is looked at, and that is the whole change: a client with no
+     * windows at all may have a menu bar, and it is the one File ▸ New lives
+     * in. */
+    menu_create(server, client, resource, id, NULL, &server->client_menus);
+}
+
+static void menu_manager_handle_get_toplevel_menu_bar(struct wl_client *client,
+                                                      struct wl_resource *resource, uint32_t id,
+                                                      struct wl_resource *toplevel_resource) {
+    struct tx_server *server = wl_resource_get_user_data(resource);
+    struct wlr_xdg_toplevel *xdg_toplevel = wlr_xdg_toplevel_from_resource(toplevel_resource);
+    struct wlr_scene_tree *tree = xdg_toplevel == NULL ? NULL : xdg_toplevel->base->data;
+    struct tx_toplevel *toplevel = tree == NULL ? NULL : tree->node.data;
+
+    if (toplevel == NULL) {
+        wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_ALREADY_HAS_MENU,
+                               "the toplevel is not one this compositor manages");
+        return;
+    }
+
+    struct tx_menu *menu;
+    wl_list_for_each(menu, &server->toplevel_menus, link) {
+        if (menu->toplevel == toplevel) {
+            wl_resource_post_error(resource, TRINIX_MENU_MANAGER_V1_ERROR_ALREADY_HAS_MENU,
+                                   "the toplevel already has a menu bar override");
+            return;
+        }
+    }
+
+    menu_create(server, client, resource, id, toplevel, &server->toplevel_menus);
 }
 
 static const struct trinix_menu_manager_v1_interface menu_manager_impl = {
     .destroy = menu_manager_handle_destroy,
     .get_menu_bar = menu_manager_handle_get_menu_bar,
+    .get_toplevel_menu_bar = menu_manager_handle_get_toplevel_menu_bar,
 };
 
 static void menu_manager_bind(struct wl_client *client, void *data, uint32_t version,
                               uint32_t id) {
-    (void)data;
-
     struct wl_resource *resource =
         wl_resource_create(client, &trinix_menu_manager_v1_interface, (int)version, id);
     if (resource == NULL) {
         wl_client_post_no_memory(client);
         return;
     }
-    wl_resource_set_implementation(resource, &menu_manager_impl, NULL, NULL);
+
+    /* The manager carries the server, because a request that names no toplevel
+     * has no other way to reach the lists it has to search. */
+    wl_resource_set_implementation(resource, &menu_manager_impl, data, NULL);
 }
 
 /* --- what the core calls ------------------------------------------------ */
 
 void tx_shell_init(struct tx_server *server) {
+    wl_list_init(&server->client_menus);
+    wl_list_init(&server->toplevel_menus);
+
     server->shell_global =
         wl_global_create(server->display, &trinix_shell_v1_interface, 1, server, shell_bind);
     server->menu_global = wl_global_create(server->display, &trinix_menu_manager_v1_interface,
@@ -531,8 +622,8 @@ void tx_shell_init(struct tx_server *server) {
 }
 
 void tx_toplevel_extensions_init(struct tx_toplevel *toplevel) {
+    toplevel->client = wl_resource_get_client(toplevel->xdg_toplevel->resource);
     pixman_region32_init(&toplevel->drag_region);
-    wl_list_init(&toplevel->menu_items);
 }
 
 void tx_toplevel_extensions_finish(struct tx_toplevel *toplevel) {
@@ -541,11 +632,23 @@ void tx_toplevel_extensions_finish(struct tx_toplevel *toplevel) {
     if (toplevel->shell_surface != NULL) {
         wl_resource_set_user_data(toplevel->shell_surface, NULL);
     }
-    if (toplevel->menu != NULL) {
-        wl_resource_set_user_data(toplevel->menu, NULL);
+
+    /*
+     * An override is detached rather than destroyed. The client still owns the
+     * trinix_menu_v1 object and may go on talking to it for as long as it takes
+     * to hear that its window is gone; what it says stops mattering, because a
+     * menu with no toplevel is one nothing resolves to. The record goes when
+     * the client destroys the resource, and the client's own bar — which this
+     * window never owned — is untouched.
+     */
+    struct tx_menu *menu;
+    wl_list_for_each(menu, &toplevel->server->toplevel_menus, link) {
+        if (menu->toplevel == toplevel) {
+            menu->toplevel = NULL;
+            break;
+        }
     }
 
-    menu_clear(toplevel);
     pixman_region32_fini(&toplevel->drag_region);
 }
 
@@ -599,26 +702,30 @@ bool trinix_wlr_toplevel_in_drag_region(void *handle, int32_t x, int32_t y) {
     return pixman_region32_contains_point(&toplevel->drag_region, x, y, NULL);
 }
 
-void trinix_wlr_menu_send_activated(void *handle, uint32_t id) {
-    struct tx_toplevel *toplevel = handle;
+void *trinix_wlr_toplevel_menu(void *handle) {
+    return menu_for_toplevel((struct tx_toplevel *)handle);
+}
 
-    if (toplevel->menu != NULL) {
-        trinix_menu_v1_send_activated(toplevel->menu, id);
+void trinix_wlr_menu_send_activated(void *handle, uint32_t id) {
+    struct tx_menu *menu = handle;
+
+    if (menu != NULL) {
+        trinix_menu_v1_send_activated(menu->resource, id);
     }
 }
 
 void trinix_wlr_menu_send_about_to_show(void *handle, uint32_t id) {
-    struct tx_toplevel *toplevel = handle;
+    struct tx_menu *menu = handle;
 
-    if (toplevel->menu != NULL) {
-        trinix_menu_v1_send_about_to_show(toplevel->menu, id);
+    if (menu != NULL) {
+        trinix_menu_v1_send_about_to_show(menu->resource, id);
     }
 }
 
 void trinix_wlr_menu_send_closed(void *handle) {
-    struct tx_toplevel *toplevel = handle;
+    struct tx_menu *menu = handle;
 
-    if (toplevel->menu != NULL) {
-        trinix_menu_v1_send_closed(toplevel->menu);
+    if (menu != NULL) {
+        trinix_menu_v1_send_closed(menu->resource);
     }
 }

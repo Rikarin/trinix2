@@ -268,7 +268,9 @@ static void export_menu(struct demo *demo) {
         return;
     }
 
-    demo->menu = trinix_menu_manager_v1_get_menu_bar(demo->menu_manager, demo->toplevel);
+    /* The client's bar, not this window's: one application, one set of menus,
+     * and no toplevel named anywhere in the request. */
+    demo->menu = trinix_menu_manager_v1_get_menu_bar(demo->menu_manager);
     trinix_menu_v1_add_listener(demo->menu, &menu_listener, demo);
 
     trinix_menu_v1_insert(demo->menu, 1, 0, -1, TRINIX_MENU_V1_KIND_SUBMENU, "_File");

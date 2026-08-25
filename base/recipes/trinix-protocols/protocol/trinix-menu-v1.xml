@@ -27,20 +27,37 @@
   <description summary="applications export their menus; the shell renders them">
     On Trinix the menu bar belongs to the screen, not to the window. An
     application therefore does not draw its menus — it describes them, and the
-    shell draws the menus of whichever window is active, at the top of the
+    shell draws the menus of whichever application is active, at the top of the
     display, in one consistent style.
+
+    A menu belongs to an *application*, and the application here is the
+    connection: a client asks for one menu bar and it covers every window that
+    client opens. That is what the system being imitated does — the bar is a
+    property of the application object, so moving between two windows of one
+    application changes nothing the user can see — and it is the only scoping
+    under which an application whose windows are all closed still has a menu
+    bar, which is how the user opens a new window from an application that has
+    none. A window whose menus genuinely differ says so with
+    `get_toplevel_menu_bar`, and that is expected to be rare.
+
+    Which window has focus does still reach the menu, but only through item
+    *state*: an application greys an item out with `update` when the focused
+    window cannot do it. It decides whether Save is available; it does not
+    decide whether the File menu exists.
 
     Why a Wayland protocol rather than D-Bus, which is what every previous
     global-menu implementation used:
 
-    A menu belongs to a *surface*, and D-Bus has no notion of one. The
-    established designs work around that by exporting the menu on the bus and
-    then using a Wayland (or X11) protocol anyway, purely to say which surface
-    the bus name belongs to — so the D-Bus route costs two IPC mechanisms, two
-    lifetimes to reconcile, and a window whose menus outlive it by however long
-    the bus takes to notice. Carrying the model on the Wayland connection makes
-    the association structural: the menu is created from the toplevel, dies
-    with it, and arrives in order with the rest of that window's state.
+    A menu has to ride something whose lifetime and focus the compositor
+    already tracks, and D-Bus has no notion of either. The established designs
+    work around that by exporting the menu on the bus and then using a Wayland
+    (or X11) protocol anyway, purely to say which client the bus name belongs
+    to — so the D-Bus route costs two IPC mechanisms, two lifetimes to
+    reconcile, and menus that outlive their owner by however long the bus takes
+    to notice. Carrying the model on the Wayland connection makes the
+    association structural: the menu is created from the connection, dies with
+    it, and arrives in order with the rest of that client's state. The mistake
+    those designs made was the bus, not the choice of object to hang a menu on.
 
     What that costs is having to define a menu model here, which the rest of
     this file is. It is a flat set of nodes addressed by client-assigned id and
@@ -54,7 +71,19 @@
   </description>
 
   <interface name="trinix_menu_manager_v1" version="1">
-    <description summary="hands out menus for toplevels"/>
+    <description summary="hands out menus, for a client or for one of its windows">
+      Two scopes, and the first is the ordinary one. `get_menu_bar` is the
+      application's, `get_toplevel_menu_bar` is an override for a single
+      window; the shell shows the focused window's override if it has one, that
+      window's client's bar otherwise, and its own if nothing is focused.
+
+      This interface is still version 1 although it once took a toplevel and
+      now does not. That is deliberate: the audience for a version bump is
+      whoever would have to keep both shapes working, nothing had shipped
+      against the first one, and a version 2 that exists to be polite to nobody
+      is a version 2 that has to be carried forever. The protocol says at the
+      top that it is not stable, and this is what that sentence is for.
+    </description>
 
     <request name="destroy" type="destructor">
       <description summary="release the manager">
@@ -63,17 +92,42 @@
     </request>
 
     <request name="get_menu_bar">
-      <description summary="describe this window's menu bar">
-        The menu bar is shown while the toplevel is active, and hidden when it
-        is not. It is a protocol error to ask for a second menu bar for the
-        same toplevel.
+      <description summary="describe this application's menu bar">
+        The bar is shown whenever any of this client's windows is active, and
+        it is not attached to any one of them: moving between two windows of
+        the same application leaves the bar exactly as it was, which is the
+        behaviour being imitated and is why this request names no toplevel.
+
+        It also outlives all of them. An application with every window closed
+        still has a menu bar, and that is not a curiosity — it is how the user
+        gets a window back.
+
+        It is a protocol error for a client to ask for a second one.
+      </description>
+      <arg name="id" type="new_id" interface="trinix_menu_v1"/>
+    </request>
+
+    <request name="get_toplevel_menu_bar">
+      <description summary="override the menu bar for one window">
+        For the window whose menus genuinely are not the application's — an
+        inspector, a console, a document of a different kind. While this
+        toplevel is active the shell shows this menu in place of the client's
+        bar; the client's bar is untouched and returns when focus moves on.
+
+        A separate request rather than an optional argument on `get_menu_bar`,
+        so that an application which never wants an override never mentions a
+        toplevel, and so that "has a menu bar already" stays a question with
+        one answer per scope rather than one answer for both.
+
+        The override is withdrawn when the toplevel goes away. It is a protocol
+        error to ask for a second one for the same toplevel.
       </description>
       <arg name="id" type="new_id" interface="trinix_menu_v1"/>
       <arg name="toplevel" type="object" interface="xdg_toplevel"/>
     </request>
 
     <enum name="error">
-      <entry name="already_has_menu" value="0" summary="the toplevel already exported a menu bar"/>
+      <entry name="already_has_menu" value="0" summary="the client, or the toplevel, already exported a menu bar"/>
       <entry name="bad_item" value="1" summary="an item id was zero, duplicated, or unknown"/>
       <entry name="bad_parent" value="2" summary="the parent id is not a submenu"/>
     </enum>
@@ -81,6 +135,12 @@
 
   <interface name="trinix_menu_v1" version="1">
     <description summary="a menu model">
+      Whether this is a client's bar or one window's override was settled by
+      the request that created it and never changes afterwards. Nothing else in
+      this interface differs between the two, which is the point of splitting
+      them at the manager: the scope is a fact about the object, not a mode the
+      client has to keep in mind on every call.
+
       Changes are accumulated and applied atomically by `commit`, for the same
       reason surface state is: a menu that is half-rebuilt must never be a menu
       the user can see, let alone click.

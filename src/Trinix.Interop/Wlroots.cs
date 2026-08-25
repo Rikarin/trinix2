@@ -196,21 +196,43 @@ public static unsafe partial class Wlroots {
     public static bool ToplevelInDragRegion(IntPtr toplevel, int x, int y) =>
         NativeToplevelInDragRegion(toplevel, x, y);
 
-    /// <summary>Tells a client the user chose one of its menu items.</summary>
+    /// <summary>
+    ///     The menu bar a window is under: its own override, or its client's.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Resolution, and the whole of it — the window's override first, then the
+    ///         client that opened the window. Zero means neither exists, which is a
+    ///         question rather than a failure: what the shell shows when an
+    ///         application has exported no menus is the shell's decision, and this
+    ///         library refuses to make it.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Two windows of one application resolve to the <i>same</i> handle, and
+    ///         that is the point: moving between them must not rebuild a menu bar that
+    ///         has not changed. Call this on focus change and compare; do not cache it
+    ///         past a <c>MenuRemoved</c>.
+    ///     </para>
+    /// </remarks>
     /// <param name="toplevel">A window handle.</param>
+    /// <returns>A menu handle, or <see cref="IntPtr.Zero" />.</returns>
+    public static IntPtr ToplevelMenu(IntPtr toplevel) => NativeToplevelMenu(toplevel);
+
+    /// <summary>Tells a client the user chose one of its menu items.</summary>
+    /// <param name="menu">A menu handle, from <see cref="ToplevelMenu" />.</param>
     /// <param name="id">The item's client-assigned id.</param>
-    public static void MenuSendActivated(IntPtr toplevel, uint id) => NativeMenuSendActivated(toplevel, id);
+    public static void MenuSendActivated(IntPtr menu, uint id) => NativeMenuSendActivated(menu, id);
 
     /// <summary>
     ///     Tells a client one of its submenus is opening, so it can populate lazily.
     /// </summary>
-    /// <param name="toplevel">A window handle.</param>
+    /// <param name="menu">A menu handle, from <see cref="ToplevelMenu" />.</param>
     /// <param name="id">The submenu's client-assigned id.</param>
-    public static void MenuSendAboutToShow(IntPtr toplevel, uint id) => NativeMenuSendAboutToShow(toplevel, id);
+    public static void MenuSendAboutToShow(IntPtr menu, uint id) => NativeMenuSendAboutToShow(menu, id);
 
     /// <summary>Tells a client nothing of its menu is open any more.</summary>
-    /// <param name="toplevel">A window handle.</param>
-    public static void MenuSendClosed(IntPtr toplevel) => NativeMenuSendClosed(toplevel);
+    /// <param name="menu">A menu handle, from <see cref="ToplevelMenu" />.</param>
+    public static void MenuSendClosed(IntPtr menu) => NativeMenuSendClosed(menu);
 
     /// <summary>
     ///     Reads a NUL-terminated UTF-8 string that C owns.
@@ -301,14 +323,17 @@ public static unsafe partial class Wlroots {
     [return: MarshalAs(UnmanagedType.U1)]
     private static partial bool NativeToplevelInDragRegion(IntPtr toplevel, int x, int y);
 
+    [LibraryImport(Library, EntryPoint = "trinix_wlr_toplevel_menu")]
+    private static partial IntPtr NativeToplevelMenu(IntPtr toplevel);
+
     [LibraryImport(Library, EntryPoint = "trinix_wlr_menu_send_activated")]
-    private static partial void NativeMenuSendActivated(IntPtr toplevel, uint id);
+    private static partial void NativeMenuSendActivated(IntPtr menu, uint id);
 
     [LibraryImport(Library, EntryPoint = "trinix_wlr_menu_send_about_to_show")]
-    private static partial void NativeMenuSendAboutToShow(IntPtr toplevel, uint id);
+    private static partial void NativeMenuSendAboutToShow(IntPtr menu, uint id);
 
     [LibraryImport(Library, EntryPoint = "trinix_wlr_menu_send_closed")]
-    private static partial void NativeMenuSendClosed(IntPtr toplevel);
+    private static partial void NativeMenuSendClosed(IntPtr menu);
 
     /// <summary>Verbosity passed to <see cref="Create" />.</summary>
     public enum LogLevel {
@@ -427,20 +452,29 @@ public static unsafe partial class Wlroots {
         /// </summary>
         public delegate* unmanaged<IntPtr, uint, int, int, int, int, void> ToplevelControl;
 
-        /// <summary>A menu is about to be delivered; discard what was held for this window.</summary>
+        /// <summary>
+        ///     A menu is about to be delivered; discard what was held for it.
+        /// </summary>
+        /// <remarks>
+        ///     ⚠ The handle is a <i>menu</i>, not a window. A menu bar belongs to a
+        ///     client and is shown for every window that client owns, so there is
+        ///     usually no one window to name — and an application with everything
+        ///     closed still has a menu bar. <see cref="ToplevelMenu" /> is what maps
+        ///     a window to the menu it is under.
+        /// </remarks>
         public delegate* unmanaged<IntPtr, void> MenuBegin;
 
         /// <summary>
-        ///     One menu item, in tree order: window, id, parent, kind, state,
+        ///     One menu item, in tree order: menu, id, parent, kind, state,
         ///     keysym, modifiers, label. Parents always arrive before their
         ///     children, so a receiver can build its tree in a single pass.
         /// </summary>
         public delegate* unmanaged<IntPtr, uint, uint, uint, uint, uint, uint, byte*, void> MenuItem;
 
-        /// <summary>The menu is complete: window and the number of items delivered.</summary>
+        /// <summary>The menu is complete: the menu and the number of items delivered.</summary>
         public delegate* unmanaged<IntPtr, uint, void> MenuEnd;
 
-        /// <summary>The window withdrew its menu bar.</summary>
+        /// <summary>The client withdrew this menu bar, and the handle is now stale.</summary>
         public delegate* unmanaged<IntPtr, void> MenuRemoved;
     }
 
