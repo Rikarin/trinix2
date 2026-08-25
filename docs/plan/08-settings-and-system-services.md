@@ -121,11 +121,26 @@ Scanning is cut from 1.0 entirely; SANE is a larger and less rewarding surface t
 ## Time, language, region
 
 NTP via `systemd-timesyncd`, timezone by geolocation (with the network-access consequence stated) or
-by hand, and the locale/keyboard-layout pair. ⚠ **Trinix's system services run with
-`InvariantGlobalization=true`** ([`Directory.Build.props`](../../src/Directory.Build.props)) and
-applications do not; a system that is invariant everywhere cannot sort a list of files correctly in
-Czech. The boundary — services invariant, applications ICU — is a decision worth restating here
-because it will otherwise be discovered as a bug.
+by hand, and the locale/keyboard-layout pair.
+
+⚠️ **This section drew the globalization boundary in the wrong place, and then nothing implemented
+even the wrong one.** Corrected 2026-08-25 by [20](20-localisation.md); both halves are worth stating.
+
+*Unimplemented:* `InvariantGlobalization=true` is set in
+[`Directory.Build.props`](../../src/Directory.Build.props), which **every** project inherits, and
+[`pack-apps.sh`](../../src/pack-apps.sh) passes `-p:InvariantGlobalization=true` again on the
+application publish line. So "applications ICU" was true nowhere, and a system that is invariant
+everywhere cannot sort a list of files correctly in Czech.
+
+*Wrong place:* the split is not services versus applications — it is **machine-facing versus
+human-facing text, and both live in the same process**. `BundleScannerTests.OrdersOrdinallyRatherThanByCulture`
+already carries the correct instinct: a signed manifest's file order must be **ordinal**, because a
+culture-sensitive sort would make a signature depend on a locale; Files' list view must be **ICU**,
+because it is read by a person. Doc 20 § owns the rule and this section defers to it.
+
+⚠ And a trap in the ICU recipe itself: .NET `dlopen`s ICU **by soname**, so a version bump makes the
+runtime fall back to invariant **silently** — correct-looking software that sorts wrongly. A startup
+assertion is required, not optional.
 
 ## Applications pane
 

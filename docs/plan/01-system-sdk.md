@@ -252,7 +252,10 @@ it on for.
   menu would be more consistent with the rest of the framework and would let the generator check
   accelerator collisions at compile time. It is also a new markup dialect. Deferred until three
   applications exist and their menus can be looked at.
-- **Localisation.** Nothing above says how a string is translated, and Vixen has no answer either.
-  It needs one before the first application ships, not after. Doc 18 R7.
+- ~~**Localisation.**~~ ✅ Answered by [20](20-localisation.md): Trinix 1.0 ships in English, and
+  every user-visible string goes into a catalogue from the day it is written anyway. The strings were
+  never the expensive part — a concatenated sentence, a count formatted with no plural category, a
+  `value.ToString()` no grep can find, and a stylesheet written in `pl-4` rather than `ps-4` are, and
+  a compiler cannot point at half of them later. 3.0 EM in Phase 7, against ~8 EM to retrofit.
 - **API stability.** Vixen gates its public surface with `PublicAPI.*.txt` and a `CheckApi` target.
   Trinix has no equivalent and the SDK is the assembly that most needs one. Doc 16.

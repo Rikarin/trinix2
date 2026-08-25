@@ -98,13 +98,32 @@ this repository's schedule) or as a Trinix-side shim (fast, wrong, and permanent
 Vixen, scheduled explicitly, in time for Phase 13 — about 2 EM upstream, and it must be asked for by
 Phase 9 or it will not be there.
 
-## R7 — There is no localisation story anywhere, in either project
+## R7 — ✅ Answered. English-only, but extractable, and decided rather than defaulted
 
-**Decision needed.** Vixen has none, `Trinix.Sdk` has none, and every application in doc 11 will be
-written with literal strings unless one exists first. Retrofitting localisation into forty windows is
-several times the cost of building it in. The decision is not *which* library — it is whether Trinix
-ships English-only for 1.0 (defensible, and it must then still keep strings extractable) or supports
-languages from the start.
+[20](20-localisation.md), 2026-08-25. Trinix 1.0 ships in English; every user-visible string goes into
+a catalogue from the day it is written, every number and date through one formatter, and the theme in
+logical edges. **3.0 EM in Phase 7, beside the SDK and before the first application**, against roughly
+8 EM to retrofit across doc 11's interface — which is what "several times the cost" turns out to mean.
+
+⚠ **This question was framed wrongly here, and the correction is the useful part.** Almost nothing
+expensive to reverse is a *translation*. It is a call site that concatenated a sentence, a count
+formatted with no plural category, a `value.ToString()` that no grep will ever find because the string
+never appears in the source, and a stylesheet written in `pl-4` where it should say `ps-4`. Those cost
+nothing today and a compiler cannot point at half of them later.
+
+The case for English-only is not that translation is expensive — it is that what Trinix cannot yet
+*do* for a non-English user dwarfs the strings: no `text-input-v3` and no IME, so Japanese cannot be
+typed; one font with no fallback face registered, so Chinese cannot be drawn; no keyboard-layout
+switching. Shipping translated menus over that would be a costume.
+
+Two findings came out of it that were not the question. Vixen's **RTL support is real** — hand-written
+UAX#9 bidi with no ICU, logical `Start`/`End` resolution, a full logical utility set — with two open
+seams (paragraph direction never reaches the shaper, and bidi reordering does not cross a font-fallback
+boundary), neither of which blocks an English 1.0. And **Vixen's string catalogue already exists in
+`Vixen.Editor.Ui`**, which is the second time an application-framework capability has been found
+sitting in the editor — see [Vixen's doc 45](../../../Vixen/docs/plan/45-commands-and-focus-scope.md),
+which found the command system in the same place. That is now a pattern rather than an incident, and it
+should be raised with Vixen as one ask rather than two.
 
 ## R8 — Btrfs for `/data` is a change to a working image
 
@@ -172,7 +191,7 @@ carried a suffix; the first `VERSION_ID` of `0.4-rc1` is when a machine stops la
 | | Question | Recommendation |
 |---|---|---|
 | R6 | Where does the accessibility tree get built? | Vixen, requested by Phase 9 |
-| R7 | Localisation from the start, or English-only 1.0? | English-only, strings extractable, decided *now* rather than by default |
+| ~~R7~~ | ✅ Settled by [20](20-localisation.md) — English-only, catalogue from day one, 3.0 EM in Phase 7 | — |
 | R9 | Who maintains the browser bundle? | Flathub's, until someone owns it |
 | R10 | Is there a Store, or a project repository? | A project repository. Call it that |
 | R13 | Does a prerelease satisfy the release it precedes? | Semver — an rc is older. Then fix the asymmetry, which is a bug under either answer |

@@ -87,7 +87,7 @@ the system feels like one thing:
 - Built on `Trinix.Sdk`, with the standard menu, the standard shortcuts, and no custom chrome.
 - **Launch to a usable window in 400 ms** (doc 00), which for several of these decides NativeAOT.
 - Full keyboard operability, and an accessibility tree that doc 15's checker passes.
-- Every string localisable, no string concatenated from fragments.
+- Every string localisable, no string concatenated from fragments — [20](20-localisation.md) defines what that requires, and it is a gate rather than a habit.
 - Sandboxed with the minimum permission set, and `trinix doctor` clean — Trinix's own applications are
   the ones that prove the rules are livable.
 - Headlessly testable through `Vixen.Ui.Testing`, and screenshot-gated in CI (doc 16). ⚠ This is the
