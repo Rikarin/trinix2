@@ -22,11 +22,6 @@ using Trinix.Gatekeeper;
 // It fails closed and says why in one line. "Refused" with no reason turns
 // every packaging mistake into a support conversation.
 
-const int ExitOk = 0;
-const int ExitUsage = 1;
-const int ExitRefused = 2;
-const int ExitFailed = 3;
-
 if (args.Length == 0 || args[0] is "--help" or "-h") {
     Console.WriteLine(
         """
@@ -35,11 +30,22 @@ if (args.Length == 0 || args[0] is "--help" or "-h") {
           open <Application.app | identifier> [arguments...]
           open --wait <Application.app> [arguments...]
           open --verify-only <Application.app>
+          open --sandbox <Application.app> [arguments...]
+          open --print-unit <Application.app>
 
         Options, which must come before the bundle:
           --wait          Replace this process with the application and share its
                           terminal, instead of launching it and returning.
           --verify-only   Check the bundle and report, but do not launch it.
+          --sandbox       Launch inside a transient systemd unit built from the
+                          bundle's signed permissions, instead of executing it
+                          directly. Needs privilege, a composed root, and — for a
+                          networked application — the shared namespace; it names
+                          whichever of those is missing rather than failing
+                          obscurely.
+          --print-unit    Build that unit, print it, and stop. Reads this machine's
+                          systemd feature string, so what it prints is what this
+                          machine would be sent.
           --trust DIR     Trust store to check against.
                           Default: /usr/share/trinix/pki/roots
 
@@ -47,11 +53,13 @@ if (args.Length == 0 || args[0] is "--help" or "-h") {
         `open` is a word, and a script should not depend on whose PATH wins.
         """
     );
-    return args.Length == 0 ? ExitUsage : ExitOk;
+    return args.Length == 0 ? ExitCode.Usage : ExitCode.Ok;
 }
 
 var verifyOnly = false;
 var wait = false;
+var sandbox = false;
+var printUnit = false;
 string? trustDirectory = null;
 var index = 0;
 
@@ -67,10 +75,25 @@ while (index < args.Length && args[index].StartsWith("--", StringComparison.Ordi
             index++;
             break;
 
+        case "--sandbox":
+            sandbox = true;
+            index++;
+            break;
+
+        // ⚠ Implies --sandbox rather than being orthogonal to it. "Print the unit"
+        // is only a question about the sandboxed path, and a --print-unit that
+        // silently did nothing without --sandbox would be a flag whose failure mode
+        // is an empty screen.
+        case "--print-unit":
+            printUnit = true;
+            sandbox = true;
+            index++;
+            break;
+
         case "--trust":
             if (index + 1 >= args.Length) {
                 Console.Error.WriteLine("open: --trust needs a directory");
-                return ExitUsage;
+                return ExitCode.Usage;
             }
 
             trustDirectory = args[index + 1];
@@ -85,7 +108,7 @@ while (index < args.Length && args[index].StartsWith("--", StringComparison.Ordi
 
         default:
             Console.Error.WriteLine($"open: unknown option {args[index]}");
-            return ExitUsage;
+            return ExitCode.Usage;
     }
 }
 
@@ -93,7 +116,23 @@ done:
 
 if (index >= args.Length) {
     Console.Error.WriteLine("open: no application given");
-    return ExitUsage;
+    return ExitCode.Usage;
+}
+
+// ⚠ Refused rather than reconciled. `--wait` means "be this application, on this
+// terminal", which is what the unit files and the Phase 6 checks depend on; a
+// transient unit's stdio belongs to the service manager unless systemd-run is
+// asked for a pty, and quietly returning while the application ran elsewhere
+// would change what --wait means for every existing caller. When there is a
+// reason to want both, it is a decision about --pty and it should be made
+// deliberately rather than inherited from this line.
+if (sandbox && wait) {
+    Console.Error.WriteLine("open: --wait and --sandbox cannot be combined");
+    Console.Error.WriteLine(
+        "  --wait makes the application this process; --sandbox makes it a unit of systemd's."
+    );
+
+    return ExitCode.Usage;
 }
 
 var requested = args[index];
@@ -104,7 +143,7 @@ if (bundlePath is null) {
     Console.Error.WriteLine(
         $"open: no application '{requested}' — looked in {BundleInstaller.ApplicationsDirectory}"
     );
-    return ExitFailed;
+    return ExitCode.Failed;
 }
 
 TrustStore trust;
@@ -115,7 +154,7 @@ try {
     // saying so is the difference between checking the image and blaming the
     // developer.
     Console.Error.WriteLine($"open: {e.Message}");
-    return ExitFailed;
+    return ExitCode.Failed;
 }
 
 VerificationResult result;
@@ -123,17 +162,17 @@ try {
     result = await BundleVerifier.VerifyAsync(bundlePath, trust).ConfigureAwait(false);
 } catch (IOException e) {
     Console.Error.WriteLine($"open: {bundlePath}: {e.Message}");
-    return ExitFailed;
+    return ExitCode.Failed;
 } catch (UnauthorizedAccessException e) {
     Console.Error.WriteLine($"open: {bundlePath}: {e.Message}");
-    return ExitFailed;
+    return ExitCode.Failed;
 }
 
 if (!result.Ok) {
     Console.Error.WriteLine($"open: refused to launch {Path.GetFileName(bundlePath)}");
     Console.Error.WriteLine($"  {Explain(result.Failure)}");
     Console.Error.WriteLine($"  {result.Message}");
-    return ExitRefused;
+    return ExitCode.Refused;
 }
 
 Console.WriteLine($"open: verified {result.Message}");
@@ -146,26 +185,34 @@ if (!SystemVersion.Satisfies(systemVersion, result.Info!.MinimumSystemVersion)) 
     Console.Error.WriteLine(
         $"  It needs Trinix {result.Info.MinimumSystemVersion} or newer; this system is {systemVersion}."
     );
-    return ExitFailed;
+    return ExitCode.Failed;
 }
 
 if (verifyOnly) {
     Console.WriteLine($"BUNDLE-VERIFIED {result.Info.Identifier} {result.Info.Version}");
-    return ExitOk;
+    return ExitCode.Ok;
+}
+
+// ⚠ Doc 04's seam, now crossed — behind a flag, and the flag is the honest part.
+// The question that blocked this was settled on 2026-08-25 in a booted VM, and
+// the answer was neither of the two that were predicted: of the five properties
+// systemd implements with libseccomp, two fail the D-Bus call and three are
+// accepted while enforcing nothing at all. Trinix.Sandbox now models all three
+// outcomes and records the third in SandboxUnit.Gaps, which Sandboxed.Launch
+// puts in the journal at every launch.
+//
+// ⚠ What is still missing is not information either. It is three things nothing
+// in this repository builds yet — the composed root, the shared network
+// namespace, and a privileged path to the system manager — so a sandboxed launch
+// refuses, by name, on every machine that exists today. Making it the default
+// would be replacing a launcher that works with one that is right about a world
+// that has not been built. SandboxPreflight is what turns that from an obscure
+// systemd error into a sentence naming the directory and whose job it is.
+if (sandbox) {
+    return Sandboxed.Launch(bundlePath, result, applicationArguments, printUnit);
 }
 
 var entry = Path.Combine(bundlePath, result.Info.EntryPoint);
-
-// ⚠ The seam for doc 04's sandbox, and deliberately not crossed here. Everything
-// constructing a transient unit would need is already in hand: result.Info
-// carries the signed permission array, and result.Manifest carries the signed
-// file list that Trinix.Sandbox's BundleRuntimeDetection reads the runtime kind
-// out of. What is missing is not information but an answer — whether systemd-run
-// accepts the properties that library emits on a systemd built without
-// libseccomp, or fails the call, which are opposite outcomes and are settled by
-// one run in a booted VM rather than by reading. Until then `open` execs the
-// entry point directly, exactly as it always has, and an application is no less
-// contained than it was yesterday.
 
 // The application learns where it lives from the environment rather than by
 // inspecting its own argv, so that a bundle's resources are findable the same
@@ -200,18 +247,18 @@ if (!wait) {
             $"open: could not launch {entry}: {new Win32Exception(spawnError).Message}"
         );
 
-        return ExitFailed;
+        return ExitCode.Failed;
     }
 
     Console.WriteLine($"BUNDLE-LAUNCHED {result.Info.Identifier} {result.Info.Version} pid {pid}");
-    return ExitOk;
+    return ExitCode.Ok;
 }
 
 var errno = Launcher.Exec(entry, applicationArguments, environment);
 
 // Only reached if the exec failed.
 Console.Error.WriteLine($"open: could not execute {entry}: {new Win32Exception(errno).Message}");
-return ExitFailed;
+return ExitCode.Failed;
 
 // --- helpers ----------------------------------------------------------------
 

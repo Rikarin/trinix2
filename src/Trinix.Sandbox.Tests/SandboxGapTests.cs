@@ -22,31 +22,105 @@ namespace Trinix.Sandbox.Tests;
 ///     </para>
 /// </remarks>
 public class SandboxGapTests {
-    /// <summary>The five properties systemd implements with libseccomp and only then.</summary>
-    static readonly string[] SeccompProperties = [
-        "SystemCallFilter",
-        "SystemCallArchitectures",
-        "MemoryDenyWriteExecute",
-        "RestrictRealtime",
-        "RestrictSUIDSGID"
-    ];
+    /// <summary>What the builder is given when it is told this image's systemd.</summary>
+    static SandboxOptions AsBuiltToday(BundleRuntime runtime = BundleRuntime.Unknown) =>
+        new() { Capabilities = SandboxCapabilities.TrinixToday, Runtime = runtime };
 
     [Fact]
-    public void OnASystemdWithoutSeccompTheSyscallFloorIsOmittedAndSaidSo() {
-        // ⚠ This is not hypothetical. base/recipes/systemd/recipe.sh builds
-        // systemd 257 with -Dseccomp=disabled, under "security frameworks the base
-        // image does not have" — so on Trinix as it is built today, doc 04's whole
-        // syscall floor row is unavailable. The unit must be constructible anyway
-        // and must say what it lost.
-        var unit = TestSandbox.Unit(new SandboxOptions { Capabilities = SandboxCapabilities.TrinixToday });
+    public void TheTwoPropertiesThisSystemdRefusesAreNotEmittedAtAll() {
+        // ⚠ Measured, not predicted. Over D-Bus, SystemCallFilter= and
+        // SystemCallArchitectures= fail the method call on a systemd built without
+        // libseccomp — "Cannot set property SystemCallFilter, or unknown property" —
+        // so emitting them produces no application rather than a hardened one. The
+        // unit must be constructible anyway and must say what it lost.
+        var unit = TestSandbox.Unit(AsBuiltToday());
 
-        foreach (var property in SeccompProperties) {
-            Assert.False(unit.Sets(property), property + " should not be emitted without libseccomp");
-            Assert.Contains(
-                unit.Gaps,
-                gap => gap.Subject == property && gap.Kind == SandboxGapKind.SystemCapability
-            );
+        foreach (var property in SandboxCapabilities.RefusedWithoutSeccomp) {
+            Assert.False(unit.Sets(property), property + " must not be emitted: the call would fail");
+
+            var gap = Assert.Single(unit.Gaps, g => g.Subject == property);
+            Assert.Equal(SandboxGapKind.SystemCapability, gap.Kind);
         }
+    }
+
+    [Fact]
+    public void TheThreePropertiesThisSystemdAcceptsAreEmittedAndCalledTheatre() {
+        // ⚠ The heart of this file. These three are accepted over the bus, are read
+        // back by `systemctl show` exactly as they would be on a machine that
+        // enforces them, and enforce nothing — `chrt -r 1` succeeds and `chmod u+s`
+        // sticks, inside a unit that sets both. That is strictly worse than the two
+        // above: a refusal is loud and this is silent. Withholding them would buy
+        // nothing, since the enforcement is missing from the binary either way, so
+        // they are emitted and the silence is what gets fixed.
+        var unit = TestSandbox.Unit(AsBuiltToday(BundleRuntime.Native));
+
+        foreach (var property in SandboxCapabilities.InertWithoutSeccomp) {
+            Assert.True(unit.Sets(property), property + " should still be emitted: systemd accepts it");
+            Assert.False(unit.Enforces(property), property + " must not be claimed as enforcing");
+
+            var gap = Assert.Single(unit.Gaps, g => g.Subject == property);
+            Assert.Equal(SandboxGapKind.Inert, gap.Kind);
+        }
+
+        Assert.Equal(
+            SandboxCapabilities.InertWithoutSeccomp.Order(StringComparer.Ordinal),
+            unit.InertProperties.Select(p => p.Name).Order(StringComparer.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void AnInertPropertyIsNeverMistakenForAnEnforcedOne() {
+        // The distinction the type system is supposed to carry. `Sets` answers the
+        // question systemctl answers; `Enforces` answers the question a security
+        // claim actually means, and on this build they differ for exactly three
+        // properties.
+        var designed = TestSandbox.Unit(new SandboxOptions { Runtime = BundleRuntime.Native });
+        var today = TestSandbox.Unit(AsBuiltToday(BundleRuntime.Native));
+
+        var divergent = today.Properties
+            .Where(p => today.Sets(p.Name) && !today.Enforces(p.Name))
+            .Select(p => p.Name)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(SandboxCapabilities.InertWithoutSeccomp.Order(StringComparer.Ordinal), divergent);
+
+        // And on a systemd that has libseccomp, the two questions agree again.
+        Assert.All(designed.Properties, p => Assert.True(designed.Enforces(p.Name)));
+        Assert.Empty(designed.InertProperties);
+    }
+
+    [Fact]
+    public void MemoryDenyWriteExecuteIsOnlyTheatreWhenItClaimsSomething() {
+        // ⚠ MemoryDenyWriteExecute=no restricts nothing by design — it is what a
+        // correct system emits for a JIT. Recording it as an unenforced restriction
+        // would put a line in the journal that is true of every machine, which is
+        // how a log stops being read.
+        var jit = TestSandbox.Unit(AsBuiltToday(BundleRuntime.Managed));
+
+        Assert.Equal("no", jit.ValueOf("MemoryDenyWriteExecute"));
+        Assert.DoesNotContain(
+            jit.Gaps,
+            gap => gap.Subject == "MemoryDenyWriteExecute" && gap.Kind == SandboxGapKind.Inert
+        );
+
+        // The Runtime gap is still there, and it is a different statement: W^X is
+        // off because the JIT needs it, not because systemd cannot do it.
+        var gap = Assert.Single(jit.Gaps, g => g.Subject == "MemoryDenyWriteExecute");
+        Assert.Equal(SandboxGapKind.Runtime, gap.Kind);
+    }
+
+    [Fact]
+    public void EveryInertGapQuotesTheMeasurementRatherThanAsserting() {
+        // A journal line that says "this enforces nothing" and cannot say how anyone
+        // knows is a line the next reader has to re-derive. Each of the three carries
+        // the thing that was watched not happening.
+        var unit = TestSandbox.Unit(AsBuiltToday(BundleRuntime.Native));
+        var reasons = unit.Gaps.Where(g => g.Kind == SandboxGapKind.Inert).Select(g => g.Reason).ToList();
+
+        Assert.Equal(3, reasons.Count);
+        Assert.Contains(reasons, r => r.Contains("chrt -r 1", StringComparison.Ordinal));
+        Assert.Contains(reasons, r => r.Contains("mode 4644", StringComparison.Ordinal));
+        Assert.All(reasons, r => Assert.Contains("systemctl show", r, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -54,30 +128,44 @@ public class SandboxGapTests {
         // The one member of the syscall-floor row that is a prctl rather than a
         // seccomp filter. Losing it along with its neighbours would be the easy
         // mistake, and it is the most valuable single property in the row.
-        var unit = TestSandbox.Unit(new SandboxOptions { Capabilities = SandboxCapabilities.TrinixToday });
+        var unit = TestSandbox.Unit(AsBuiltToday());
 
         Assert.Equal("yes", unit.ValueOf("NoNewPrivileges"));
+        Assert.True(unit.Enforces("NoNewPrivileges"));
     }
 
     [Fact]
     public void TheMountAndCapabilityHardeningSurvivesTooBecauseItIsNotSeccomp() {
-        var unit = TestSandbox.Unit(new SandboxOptions { Capabilities = SandboxCapabilities.TrinixToday });
+        var unit = TestSandbox.Unit(AsBuiltToday());
 
         Assert.Equal("yes", unit.ValueOf("ProtectKernelTunables"));
         Assert.Equal("yes", unit.ValueOf("ProtectKernelModules"));
         Assert.Equal("yes", unit.ValueOf("ProtectControlGroups"));
         Assert.Equal(SandboxLayout.DefaultComposedRoot, unit.ValueOf("RootDirectory"));
+
+        // ✅ And the one whose enforcement was actually watched: PrivateNetwork=yes
+        // removes eth0 inside the unit and does not in the control, which is what
+        // makes the same harness believable when it says RestrictRealtime= does
+        // nothing.
+        Assert.True(unit.Enforces("PrivateNetwork"));
     }
 
     [Fact]
-    public void EverySeccompPropertyIsMarkedAsOneWhenItIsEmitted() {
-        // The flag is what lets a caller strip them for a system that cannot take
-        // them without the builder having to be reinvoked, and a property that
-        // grew a seccomp dependency without the flag would silently break that.
-        var unit = TestSandbox.Unit();
-        var flagged = unit.Properties.Where(p => p.NeedsSeccomp).Select(p => p.Name).Order(StringComparer.Ordinal);
+    public void OnlyTheFiveSeccompPropertiesEverDependOnHowSystemdWasBuilt() {
+        // ⚠ The guard against the quiet version of this bug: a property that grows a
+        // seccomp dependency, is emitted through the wrong helper, and therefore
+        // claims an enforcement nobody measured. Any property whose enforcement
+        // differs between the two capability sets must be one of the five, and every
+        // one of the five must differ.
+        var designed = TestSandbox.Unit(new SandboxOptions { Runtime = BundleRuntime.Native });
+        var today = TestSandbox.Unit(AsBuiltToday(BundleRuntime.Native));
 
-        Assert.Equal(SeccompProperties.Order(StringComparer.Ordinal), flagged);
+        var differs = designed.Properties
+            .Where(p => !today.Enforces(p.Name))
+            .Select(p => p.Name)
+            .Order(StringComparer.Ordinal);
+
+        Assert.Equal(SandboxCapabilities.ImplementedWithSeccomp.Order(StringComparer.Ordinal), differs);
     }
 
     // --- MemoryDenyWriteExecute, the per-bundle exception --------------------

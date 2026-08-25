@@ -24,11 +24,46 @@ public sealed record UnitProperty {
     public required string Rationale { get; init; }
 
     /// <summary>
-    ///     Whether systemd has to have been built with libseccomp for this property to
-    ///     exist at all.
+    ///     Whether setting this property achieves anything on the system the unit was
+    ///     built for.
     /// </summary>
-    /// <seealso cref="SandboxCapabilities.Seccomp" />
-    public bool NeedsSeccomp { get; init; }
+    /// <remarks>
+    ///     <para>
+    ///         ⚠ <b>Required, and that is the point of it.</b> This used to be a
+    ///         <c>NeedsSeccomp</c> flag defaulting to <see langword="false" />, which
+    ///         made "this property protects the application" the answer a caller got by
+    ///         saying nothing — and the measurement of 2026-08-25 found three properties
+    ///         for which that answer is wrong in the worst available way: accepted by
+    ///         systemd, readable back from <c>systemctl show</c>, enforcing nothing.
+    ///         Making the field required means a property cannot enter this list without
+    ///         somebody stating which of the three states it is in, so
+    ///         <see cref="PropertyEnforcement.Inert" /> can never be reached by
+    ///         forgetting. <see cref="Enforced" /> is the shorthand for the ordinary
+    ///         case, and it is a statement rather than a default.
+    ///     </para>
+    /// </remarks>
+    public required PropertyEnforcement Enforcement { get; init; }
+
+    /// <summary>
+    ///     A property that does what it says on the system this unit is for.
+    /// </summary>
+    /// <param name="name">The systemd property name.</param>
+    /// <param name="value">Its value, exactly as systemd should see it.</param>
+    /// <param name="rationale">Which doc 04 table row it came from.</param>
+    /// <remarks>
+    ///     ⚠ Only for properties whose mechanism is not seccomp — see
+    ///     <see cref="SandboxCapabilities.ImplementedWithSeccomp" /> for the five that
+    ///     must go through <see cref="SandboxCapabilities.EnforcementOf(string)" />
+    ///     instead. Using this for one of those would be asserting an enforcement that
+    ///     was measured not to happen.
+    /// </remarks>
+    public static UnitProperty Enforced(string name, string value, string rationale) =>
+        new() {
+            Name = name,
+            Value = value,
+            Rationale = rationale,
+            Enforcement = PropertyEnforcement.Enforced
+        };
 }
 
 /// <summary>
@@ -84,10 +119,33 @@ public enum SandboxGapKind {
     SessionManager,
 
     /// <summary>
-    ///     The property was omitted because this systemd cannot implement it. See
-    ///     <see cref="SandboxCapabilities" />.
+    ///     The property was omitted because this systemd would fail the call. See
+    ///     <see cref="PropertyEnforcement.Rejected" />.
     /// </summary>
     SystemCapability,
+
+    /// <summary>
+    ///     ⚠ The property <b>was</b> set, systemd accepted it, and it enforces nothing.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The most important line this library can put in a journal, and the one
+    ///         doc 04 did not know it needed. A <see cref="SystemCapability" /> gap
+    ///         describes a property that is absent, which is a state anybody can observe
+    ///         from outside: <c>systemctl show</c> does not report it and the unit does
+    ///         not carry it. This one describes a property that is present in every
+    ///         observable sense and inert in the only sense that matters — so there is
+    ///         no way to find it by looking at the running system, and it will read as
+    ///         hardening to every audit that ever looks.
+    ///     </para>
+    ///     <para>
+    ///         Which is why it is a gap at all. Doc 04: "a permission enforced by nothing
+    ///         should be a line in the journal rather than a silence." Three properties
+    ///         on the image as built today are exactly that, and this kind is how they
+    ///         get their line.
+    ///     </para>
+    /// </remarks>
+    Inert,
 
     /// <summary>
     ///     systemd has no property that expresses the distinction the permission
@@ -198,7 +256,32 @@ public sealed record SandboxUnit {
 
     /// <summary>Is this property set at all?</summary>
     /// <param name="name">The systemd property name.</param>
+    /// <remarks>
+    ///     ⚠ "Set" is not "enforced", and on the image as built today three properties
+    ///     make that distinction real. Use <see cref="Enforces" /> for the question a
+    ///     security assertion actually means.
+    /// </remarks>
     public bool Sets(string name) => ValueOf(name) is not null;
+
+    /// <summary>Is this property set <i>and</i> going to do something?</summary>
+    /// <param name="name">The systemd property name.</param>
+    public bool Enforces(string name) =>
+        Properties.Any(p =>
+            string.Equals(p.Name, name, StringComparison.Ordinal)
+            && p.Enforcement == PropertyEnforcement.Enforced
+        );
+
+    /// <summary>
+    ///     ⚠ Every property this unit sets that enforces nothing.
+    /// </summary>
+    /// <remarks>
+    ///     The theatre, listed. Each one also has a <see cref="SandboxGapKind.Inert" />
+    ///     entry in <see cref="Gaps" /> when its value asserts a restriction — the two
+    ///     views exist because a launcher wants the sentence and <c>trinix doctor</c>
+    ///     wants the property.
+    /// </remarks>
+    public IReadOnlyList<UnitProperty> InertProperties =>
+        [.. Properties.Where(p => p.Enforcement == PropertyEnforcement.Inert)];
 
     /// <summary>
     ///     The unit as <c>systemd-run</c> would be invoked to create it.
@@ -259,12 +342,23 @@ public sealed record SandboxUnit {
     ///     a bug report — "show me what this application would run as" is a question
     ///     with an answer, and the answer is much easier to read in the format everyone
     ///     already knows than as forty <c>--property=</c> arguments.
+    ///
+    ///     ⚠ An inert property is rendered with a comment above it saying so, which is
+    ///     the one respect in which this is <i>not</i> what a unit file would look like.
+    ///     That is deliberate: the reason somebody reads this output is to find out what
+    ///     an application is contained by, and a line that answers that question wrongly
+    ///     is worse than no output. The comment is also why this must never be written
+    ///     to disk and then loaded back.
     /// </remarks>
     public string ToUnitFile() {
         var text = new System.Text.StringBuilder();
         text.Append(CultureInfo.InvariantCulture, $"[Unit]\nDescription={Description}\n\n[Service]\n");
 
         foreach (var property in Properties) {
+            if (property.Enforcement == PropertyEnforcement.Inert) {
+                text.Append("# ⚠ accepted by this systemd and enforcing nothing — see Gaps\n");
+            }
+
             text.Append(CultureInfo.InvariantCulture, $"{property.Name}={property.Value}\n");
         }
 

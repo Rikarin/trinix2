@@ -18,16 +18,28 @@
       directly, in a test that runs in milliseconds.
 
       ⚠ The corollary is the thing this assembly cannot know: whether systemd
-      accepts what it produced. See SandboxCapabilities for the properties whose
-      availability depends on how systemd was built, and base/recipes/systemd/
-      for how Trinix's was.
+      accepts what it produced. See SandboxCapabilities for the three answers a
+      property can get — refused, enforced, or accepted-and-inert, which is the
+      dangerous one — and base/recipes/systemd/ for how Trinix's was built.
 
-      ⚠ SandboxUser is the one file that asks the machine anything — getuid and
-      getpwuid_r, so that a layout resolves against the user who is actually
-      there instead of against a plausible-looking constant. It is deliberately
-      one file, one call site, and separate from the builder: everything the
-      builder sees is still an argument, which is what keeps the containment
-      rules assertable without a passwd database.
+      ⚠ Three files ask the machine something, and each is deliberately alone
+      with its question so that everything downstream is still a function of its
+      arguments:
+
+        * SandboxUser    — getuid and getpwuid_r, so that a layout resolves
+                           against the user who is actually there rather than a
+                           plausible-looking constant.
+        * SystemdProbe   — runs `systemctl` for its version banner and hands the
+                           string to SystemdFeatures, which is pure and is where
+                           every decision lives. Testable against a captured
+                           banner on a machine with no systemd at all.
+        * SandboxPreflight — asks whether the composed root, the shared network
+                           namespace and the container exist, with both
+                           machine-facing inputs as parameters so that every
+                           branch is testable without any of them.
+
+      None of them talks to D-Bus and none shells out to systemd-run: starting
+      the unit is the launcher's, in Trinix.Gatekeeper.
 
       It references Trinix.Bundle for the permission vocabulary, and nothing
       else. One vocabulary, in the assembly that already refuses an unknown one
