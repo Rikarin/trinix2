@@ -1,4 +1,5 @@
-; Roslyn's release-tracking file for the diagnostics in ServiceDiagnostics.cs.
+; Roslyn's release-tracking file for the diagnostics in ServiceDiagnostics.cs
+; (TRX10xx) and SettingsDiagnostics.cs (TRX20xx).
 ;
 ; RS2008 makes this mandatory, and the rule is right: an analyzer that adds or
 ; removes a diagnostic id without recording it breaks every .editorconfig and
@@ -18,3 +19,10 @@ TRX1004 | Trinix.Services | Error | No IsPermissionGranted boolean. Do the thing
 TRX1005 | Trinix.Services | Error | This type has no D-Bus representation.
 TRX1006 | Trinix.Services | Error | A [ServiceSignal] subscription has exactly one shape.
 TRX1007 | Trinix.Services | Error | A [TrinixService] declaration is missing its bus name or object path.
+TRX2001 | Trinix.Settings | Error | A [SettingsSchema] identifier is malformed, or the interface is generic or nested.
+TRX2002 | Trinix.Settings | Error | A key with no [Setting] — doc 02's "a key with no schema is a bug", caught.
+TRX2003 | Trinix.Settings | Error | This type cannot be a preference. No lists, no blobs, no [Flags], no nullables.
+TRX2004 | Trinix.Settings | Error | A setting needs a Default, and it must be a constant of its own type.
+TRX2005 | Trinix.Settings | Error | A setting needs a Summary. This is what keeps the store from being a registry.
+TRX2006 | Trinix.Settings | Error | A settings schema holds get-only properties and nothing else.
+TRX2007 | Trinix.Settings | Error | Two [SettingsSchema] interfaces in one assembly claim the same identifier.

@@ -24,4 +24,6 @@
     <Project Path="Trinix.Sdk.Generators.Tests/Trinix.Sdk.Generators.Tests.csproj"/>
     <Project Path="Trinix.Services.Contracts/Trinix.Services.Contracts.csproj"/>
     <Project Path="Trinix.Services.Contracts.Tests/Trinix.Services.Contracts.Tests.csproj"/>
+    <Project Path="Trinix.Settings/Trinix.Settings.csproj"/>
+    <Project Path="Trinix.Settings.Tests/Trinix.Settings.Tests.csproj"/>
 </Solution>

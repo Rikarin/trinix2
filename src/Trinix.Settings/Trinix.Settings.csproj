@@ -1,0 +1,124 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Settings — doc 02 § Settings storage, as code.
+
+      The store is a service because three things need it and none of them should
+      own it, and it is SQLite rather than a directory of files because doc 02
+      names two requirements a directory cannot meet: an atomic multi-key write,
+      and a change notification that is not an inotify storm. Both fall out of a
+      transaction and a commit hook; neither falls out of rename(2) over a tree of
+      key files.
+
+      ⚠ **This is not a registry**, and the schema requirement is the mechanism
+      rather than the slogan. Every key is declared once, typed, with a default
+      *and a one-line summary a user would recognise* — see SettingsAttributes.cs
+      for why the summary is mandatory and what it costs a would-be abuser. If you
+      cannot write that sentence, what you have is application data, and doc 02
+      says it belongs in the container.
+
+      ===========================================================================
+      ⚠ The provider seam — the one thing to read before changing this file
+      ===========================================================================
+
+      Managed callers reach SQLite through SQLitePCLRaw, which has two shapes:
+
+        * a *bundle* that carries its own compiled copy of the amalgamation
+          (`bundle_e_sqlite3` — the native library is `e_sqlite3`), and
+        * a *system* provider that P/Invokes whatever `libsqlite3.so.0` the
+          platform loader finds (`bundle_sqlite3` — native library `sqlite3`).
+
+      Trinix ships the second, against the library base/recipes/sqlite builds. That
+      recipe's comments explain the flags at length; the two that decide managed
+      behaviour are SQLITE_ENABLE_COLUMN_METADATA (without it
+      Microsoft.Data.Sqlite's GetSchemaTable/GetColumnSchema throw at runtime) and
+      FTS5 (doc 06's index; not this component's business, but the same object).
+
+      There is no such library on a macOS development host, so the choice is made
+      by RID below: a linux publish takes the system provider, everything else
+      takes the bundle. That is a real difference between what the tests exercise
+      and what ships, and pretending otherwise would make the suite worth less than
+      it looks. Two things narrow it:
+
+        * SqliteRequirements runs at every SettingsStore.Open. It reads
+          `PRAGMA compile_options` and refuses a library that is missing what this
+          store depends on or that carries one of the OMIT_* flags the recipe
+          declines. A wrong build fails at open with the library's name in the
+          message, not three weeks later inside a GetSchemaTable.
+        * The store never relies on a compile-time *default*. e_sqlite3 is built
+          with SQLITE_DEFAULT_FOREIGN_KEYS and the recipe's library is not, so
+          foreign key enforcement — which is how a write to an undeclared key is
+          refused — is turned on per connection and then asserted. That divergence
+          is the shape of the whole problem: it would have passed every test here
+          and failed on the device.
+
+      What is still unproven from here: the system provider is never *loaded* on
+      this host, so its P/Invoke surface, its trim behaviour under ILC, and the
+      recipe's library itself are all taken on the recipe's own trinix_check.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Settings</RootNamespace>
+        <AssemblyName>Trinix.Settings</AssemblyName>
+
+        <!--
+          CA1720 "identifier contains type name", raised by SettingKind.Integer and
+          SettingValue.Integer. The rule is aimed at parameters and members named
+          after the type of the thing they hold — `void Write(int integer)` — where
+          the name says nothing the signature did not. Here the name *is* the
+          subject: SettingKind enumerates SQLite's own storage classes, which are
+          spelled NULL, INTEGER, REAL, TEXT and BLOB, and a settings database is
+          read on a console with the sqlite3 CLI by people who know those words.
+          Renaming to satisfy the heuristic would put a private vocabulary between
+          the C# and the rows it writes. ⚠ Suppressed at the project level rather
+          than per-member because a [SuppressMessage] on each of the two would be
+          two copies of this paragraph; if a third identifier ever trips it, read
+          this and check the reason still holds.
+        -->
+        <NoWarn>$(NoWarn);CA1720</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- .Core, not Microsoft.Data.Sqlite: the non-Core package hard-references
+             bundle_e_sqlite3, which is precisely the choice this file needs to make
+             for itself. Pinned exactly, because the SQLitePCLRaw.core version it
+             asks for has to be the one both bundles below were built against — a
+             mismatched pair fails at the first P/Invoke rather than at restore. -->
+        <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="[10.0.10]"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="!$(RuntimeIdentifier.StartsWith('linux'))">
+        <!--
+          The development host. `e_sqlite3` is SQLitePCLRaw's own build of the
+          amalgamation; see the header for what it does and does not prove.
+
+          ⚠ 2.1.12 and not 2.1.11, and the reason is the seam speaking for itself:
+          `SQLitePCLRaw.lib.e_sqlite3 <= 2.1.11` carries GHSA-2m69-gcr7-jv3q, a
+          vulnerable *copy of SQLite* compiled into the package. That is the real
+          cost of a bundle — it is a second SQLite in the image with its own patch
+          stream, discovered by NuGet audit rather than by the distribution's own
+          version pin. The system provider below has no such problem because it has
+          no such copy: it gets whatever base/sources.json pins, which is 3.53.4,
+          one point release ahead of the 3.53.3 inside this package.
+        -->
+        <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="[2.1.12]"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
+        <!-- The target. ⚠ Despite the name, `bundle_sqlite3` bundles nothing: it
+             wires SQLitePCLRaw to the *system* `sqlite3`, which on a Trinix image
+             is base/recipes/sqlite's libsqlite3.so.0 and nothing else. This is the
+             row of the table that ships. -->
+        <PackageReference Include="SQLitePCLRaw.bundle_sqlite3" Version="[2.1.11]"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The schema generator, as a compiler plugin. ReferenceOutputAssembly is
+             false for the same reason Trinix.Services.Contracts sets it: nothing
+             here calls into the generator, the compiler loads it. -->
+        <ProjectReference Include="..\Trinix.Sdk.Generators\Trinix.Sdk.Generators.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
