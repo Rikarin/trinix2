@@ -59,8 +59,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
       dwarves kmod \
       `# run foreign test binaries in-container (Phase 1 sanity suite)` \
       qemu-user-static \
-      `# image assembly (Phase 2 onwards)` \
-      fakeroot gdisk parted dosfstools e2fsprogs mtools \
+      `# image assembly (Phase 2 onwards). btrfs-progs is here for the same` \
+      `# reason e2fsprogs is: /data is Btrfs (docs/plan/10 § Rewind) and the` \
+      `# image is populated with mkfs.btrfs --rootdir --subvol, which is what` \
+      `# lets a subvolume layout be built without a loop device. ⚠ Debian's` \
+      `# copy is not the one that ships — base/recipes/btrfs-progs is — so the` \
+      `# on-disk features the two produce are pinned explicitly in` \
+      `# image/scripts/build-image.sh rather than left to either default.` \
+      fakeroot gdisk parted dosfstools e2fsprogs btrfs-progs mtools \
       squashfs-tools erofs-utils cryptsetup-bin \
  && rm -rf /var/log/apt
 

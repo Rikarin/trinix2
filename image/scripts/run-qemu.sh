@@ -449,10 +449,13 @@ if [ "$check" -eq 1 ]; then
                     verdict="$verdict install"
                 fi
 
-                # fs-verity is asserted rather than merely hoped for: the data
-                # filesystem is created with the feature on purpose (see
-                # image/scripts/build-image.sh) and the kernel is configured for
-                # it, so "could not seal" here means one of those two regressed.
+                # fs-verity is asserted rather than merely hoped for, and it is
+                # worth more since /data became Btrfs: ext4 needed the feature
+                # switched on at mke2fs time, so a failure had a second possible
+                # cause that this check disambiguated. Btrfs needs no such flag
+                # — it keeps the Merkle tree as ordinary items — so "could not
+                # seal" now means exactly one thing, that CONFIG_FS_VERITY or
+                # the Btrfs implementation of it regressed.
                 if ! await 'sealed by the kernel' 60; then
                     verdict="$verdict fs-verity"
                 fi

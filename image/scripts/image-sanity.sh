@@ -130,6 +130,57 @@ fs_uuid="$(printf '%s\n' "$super" | awk -F': *' '/Filesystem UUID/ {print tolowe
     && pass 'the filesystem UUID matches the partition GUID' \
     || fail "filesystem UUID $fs_uuid does not match partition GUID $root_a_guid"
 
+# --- /data, and its subvolumes ---------------------------------------------
+# Worth checking here rather than trusting build-image.sh, because the
+# subvolume layout is the one thing in the image that no boot test exercises:
+# a /data with the right label and no subvolumes mounts, boots, logs in, and
+# then turns out to have nowhere for docs/plan/10's Rewind to snapshot.
+#
+# Unlike the root slot this needs the whole partition, not just a superblock —
+# the root tree can be anywhere the allocator put it. conv=sparse keeps the
+# copy cheap: almost all of a fresh /data is holes.
+log 'Data filesystem'
+data_start_sector="$(part_field 4 'First sector' | awk '{print $1}')"
+data_end_sector="$(part_field 4 'Last sector' | awk '{print $1}')"
+dd if="$IMAGE" of="$WORK/data.img" bs=512 \
+   skip="$data_start_sector" count=$(( data_end_sector - data_start_sector + 1 )) \
+   conv=sparse status=none
+
+data_super="$(btrfs inspect-internal dump-super "$WORK/data.img" 2>/dev/null || true)"
+if printf '%s\n' "$data_super" | grep -qE '^label[[:space:]]+trinix-data$'; then
+    pass '/data carries a Btrfs filesystem labelled trinix-data'
+else
+    fail '/data has no recognisable Btrfs superblock — is it still ext4?'
+fi
+
+data_guid="$(part_field 4 'Partition unique GUID' | tr 'A-Z' 'a-z')"
+data_fsid="$(printf '%s\n' "$data_super" | awk '/^fsid/ {print tolower($2)}')"
+[ "$data_fsid" = "$data_guid" ] \
+    && pass 'the Btrfs fsid matches the partition GUID' \
+    || fail "Btrfs fsid $data_fsid does not match partition GUID $data_guid"
+
+# block-group-tree is compat_ro bit 3. Asserted because it is the one on-disk
+# feature the image sets by hand — precisely so that a /data written later by
+# the installer or by Recovery, with a newer mkfs.btrfs, agrees with this one.
+compat_ro="$(printf '%s\n' "$data_super" | awk '/^compat_ro_flags/ {print $2}')"
+if [ -n "$compat_ro" ] && (( compat_ro & 0x8 )); then
+    pass "block-group-tree is on (compat_ro $compat_ro)"
+else
+    fail "compat_ro is '$compat_ro' — block-group-tree is missing, so this /data does not match one made by the installer"
+fi
+
+# The subvolumes themselves, read out of the root tree by name. This is the
+# assertion docs/plan/10 § Rewind actually depends on.
+subvols="$(btrfs inspect-internal dump-tree -t root "$WORK/data.img" 2>/dev/null \
+           | awk '/root ref key/ { print $NF }' | sort -u)"
+for required in '@home' '@apps' '@var' '@containers' '.snapshots'; do
+    if printf '%s\n' "$subvols" | grep -qxF "$required"; then
+        pass "subvolume $required"
+    else
+        fail "subvolume $required is missing from /data"
+    fi
+done
+
 echo
 [ "$failures" -eq 0 ] || die "$failures image check(s) failed for $TRINIX_ARCH"
 log "Disk image sanity passed for $TRINIX_ARCH"

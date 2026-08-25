@@ -96,6 +96,13 @@ trinix_check() {
         CONFIG_EXT4_FS                          # the root filesystem, built in:
                                                 # there is no initramfs to load
                                                 # a module from
+        CONFIG_BTRFS_FS                         # /data, and for the same
+                                                # reason built in: /var lives
+                                                # on it, so systemd needs it
+                                                # before it could load anything
+        CONFIG_BTRFS_FS_POSIX_ACL               # has no `default y` upstream,
+                                                # unlike ext4's — and journald
+                                                # sets an ACL on /var/log/journal
         CONFIG_INPUT_EVDEV                      # the Phase 4 compositor's only
                                                 # route to a keyboard
         CONFIG_DRM_VIRTIO_GPU                   # and its only route to a screen
