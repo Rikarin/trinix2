@@ -37,6 +37,12 @@
         <!-- For the attribute definitions and Tmds' types, which the compilations
              under test have to resolve. -->
         <ProjectReference Include="..\Trinix.Services.Contracts\Trinix.Services.Contracts.csproj"/>
+        <!-- Likewise for the settings generator: its snippets resolve [SettingsSchema],
+             [Setting] and the SettingValue/SettingsStore the emitted code calls. ⚠ The
+             emitted code is *compiled* against the real Trinix.Settings, so a change to
+             either that breaks generated code breaks these tests too — a harness with
+             stub attributes would keep passing and the consumer would not. -->
+        <ProjectReference Include="..\Trinix.Settings\Trinix.Settings.csproj"/>
     </ItemGroup>
 
     <ItemGroup>

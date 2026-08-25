@@ -1,0 +1,185 @@
+#nullable enable
+Trinix.Settings.AppearanceSettings -> sealed class
+Trinix.Settings.AppearanceSettings.AccentColor.get -> string
+Trinix.Settings.AppearanceSettings.AppearanceSettings(Trinix.Settings.SettingsStore store) -> void
+Trinix.Settings.AppearanceSettings.BeginEdit() -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit -> sealed class
+Trinix.Settings.AppearanceSettings.Edit.Commit() -> void
+Trinix.Settings.AppearanceSettings.Edit.ResetAccentColor() -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.ResetAll() -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.ResetIncreaseContrast() -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.ResetReduceMotion() -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.ResetScheme() -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.SetAccentColor(string value) -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.SetIncreaseContrast(bool value) -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.SetReduceMotion(bool value) -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.Edit.SetScheme(Trinix.Settings.ColorScheme value) -> Trinix.Settings.AppearanceSettings.Edit
+Trinix.Settings.AppearanceSettings.IncreaseContrast.get -> bool
+Trinix.Settings.AppearanceSettings.Keys -> static class
+Trinix.Settings.AppearanceSettings.ReduceMotion.get -> bool
+Trinix.Settings.AppearanceSettings.ResolveAccentColor() -> Trinix.Settings.SettingsResolution
+Trinix.Settings.AppearanceSettings.ResolveIncreaseContrast() -> Trinix.Settings.SettingsResolution
+Trinix.Settings.AppearanceSettings.ResolveReduceMotion() -> Trinix.Settings.SettingsResolution
+Trinix.Settings.AppearanceSettings.ResolveScheme() -> Trinix.Settings.SettingsResolution
+Trinix.Settings.AppearanceSettings.Scheme.get -> Trinix.Settings.ColorScheme
+Trinix.Settings.AppearanceSettings.Store.get -> Trinix.Settings.SettingsStore
+Trinix.Settings.AppearanceSettings.Subscribe(System.Action<Trinix.Settings.AppearanceSettings> handler) -> System.IDisposable
+Trinix.Settings.ColorScheme -> enum : int
+Trinix.Settings.ColorScheme.ColorScheme() -> void
+Trinix.Settings.ColorScheme.Dark = 1 -> Trinix.Settings.ColorScheme
+Trinix.Settings.ColorScheme.Light = 0 -> Trinix.Settings.ColorScheme
+Trinix.Settings.IAppearanceSettings -> interface
+Trinix.Settings.IAppearanceSettings.AccentColor.get -> string
+Trinix.Settings.IAppearanceSettings.IncreaseContrast.get -> bool
+Trinix.Settings.IAppearanceSettings.ReduceMotion.get -> bool
+Trinix.Settings.IAppearanceSettings.Scheme.get -> Trinix.Settings.ColorScheme
+Trinix.Settings.SettingAttribute -> sealed class
+Trinix.Settings.SettingAttribute : System.Attribute
+Trinix.Settings.SettingAttribute.Default.get -> object?
+Trinix.Settings.SettingAttribute.Default.set -> object?
+Trinix.Settings.SettingAttribute.SettingAttribute() -> void
+Trinix.Settings.SettingAttribute.Summary.get -> string?
+Trinix.Settings.SettingAttribute.Summary.set -> string?
+Trinix.Settings.SettingDescriptor -> sealed class
+Trinix.Settings.SettingDescriptor.Default.get -> Trinix.Settings.SettingValue
+Trinix.Settings.SettingDescriptor.Kind.get -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingDescriptor.Name.get -> string
+Trinix.Settings.SettingDescriptor.SettingDescriptor(string name, Trinix.Settings.SettingValue default, string summary) -> void
+Trinix.Settings.SettingDescriptor.Summary.get -> string
+Trinix.Settings.SettingKind -> enum : int
+Trinix.Settings.SettingKind.Bool = 1 -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingKind.Enum = 5 -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingKind.Integer = 2 -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingKind.None = 0 -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingKind.Real = 3 -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingKind.SettingKind() -> void
+Trinix.Settings.SettingKind.Text = 4 -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingValue -> readonly struct
+Trinix.Settings.SettingValue : System.IEquatable<Trinix.Settings.SettingValue>
+Trinix.Settings.SettingValue.AsBool() -> bool
+Trinix.Settings.SettingValue.AsEnumMember() -> string
+Trinix.Settings.SettingValue.AsInteger() -> long
+Trinix.Settings.SettingValue.AsReal() -> double
+Trinix.Settings.SettingValue.AsText() -> string
+Trinix.Settings.SettingValue.Equals(Trinix.Settings.SettingValue other) -> bool
+Trinix.Settings.SettingValue.Kind.get -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingValue.SettingValue() -> void
+Trinix.Settings.SettingsChangedEventArgs -> sealed class
+Trinix.Settings.SettingsChangedEventArgs : System.EventArgs
+Trinix.Settings.SettingsChangedEventArgs.Changes.get -> System.Collections.Generic.IReadOnlyList<Trinix.Settings.SettingsResolution>
+Trinix.Settings.SettingsChangedEventArgs.SettingsChangedEventArgs(System.Collections.Generic.IReadOnlyList<Trinix.Settings.SettingsResolution> changes) -> void
+Trinix.Settings.SettingsChangedEventArgs.Touches(string schemaId) -> bool
+Trinix.Settings.SettingsException -> class
+Trinix.Settings.SettingsException : System.Exception
+Trinix.Settings.SettingsException.SettingsException(string message) -> void
+Trinix.Settings.SettingsException.SettingsException(string message, System.Exception innerException) -> void
+Trinix.Settings.SettingsKey -> readonly struct
+Trinix.Settings.SettingsKey : System.IEquatable<Trinix.Settings.SettingsKey>
+Trinix.Settings.SettingsKey.Name.get -> string
+Trinix.Settings.SettingsKey.Name.init -> string
+Trinix.Settings.SettingsKey.Schema.get -> string
+Trinix.Settings.SettingsKey.Schema.init -> string
+Trinix.Settings.SettingsKey.SettingsKey() -> void
+Trinix.Settings.SettingsKey.SettingsKey(string Schema, string Name) -> void
+Trinix.Settings.SettingsLayer -> enum : int
+Trinix.Settings.SettingsLayer.Administrator = 1 -> Trinix.Settings.SettingsLayer
+Trinix.Settings.SettingsLayer.ManagedProfile = 3 -> Trinix.Settings.SettingsLayer
+Trinix.Settings.SettingsLayer.SettingsLayer() -> void
+Trinix.Settings.SettingsLayer.SystemDefault = 0 -> Trinix.Settings.SettingsLayer
+Trinix.Settings.SettingsLayer.User = 2 -> Trinix.Settings.SettingsLayer
+Trinix.Settings.SettingsLayout -> sealed record
+Trinix.Settings.SettingsLayout : System.IEquatable<Trinix.Settings.SettingsLayout>
+Trinix.Settings.SettingsLayout.AdministratorPath.get -> string?
+Trinix.Settings.SettingsLayout.AdministratorPath.init -> string?
+Trinix.Settings.SettingsLayout.ManagedProfilePath.get -> string?
+Trinix.Settings.SettingsLayout.ManagedProfilePath.init -> string?
+Trinix.Settings.SettingsLayout.PathFor(Trinix.Settings.SettingsLayer layer) -> string?
+Trinix.Settings.SettingsLayout.SettingsLayout(string UserPath) -> void
+Trinix.Settings.SettingsLayout.SystemDefaultPath.get -> string?
+Trinix.Settings.SettingsLayout.SystemDefaultPath.init -> string?
+Trinix.Settings.SettingsLayout.UserPath.get -> string
+Trinix.Settings.SettingsLayout.UserPath.init -> string
+Trinix.Settings.SettingsProviderException -> sealed class
+Trinix.Settings.SettingsProviderException : Trinix.Settings.SettingsException
+Trinix.Settings.SettingsProviderException.NativeLibrary.get -> string
+Trinix.Settings.SettingsProviderException.Problems.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Settings.SettingsProviderException.SettingsProviderException(string nativeLibrary, System.Collections.Generic.IReadOnlyList<string> problems) -> void
+Trinix.Settings.SettingsResolution -> sealed record
+Trinix.Settings.SettingsResolution : System.IEquatable<Trinix.Settings.SettingsResolution>
+Trinix.Settings.SettingsResolution.Key.get -> Trinix.Settings.SettingsKey
+Trinix.Settings.SettingsResolution.Key.init -> Trinix.Settings.SettingsKey
+Trinix.Settings.SettingsResolution.Layer.get -> Trinix.Settings.SettingsLayer?
+Trinix.Settings.SettingsResolution.Layer.init -> Trinix.Settings.SettingsLayer?
+Trinix.Settings.SettingsResolution.SettingsResolution(Trinix.Settings.SettingsKey Key, Trinix.Settings.SettingValue Value, Trinix.Settings.SettingsLayer? Layer) -> void
+Trinix.Settings.SettingsResolution.Value.get -> Trinix.Settings.SettingValue
+Trinix.Settings.SettingsResolution.Value.init -> Trinix.Settings.SettingValue
+Trinix.Settings.SettingsSchema -> sealed class
+Trinix.Settings.SettingsSchema.Declares(Trinix.Settings.SettingsSchema other) -> bool
+Trinix.Settings.SettingsSchema.Find(string name) -> Trinix.Settings.SettingDescriptor?
+Trinix.Settings.SettingsSchema.Id.get -> string
+Trinix.Settings.SettingsSchema.Key(string name) -> Trinix.Settings.SettingsKey
+Trinix.Settings.SettingsSchema.Settings.get -> System.Collections.Generic.IReadOnlyList<Trinix.Settings.SettingDescriptor>
+Trinix.Settings.SettingsSchema.SettingsSchema(string id, System.Collections.Generic.IReadOnlyList<Trinix.Settings.SettingDescriptor> settings) -> void
+Trinix.Settings.SettingsSchemaAttribute -> sealed class
+Trinix.Settings.SettingsSchemaAttribute : System.Attribute
+Trinix.Settings.SettingsSchemaAttribute.Id.get -> string
+Trinix.Settings.SettingsSchemaAttribute.SettingsSchemaAttribute(string id) -> void
+Trinix.Settings.SettingsSchemaException -> sealed class
+Trinix.Settings.SettingsSchemaException : Trinix.Settings.SettingsException
+Trinix.Settings.SettingsSchemaException.Key.get -> Trinix.Settings.SettingsKey
+Trinix.Settings.SettingsSchemaException.SettingsSchemaException(Trinix.Settings.SettingsKey key) -> void
+Trinix.Settings.SettingsSchemaException.SettingsSchemaException(string message) -> void
+Trinix.Settings.SettingsStore -> sealed class
+Trinix.Settings.SettingsStore : System.IDisposable
+Trinix.Settings.SettingsStore.BeginWrite() -> Trinix.Settings.SettingsTransaction
+Trinix.Settings.SettingsStore.Changed -> System.EventHandler<Trinix.Settings.SettingsChangedEventArgs>?
+Trinix.Settings.SettingsStore.Dispose() -> void
+Trinix.Settings.SettingsStore.Get(Trinix.Settings.SettingsKey key) -> Trinix.Settings.SettingValue
+Trinix.Settings.SettingsStore.Register(Trinix.Settings.SettingsSchema schema) -> void
+Trinix.Settings.SettingsStore.Resolve(Trinix.Settings.SettingsKey key) -> Trinix.Settings.SettingsResolution
+Trinix.Settings.SettingsStore.Schemas.get -> System.Collections.Generic.IReadOnlyCollection<Trinix.Settings.SettingsSchema>
+Trinix.Settings.SettingsStore.WritableLayer.get -> Trinix.Settings.SettingsLayer
+Trinix.Settings.SettingsTransaction -> sealed class
+Trinix.Settings.SettingsTransaction.Commit() -> void
+Trinix.Settings.SettingsTransaction.Reset(Trinix.Settings.SettingsKey key) -> Trinix.Settings.SettingsTransaction
+Trinix.Settings.SettingsTransaction.Set(Trinix.Settings.SettingsKey key, Trinix.Settings.SettingValue value) -> Trinix.Settings.SettingsTransaction
+Trinix.Settings.SettingsTypeMismatchException -> sealed class
+Trinix.Settings.SettingsTypeMismatchException : Trinix.Settings.SettingsException
+Trinix.Settings.SettingsTypeMismatchException.Actual.get -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingsTypeMismatchException.Expected.get -> Trinix.Settings.SettingKind
+Trinix.Settings.SettingsTypeMismatchException.SettingsTypeMismatchException(Trinix.Settings.SettingKind expected, Trinix.Settings.SettingKind actual) -> void
+Trinix.Settings.SqliteRequirements -> static class
+const Trinix.Settings.AppearanceSettings.SchemaId = "com.trinix.desktop.appearance" -> string
+const Trinix.Settings.SettingsLayout.DefaultAdministratorPath = "/etc/trinix/settings/administrator.db" -> string
+const Trinix.Settings.SettingsLayout.DefaultManagedProfilePath = "/etc/trinix/settings/managed.db" -> string
+const Trinix.Settings.SettingsLayout.DefaultSystemDefaultPath = "/usr/share/trinix/settings/defaults.db" -> string
+const Trinix.Settings.SettingsLayout.UserFileName = "Settings.db" -> string
+override Trinix.Settings.SettingValue.Equals(object? obj) -> bool
+override Trinix.Settings.SettingValue.GetHashCode() -> int
+override Trinix.Settings.SettingValue.ToString() -> string
+override Trinix.Settings.SettingsKey.ToString() -> string
+static Trinix.Settings.AppearanceSettings.Keys.AccentColor.get -> Trinix.Settings.SettingsKey
+static Trinix.Settings.AppearanceSettings.Keys.IncreaseContrast.get -> Trinix.Settings.SettingsKey
+static Trinix.Settings.AppearanceSettings.Keys.ReduceMotion.get -> Trinix.Settings.SettingsKey
+static Trinix.Settings.AppearanceSettings.Keys.Scheme.get -> Trinix.Settings.SettingsKey
+static Trinix.Settings.AppearanceSettings.Schema.get -> Trinix.Settings.SettingsSchema
+static Trinix.Settings.SettingValue.Bool(bool value) -> Trinix.Settings.SettingValue
+static Trinix.Settings.SettingValue.EnumMember(string member) -> Trinix.Settings.SettingValue
+static Trinix.Settings.SettingValue.Integer(long value) -> Trinix.Settings.SettingValue
+static Trinix.Settings.SettingValue.Real(double value) -> Trinix.Settings.SettingValue
+static Trinix.Settings.SettingValue.Text(string value) -> Trinix.Settings.SettingValue
+static Trinix.Settings.SettingValue.operator !=(Trinix.Settings.SettingValue left, Trinix.Settings.SettingValue right) -> bool
+static Trinix.Settings.SettingValue.operator ==(Trinix.Settings.SettingValue left, Trinix.Settings.SettingValue right) -> bool
+static Trinix.Settings.SettingsLayout.ForDirectory(string directory) -> Trinix.Settings.SettingsLayout
+static Trinix.Settings.SettingsLayout.ForHome(string home) -> Trinix.Settings.SettingsLayout
+static Trinix.Settings.SettingsSchema.IsWellFormedId(string? id) -> bool
+static Trinix.Settings.SettingsStore.Open(Trinix.Settings.SettingsLayout layout) -> Trinix.Settings.SettingsStore
+static Trinix.Settings.SettingsStore.Open(Trinix.Settings.SettingsLayout layout, Trinix.Settings.SettingsLayer writableLayer) -> Trinix.Settings.SettingsStore
+static Trinix.Settings.SqliteRequirements.CompileOptions(Microsoft.Data.Sqlite.SqliteConnection connection) -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Settings.SqliteRequirements.Divergences.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Settings.SqliteRequirements.Forbidden.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Settings.SqliteRequirements.NativeLibrary.get -> string
+static Trinix.Settings.SqliteRequirements.RecipePromises.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Settings.SqliteRequirements.Required.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Settings.SqliteRequirements.Shortfall(System.Collections.Generic.IReadOnlyList<string> options) -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Settings.SqliteRequirements.Verify(Microsoft.Data.Sqlite.SqliteConnection connection) -> void

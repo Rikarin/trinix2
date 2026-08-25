@@ -32,22 +32,43 @@ static class GeneratorHarness {
         .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
     );
 
-    /// <summary>Compile <paramref name="source" />, run the generator, return everything.</summary>
+    /// <summary>Compile <paramref name="source" />, run the service generator, return everything.</summary>
     /// <param name="source">The contract under test.</param>
     /// <param name="expectFailure">
     ///     When the snippet is <i>meant</i> to be refused, so that the resulting compilation
     ///     is allowed to be broken and only the diagnostics matter.
     /// </param>
-    public static GeneratorResult Run(string source, bool expectFailure = false) {
+    public static GeneratorResult Run(string source, bool expectFailure = false) =>
+        Run(new TrinixServiceGenerator(), source, expectFailure);
+
+    /// <summary>Compile <paramref name="source" />, run the settings generator, return everything.</summary>
+    /// <remarks>
+    ///     ⚠ One generator per run rather than both at once. They ignore each other's
+    ///     attributes, so running the pair would work — and would mean that a failure in a
+    ///     settings test could be caused by the service generator, which is the sort of
+    ///     coupling a suite acquires without noticing and cannot then remove.
+    /// </remarks>
+    /// <param name="source">The schema under test.</param>
+    /// <param name="expectFailure">As above.</param>
+    public static GeneratorResult RunSettings(string source, bool expectFailure = false) =>
+        Run(new TrinixSettingsGenerator(), source, expectFailure);
+
+    static GeneratorResult Run(IIncrementalGenerator generator, string source, bool expectFailure) {
+        // ⚠ The assembly name is not decoration: TrinixServiceGenerator derives the
+        // marshalling helper's namespace from it, so every generated proxy in these runs
+        // says `using static Trinix.Sdk.Generators.UnderTest.Generated.ServiceWire`. It was
+        // Trinix.Services.Contracts.UnderTest while this harness ran one generator; a
+        // settings schema compiled into an assembly named after the contracts is a name
+        // that would mislead the next person reading a failure.
         var compilation = CSharpCompilation.Create(
-            "Trinix.Services.Contracts.UnderTest",
+            "Trinix.Sdk.Generators.UnderTest",
             [CSharpSyntaxTree.ParseText(source)],
             References,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable)
         );
 
         var driver = CSharpGeneratorDriver
-            .Create(new TrinixServiceGenerator())
+            .Create(generator)
             .RunGeneratorsAndUpdateCompilation(compilation, out var updated, out var diagnostics);
 
         var run = driver.GetRunResult();
