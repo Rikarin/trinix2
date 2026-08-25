@@ -186,6 +186,19 @@ all. What it loses is granularity: one member sees every journal, not only their
 doc 05 § Accounts defines as "one primary user, occasionally a second", **that is not a loss** — and
 that is my judgement, not a measurement. It becomes one the day there is a second user.
 
+⚠️ **RETRACTED 2026-08-26 — both of these are false, and were false when written.**
+`base/recipes/linux/config/trinix.config` lines 84 and 90 set `CONFIG_BTRFS_FS=y` and
+`CONFIG_BTRFS_FS_POSIX_ACL=y`, the second carrying a comment naming the exact journald ACL need this
+document argues above cannot be met, and `/data` is Btrfs with four subvolumes.
+
+The cause is worth more than the error. This document was written in a git worktree created **before**
+the Btrfs work merged: Btrfs landed at 23:02:56 and this document at 23:11:53, against a tree nine
+minutes stale. ⚠ **An audit run from a stale worktree audits a repository that no longer exists**, and
+that has now happened twice — so a research task's first act should be to confirm its base is current.
+The substantive findings above were separately re-verified and stand.
+
+*The original two paragraphs are kept below for the record.*
+
 Two corrections to the premise this audit started from, both worth recording because both were assumed
 and neither is true:
 
