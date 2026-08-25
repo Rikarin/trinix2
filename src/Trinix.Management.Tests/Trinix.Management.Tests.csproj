@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Management.Tests — the parsing under the administration cmdlets.
+
+      ⚠ The cmdlets themselves are not tested here, and that is a boundary
+      rather than an omission. Every one of them is a thin shell around
+      `systemctl show` or `ip -json`: exercising them would mean either a
+      running systemd (which is the container tier's job, per
+      docs/plan/16-build-ci-and-testing.md) or a process-launching abstraction
+      invented purely so that a test could stub it out, which would be more code
+      than the cmdlets contain.
+
+      What is left once those are set aside is the part that can actually be
+      wrong in a way nobody notices: the key=value parser, the line splitter,
+      the JSON shapes iproute2 emits, and the health rule that decides whether a
+      one-shot unit that exited counts as broken. All four are pure functions of
+      a string.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Management.Tests</RootNamespace>
+        <AssemblyName>Trinix.Management.Tests</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <!-- The same three opt-outs as Trinix.Bundle.Tests, for the same reason:
+             these rules are about shipping, and a test assembly does not ship.
+             Trinix.Management already sets two of them for itself, because pwsh
+             loads it reflectively. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Management\Trinix.Management.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+</Project>
