@@ -82,6 +82,11 @@ trinix_check() {
     # finds no symbol throws EntryPointNotFoundException at the first call,
     # which is a long way from the build that dropped it — and dropping one is
     # a plausible accident, since nothing in C fails when a function is unused.
+    #
+    # "Every" is meant literally, and this list is checked against
+    # src/Trinix.Interop/WaylandClient.cs rather than sampled from it. A subset
+    # is a check that passes while the symbol someone actually dropped is one
+    # of the ones it does not name — which is the only case it exists for.
     local symbols missing=''
     symbols="$(llvm-nm --defined-only --dynamic "$lib" | awk '{ print $NF }' | sed 's/@@.*//')"
     for symbol in trinix_wl_client_connect trinix_wl_client_destroy trinix_wl_client_pump \
@@ -89,11 +94,15 @@ trinix_check() {
                   trinix_wl_client_globals trinix_wl_client_display \
                   trinix_wl_window_create trinix_wl_window_destroy trinix_wl_window_surface \
                   trinix_wl_window_set_title trinix_wl_window_set_mode \
+                  trinix_wl_window_set_min_size trinix_wl_window_set_max_size \
                   trinix_wl_window_begin_move trinix_wl_window_begin_resize \
                   trinix_wl_window_set_shadow trinix_wl_window_set_corner_radius \
-                  trinix_wl_window_set_drag_region trinix_wl_window_set_control \
+                  trinix_wl_window_set_resize_inset \
+                  trinix_wl_window_set_drag_region \
+                  trinix_wl_window_set_control trinix_wl_window_unset_control \
                   trinix_wl_client_menu_create trinix_wl_window_menu_create \
-                  trinix_wl_menu_insert trinix_wl_menu_commit trinix_wl_menu_destroy; do
+                  trinix_wl_menu_insert trinix_wl_menu_update trinix_wl_menu_accelerator \
+                  trinix_wl_menu_remove trinix_wl_menu_commit trinix_wl_menu_destroy; do
         grep -qx "$symbol" <<<"$symbols" || missing="$missing $symbol"
     done
     [ -z "$missing" ] || { echo "trinix-wl-client: missing entry point(s):$missing" >&2; return 1; }
