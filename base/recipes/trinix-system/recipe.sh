@@ -222,15 +222,54 @@ _filesystems() {
     # layout, which is Trinix's own (see image/), while UUIDs are generated per
     # image. udev resolves these; the kernel gets the root device by PARTUUID
     # on the command line instead, because udev is not running yet at that point.
+    # ⚠ /data is Btrfs, and the five lines below are the half of that change
+    # image assembly cannot write for itself. image/scripts/build-image.sh
+    # refuses to assemble an image whose rootfs fstab disagrees with it, and
+    # prints exactly this block when it does — a filesystem type in fstab is
+    # not advisory, mount will not guess, and a /data that does not mount is a
+    # /var that does not exist, which is a boot that reads as a page of systemd
+    # dependency failures on a serial console. The full argument for each
+    # option is in image/README.md § Mount options; the short version:
+    #
+    #   compress=zstd:1  docs/plan/10 asked for transparent compression. Level
+    #                    1 because the levels above it buy a few percent for
+    #                    CPU spent on every write, and `compress` rather than
+    #                    `compress-force` so a directory of JPEGs is left alone.
+    #   noatime          not the usual micro-optimisation. On a snapshotted
+    #                    filesystem an atime update copies metadata and
+    #                    unshares a block from every snapshot holding it — with
+    #                    relatime, *reading* a file grows the backup.
+    #   discard=async    nothing else trims this disk: there is no fstrim.timer
+    #                    in the base set. Async keeps the discards off the
+    #                    commit path. A harmless no-op on a VM's virtio-blk.
+    #   subvolid=5       /data is the *top level*, not @home. That is what
+    #                    gives Rewind a path to every subvolume and to
+    #                    .snapshots without a second mount namespace.
+    #
+    # The subvol= names are the ones mkfs.btrfs --subvol creates in
+    # build-image.sh, and the mount points under /data are plain directories in
+    # the top level that the same script stages. Order matters only to a reader
+    # — systemd's fstab-generator orders a nested mount after its parent by
+    # path — but the parent is written first anyway.
+    #
+    # ⚠ The last field is 0, not the 2 the ext4 line carried. Btrfs has no
+    # boot-time consistency check to run: fsck.btrfs exists solely so that an
+    # fstab which asks for one does not fail, and it is a stub that prints a
+    # note and exits 0. Asking for pass 2 here would pull in a systemd-fsck@
+    # unit to run a program whose entire purpose is to do nothing.
     cat > "$DESTDIR/etc/fstab" <<'EOF'
-# <device>                 <mount>  <type>  <options>                             <dump> <fsck>
+# <device>              <mount>            <type>  <options>                                                    <dump> <fsck>
 #
 # The root filesystem is mounted by the kernel from root= on the command line
 # and is deliberately absent here: which of the two slots is root changes with
 # every A/B update, and fstab is part of the image being updated.
-PARTLABEL=trinix-data      /data    ext4    defaults,noatime                      0 2
-PARTLABEL=trinix-esp       /boot    vfat    ro,noatime,umask=0077,nofail          0 2
-tmpfs                      /tmp     tmpfs   rw,nosuid,nodev,mode=1777,size=50%    0 0
+PARTLABEL=trinix-data   /data              btrfs   rw,noatime,compress=zstd:1,discard=async,subvolid=5           0 0
+PARTLABEL=trinix-data   /data/home         btrfs   rw,noatime,compress=zstd:1,discard=async,subvol=/@home        0 0
+PARTLABEL=trinix-data   /data/Applications btrfs   rw,noatime,compress=zstd:1,discard=async,subvol=/@apps        0 0
+PARTLABEL=trinix-data   /data/var          btrfs   rw,noatime,compress=zstd:1,discard=async,subvol=/@var         0 0
+PARTLABEL=trinix-data   /data/containers   btrfs   rw,noatime,compress=zstd:1,discard=async,subvol=/@containers  0 0
+PARTLABEL=trinix-esp    /boot              vfat    ro,noatime,umask=0077,nofail                                 0 2
+tmpfs                   /tmp               tmpfs   rw,nosuid,nodev,mode=1777,size=50%                           0 0
 EOF
 
     # Nothing writes this yet — networkd and resolved are both declined by the
@@ -519,6 +558,25 @@ trinix_check() {
         [ -L "$DESTDIR/$required" ] || missing="$missing $required"
     done
     [ -z "$missing" ] || { echo "trinix-system: missing$missing" >&2; return 1; }
+
+    # The other half of image/scripts/build-image.sh's fstab guard, asserted
+    # from this side too. That one refuses to assemble a disk; this one refuses
+    # to finish a base, which is forty minutes earlier and names the file that
+    # is wrong. Every subvolume mkfs.btrfs --subvol creates needs a line, or the
+    # symlink pointing at it resolves into an empty directory in the top level
+    # and the system boots with, say, an /Applications that is simply not there.
+    local mount
+    for mount in /data /data/home /data/Applications /data/var /data/containers; do
+        grep -qE "^PARTLABEL=trinix-data[[:space:]]+${mount}[[:space:]]+btrfs[[:space:]]" \
+            "$DESTDIR/etc/fstab" \
+            || { echo "trinix-system: /etc/fstab does not mount $mount as btrfs — see image/README.md § Mount options" >&2; return 1; }
+    done
+    # noatime is load-bearing rather than a preference: with relatime, reading a
+    # file on a snapshotted subvolume unshares a block and grows every snapshot
+    # holding it. Cheap to assert, and the failure it prevents is invisible.
+    grep -qE '^PARTLABEL=trinix-data[[:space:]]+/data[[:space:]]+btrfs[[:space:]]+[^[:space:]]*noatime' \
+        "$DESTDIR/etc/fstab" \
+        || { echo 'trinix-system: /data is not mounted noatime — see image/README.md § Mount options' >&2; return 1; }
 
     # Every login shell has to exist in the image, or the prompt is reached and
     # then immediately loses to "no such file or directory". Checked for every
