@@ -211,8 +211,46 @@ public static unsafe partial class WaylandClient {
     public static void UnsetControl(IntPtr window, Control control) =>
         NativeWindowUnsetControl(window, (uint)control);
 
-    /// <summary>Adds an item to the window's menu bar.</summary>
-    /// <param name="window">The window.</param>
+    /// <summary>Takes over this application's menu bar.</summary>
+    /// <remarks>
+    ///     <para>
+    ///         The ordinary way to get a menu bar, and the only one most applications
+    ///         want. It covers every window this connection opens, it does not change
+    ///         as the user moves between them, and it exists while there are none —
+    ///         which is how an application with everything closed still offers
+    ///         File ▸ New.
+    ///     </para>
+    ///     <para>
+    ///         Idempotent: asking twice is a protocol error, and the library answers
+    ///         with the bar it already made rather than committing one.
+    ///     </para>
+    /// </remarks>
+    /// <param name="client">A connected client.</param>
+    /// <returns>
+    ///     A menu handle, or <see cref="IntPtr.Zero" /> when the compositor offered no
+    ///     <c>trinix_menu_manager_v1</c> — a system with no menu bar, and an
+    ///     application that is otherwise fine.
+    /// </returns>
+    public static IntPtr CreateApplicationMenu(IntPtr client) => NativeClientMenuCreate(client);
+
+    /// <summary>Gives one window a menu bar of its own.</summary>
+    /// <remarks>
+    ///     ⚠ The exception, not the shorthand. The shell shows this in place of the
+    ///     application's bar while this window is active, which is right for a window
+    ///     whose menus genuinely are not the application's and wrong for every other
+    ///     window — asking per window exports one tree N times and leaves the
+    ///     application applying every state change N times.
+    /// </remarks>
+    /// <param name="window">The window whose menus differ.</param>
+    /// <returns>A menu handle, or <see cref="IntPtr.Zero" /> if there is no menu bar.</returns>
+    public static IntPtr CreateWindowMenu(IntPtr window) => NativeWindowMenuCreate(window);
+
+    /// <summary>Withdraws a menu bar.</summary>
+    /// <param name="menu">A menu handle.</param>
+    public static void DestroyMenu(IntPtr menu) => NativeMenuDestroy(menu);
+
+    /// <summary>Adds an item to a menu bar.</summary>
+    /// <param name="menu">The menu.</param>
     /// <param name="id">Client-assigned, non-zero, unique within this menu.</param>
     /// <param name="parent">The containing submenu, or zero for a top-level menu.</param>
     /// <param name="index">Where among its siblings.</param>
@@ -220,24 +258,24 @@ public static unsafe partial class WaylandClient {
     /// <param name="label">The text, with an underscore before the mnemonic.</param>
     /// <remarks>Takes effect at <see cref="CommitMenu" />, not here.</remarks>
     public static void InsertMenuItem(
-        IntPtr window,
+        IntPtr menu,
         uint id,
         uint parent,
         int index,
         MenuKind kind,
         string label
-    ) => NativeMenuInsert(window, id, parent, index, (uint)kind, label);
+    ) => NativeMenuInsert(menu, id, parent, index, (uint)kind, label);
 
     /// <summary>Changes an item's label or state.</summary>
-    /// <param name="window">The window.</param>
+    /// <param name="menu">The menu.</param>
     /// <param name="id">The item.</param>
     /// <param name="label">The new text.</param>
     /// <param name="state">Enabled, checked, hidden.</param>
-    public static void UpdateMenuItem(IntPtr window, uint id, string label, MenuState state) =>
-        NativeMenuUpdate(window, id, label, (uint)state);
+    public static void UpdateMenuItem(IntPtr menu, uint id, string label, MenuState state) =>
+        NativeMenuUpdate(menu, id, label, (uint)state);
 
     /// <summary>Gives an item a keyboard accelerator the shell handles.</summary>
-    /// <param name="window">The window.</param>
+    /// <param name="menu">The menu.</param>
     /// <param name="id">The item.</param>
     /// <param name="keysym">An xkb keysym.</param>
     /// <param name="modifiers">The modifier mask.</param>
@@ -245,18 +283,18 @@ public static unsafe partial class WaylandClient {
     ///     A registered accelerator never reaches the application as a key press —
     ///     which is the point of registering it.
     /// </remarks>
-    public static void SetMenuAccelerator(IntPtr window, uint id, uint keysym, Modifiers modifiers) =>
-        NativeMenuAccelerator(window, id, keysym, (uint)modifiers);
+    public static void SetMenuAccelerator(IntPtr menu, uint id, uint keysym, Modifiers modifiers) =>
+        NativeMenuAccelerator(menu, id, keysym, (uint)modifiers);
 
     /// <summary>Removes an item and everything under it.</summary>
-    /// <param name="window">The window.</param>
+    /// <param name="menu">The menu.</param>
     /// <param name="id">The item.</param>
-    public static void RemoveMenuItem(IntPtr window, uint id) => NativeMenuRemove(window, id);
+    public static void RemoveMenuItem(IntPtr menu, uint id) => NativeMenuRemove(menu, id);
 
     /// <summary>Applies everything since the last commit.</summary>
-    /// <param name="window">The window.</param>
+    /// <param name="menu">The menu.</param>
     /// <remarks>A commit with nothing pending is valid and does nothing.</remarks>
-    public static void CommitMenu(IntPtr window) => NativeMenuCommit(window);
+    public static void CommitMenu(IntPtr menu) => NativeMenuCommit(menu);
 
     /// <summary>Reads a NUL-terminated UTF-8 string a callback was given.</summary>
     /// <param name="value">A pointer, possibly null.</param>
@@ -349,9 +387,18 @@ public static unsafe partial class WaylandClient {
     [LibraryImport(Library, EntryPoint = "trinix_wl_window_unset_control")]
     private static partial void NativeWindowUnsetControl(IntPtr window, uint control);
 
-    [LibraryImport(Library, EntryPoint = "trinix_wl_window_menu_insert", StringMarshalling = StringMarshalling.Utf8)]
+    [LibraryImport(Library, EntryPoint = "trinix_wl_client_menu_create")]
+    private static partial IntPtr NativeClientMenuCreate(IntPtr client);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wl_window_menu_create")]
+    private static partial IntPtr NativeWindowMenuCreate(IntPtr window);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wl_menu_destroy")]
+    private static partial void NativeMenuDestroy(IntPtr menu);
+
+    [LibraryImport(Library, EntryPoint = "trinix_wl_menu_insert", StringMarshalling = StringMarshalling.Utf8)]
     private static partial void NativeMenuInsert(
-        IntPtr window,
+        IntPtr menu,
         uint id,
         uint parent,
         int index,
@@ -359,17 +406,17 @@ public static unsafe partial class WaylandClient {
         string label
     );
 
-    [LibraryImport(Library, EntryPoint = "trinix_wl_window_menu_update", StringMarshalling = StringMarshalling.Utf8)]
-    private static partial void NativeMenuUpdate(IntPtr window, uint id, string label, uint state);
+    [LibraryImport(Library, EntryPoint = "trinix_wl_menu_update", StringMarshalling = StringMarshalling.Utf8)]
+    private static partial void NativeMenuUpdate(IntPtr menu, uint id, string label, uint state);
 
-    [LibraryImport(Library, EntryPoint = "trinix_wl_window_menu_accelerator")]
-    private static partial void NativeMenuAccelerator(IntPtr window, uint id, uint keysym, uint modifiers);
+    [LibraryImport(Library, EntryPoint = "trinix_wl_menu_accelerator")]
+    private static partial void NativeMenuAccelerator(IntPtr menu, uint id, uint keysym, uint modifiers);
 
-    [LibraryImport(Library, EntryPoint = "trinix_wl_window_menu_remove")]
-    private static partial void NativeMenuRemove(IntPtr window, uint id);
+    [LibraryImport(Library, EntryPoint = "trinix_wl_menu_remove")]
+    private static partial void NativeMenuRemove(IntPtr menu, uint id);
 
-    [LibraryImport(Library, EntryPoint = "trinix_wl_window_menu_commit")]
-    private static partial void NativeMenuCommit(IntPtr window);
+    [LibraryImport(Library, EntryPoint = "trinix_wl_menu_commit")]
+    private static partial void NativeMenuCommit(IntPtr menu);
 
     /// <summary>Which optional globals a compositor offered.</summary>
     [Flags]
@@ -558,7 +605,13 @@ public static unsafe partial class WaylandClient {
         /// <summary>What the shadow occupies outside the window: left, top, right, bottom.</summary>
         public delegate* unmanaged<IntPtr, int, int, int, int, void> ShadowApplied;
 
-        /// <summary>The user chose a menu item. Leaf items only.</summary>
+        /// <summary>The user chose a menu item: menu, item id. Leaf items only.</summary>
+        /// <remarks>
+        ///     ⚠ The handle is the menu, not a window. A menu bar belongs to the
+        ///     application and there is often no window it could name — an
+        ///     application with everything closed still has one, and an item chosen
+        ///     from it is how a window comes back.
+        /// </remarks>
         public delegate* unmanaged<IntPtr, uint, void> MenuActivated;
 
         /// <summary>A submenu is opening, which is where to populate it lazily.</summary>

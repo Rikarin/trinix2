@@ -92,13 +92,18 @@ struct trinix_wlr_callbacks {
      * the boundary and freed on the other. `menu_item` is called once per item
      * in tree order, bracketed by menu_begin/menu_end — so the managed side
      * rebuilds its own model without either side owning the other's memory.
+     *
+     * The handle is a *menu*, not a window. A menu belongs to a client and is
+     * shown for every window that client owns, so there is often no one window
+     * to name — and an application with nothing open still has a menu bar.
+     * Which menu a given window is under is trinix_wlr_toplevel_menu.
      */
-    void (*menu_begin)(void *toplevel);
-    void (*menu_item)(void *toplevel, uint32_t id, uint32_t parent, uint32_t kind,
+    void (*menu_begin)(void *menu);
+    void (*menu_item)(void *menu, uint32_t id, uint32_t parent, uint32_t kind,
                       uint32_t state, uint32_t keysym, uint32_t modifiers,
                       const char *label);
-    void (*menu_end)(void *toplevel, uint32_t item_count);
-    void (*menu_removed)(void *toplevel);
+    void (*menu_end)(void *menu, uint32_t item_count);
+    void (*menu_removed)(void *menu);
 };
 
 /* --- lifecycle ---------------------------------------------------------- */
@@ -172,10 +177,26 @@ bool trinix_wlr_toplevel_in_drag_region(void *toplevel, int32_t x, int32_t y);
 
 /* --- menus, from trinix-menu-v1 ----------------------------------------- */
 
-/* Tell the client the user chose an item, or that a submenu is opening. */
-void trinix_wlr_menu_send_activated(void *toplevel, uint32_t id);
-void trinix_wlr_menu_send_about_to_show(void *toplevel, uint32_t id);
-void trinix_wlr_menu_send_closed(void *toplevel);
+/*
+ * The menu bar this window is under, or null if neither it nor its client has
+ * exported one.
+ *
+ * Resolution is the window's own override first, then its client's bar. Two
+ * lookups, and no third: what to show when there is neither is the shell's
+ * decision, not this library's, and null is how that question gets asked.
+ *
+ * Valid until the menu's client destroys it, which is reported by menu_removed.
+ * Call it on focus change rather than caching it — and notice that switching
+ * between two windows of one application returns the same handle both times,
+ * which is exactly the property that keeps the bar from being rebuilt.
+ */
+void *trinix_wlr_toplevel_menu(void *toplevel);
+
+/* Tell the client the user chose an item, or that a submenu is opening. The
+ * handle is a menu, from trinix_wlr_toplevel_menu or from a menu callback. */
+void trinix_wlr_menu_send_activated(void *menu, uint32_t id);
+void trinix_wlr_menu_send_about_to_show(void *menu, uint32_t id);
+void trinix_wlr_menu_send_closed(void *menu);
 
 /* --- pointer ------------------------------------------------------------ */
 

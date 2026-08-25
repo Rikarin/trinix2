@@ -40,8 +40,29 @@ sealed class WindowManager {
     const int CascadeWrapAfter = 6;
 
     readonly List<IntPtr> _windows = [];
+
+    /// <summary>
+    ///     Every menu model the shell holds, by the compositor's handle for it.
+    /// </summary>
+    /// <remarks>
+    ///     Keyed on the menu rather than on a window, because <c>trinix-menu-v1</c>
+    ///     scopes a menu bar to the client: one entry here serves all of an
+    ///     application's windows and survives their all being closed. A per-toplevel
+    ///     override is another entry, indistinguishable from this side — which one
+    ///     applies is <see cref="RefreshMenuBar" />'s question, not this dictionary's.
+    /// </remarks>
     readonly Dictionary<IntPtr, MenuBar> _menus = [];
+
     readonly IntPtr _server;
+
+    /// <summary>The menu bar currently on screen, or zero for none.</summary>
+    /// <remarks>
+    ///     ⚠ Compared, never dereferenced, and cleared the moment the menu behind it
+    ///     is withdrawn: an unmanaged handle that has been freed may come back as the
+    ///     address of the next one, and a stale value left here would make a menu
+    ///     that changed look like a menu that had not.
+    /// </remarks>
+    IntPtr _activeMenu;
 
     PointerMode _mode = PointerMode.Passthrough;
     IntPtr _grabbed;
@@ -192,12 +213,52 @@ sealed class WindowManager {
 
         _windows.Add(window);
         Wlroots.ToplevelFocus(window);
+        RefreshMenuBar();
     }
 
     void FocusTop() {
         if (Focused != IntPtr.Zero) {
             Wlroots.ToplevelFocus(Focused);
         }
+
+        RefreshMenuBar();
+    }
+
+    /// <summary>
+    ///     Works out which menu bar the shell should be showing, and says so when
+    ///     the answer changes.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         The resolution is the focused window's own override, else that window's
+    ///         client's bar, else nothing. The first two are one call into the
+    ///         compositor, which holds both scopes and does the two lookups; the third
+    ///         is decided here, because what to show when no application has exported
+    ///         a menu is shell policy rather than a fact about the protocol. macOS
+    ///         shows Finder's bar; Trinix will show the shell's, once there is a shell
+    ///         process to have one, and until then shows nothing.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Called on every focus change, and the interesting case is the one
+    ///         where it does nothing: two windows of one application resolve to the
+    ///         same menu, so cycling between them must leave the bar exactly as it
+    ///         was. That is the behaviour being imitated, and a rebuild there would be
+    ///         a visible bug rather than a wasted cycle — see
+    ///         <c>docs/plan/19-menus-belong-to-applications.md</c>.
+    ///     </para>
+    /// </remarks>
+    void RefreshMenuBar() {
+        var resolved = Focused == IntPtr.Zero ? IntPtr.Zero : Wlroots.ToplevelMenu(Focused);
+        if (resolved == _activeMenu) {
+            return;
+        }
+
+        _activeMenu = resolved;
+        Log.Line(
+            _menus.TryGetValue(resolved, out var bar)
+                ? $"menu bar shown: {bar.Describe()}"
+                : "menu bar cleared"
+        );
     }
 
     static string Title(IntPtr window) => Wlroots.ToplevelTitle(window) ?? "untitled";
@@ -303,6 +364,10 @@ sealed class WindowManager {
 
         Wlroots.ToplevelGetBox(window, out var x, out var y, out var w, out var h);
         Log.Line($"window mapped '{Title(window)}' {w}x{h} at {x},{y}");
+
+        // A second window of an application already on screen changes nothing
+        // here, which is the whole point of the menu being the client's.
+        RefreshMenuBar();
     }
 
     /// <summary>Forgets a window that is no longer on screen.</summary>
@@ -324,8 +389,13 @@ sealed class WindowManager {
 
     /// <summary>Drops a destroyed window, in case it was never unmapped.</summary>
     /// <param name="window">The window handle, no longer valid.</param>
+    /// <remarks>
+    ///     Nothing is forgotten from <see cref="_menus" /> here. A menu is the
+    ///     client's, and a client outliving one of its windows is the ordinary case;
+    ///     an override is withdrawn by the compositor, which reports it as
+    ///     <see cref="MenuRemoved" /> like any other.
+    /// </remarks>
     internal void WindowRemoved(IntPtr window) {
-        _menus.Remove(window);
         if (_hoveredWindow == window) {
             _hoveredWindow = IntPtr.Zero;
             _hoveredControl = Wlroots.WindowControl.None;
@@ -334,34 +404,36 @@ sealed class WindowManager {
         if (_windows.Remove(window) && _grabbed == window) {
             ResetPointer();
         }
+
+        RefreshMenuBar();
     }
 
     // --- trinix-menu-v1 ---------------------------------------------------
 
-    /// <summary>A window is about to deliver a new menu model.</summary>
-    /// <param name="window">The window handle.</param>
-    internal void MenuBegin(IntPtr window) {
-        if (!_menus.TryGetValue(window, out var bar)) {
+    /// <summary>An application is about to deliver a new menu model.</summary>
+    /// <param name="menu">The menu handle, which is a client's bar or one window's override.</param>
+    internal void MenuBegin(IntPtr menu) {
+        if (!_menus.TryGetValue(menu, out var bar)) {
             bar = new();
-            _menus[window] = bar;
+            _menus[menu] = bar;
         }
 
         bar.Begin();
     }
 
     /// <summary>One item of the model being delivered.</summary>
-    /// <param name="window">The window handle.</param>
+    /// <param name="menu">The menu handle.</param>
     /// <param name="entry">The item.</param>
-    internal void MenuItem(IntPtr window, MenuEntry entry) {
-        if (_menus.TryGetValue(window, out var bar)) {
+    internal void MenuItem(IntPtr menu, MenuEntry entry) {
+        if (_menus.TryGetValue(menu, out var bar)) {
             bar.Add(entry);
         }
     }
 
-    /// <summary>The model is complete and becomes the window's menu bar.</summary>
-    /// <param name="window">The window handle.</param>
-    internal void MenuEnd(IntPtr window) {
-        if (!_menus.TryGetValue(window, out var bar)) {
+    /// <summary>The model is complete and becomes that application's menu bar.</summary>
+    /// <param name="menu">The menu handle.</param>
+    internal void MenuEnd(IntPtr menu) {
+        if (!_menus.TryGetValue(menu, out var bar)) {
             return;
         }
 
@@ -371,15 +443,33 @@ sealed class WindowManager {
         // stands: the model arrives complete and the shell holds it, but the
         // image has no font, so there is nothing to render the words with. The
         // line below is what the boot check reads instead.
-        Log.Line($"menu bar for '{Title(window)}': {bar.Describe()}");
+        //
+        // The application is not named, because the compositor does not yet
+        // know what it is called: a menu is scoped to a connection, and a
+        // connection carries no name it is worth trusting. Doc 19 leaves that
+        // open and answers it the way doc 04 answers everything else — the
+        // bundle identity the launcher established, not app_id.
+        Log.Line($"menu bar for an application: {bar.Describe()}");
+
+        // A first commit is also how a menu becomes resolvable, so this is a
+        // focus change in everything but name.
+        RefreshMenuBar();
     }
 
-    /// <summary>A window withdrew its menu bar.</summary>
-    /// <param name="window">The window handle.</param>
-    internal void MenuRemoved(IntPtr window) {
-        if (_menus.Remove(window)) {
-            Log.Line($"menu bar withdrawn by '{Title(window)}'");
+    /// <summary>An application withdrew a menu bar.</summary>
+    /// <param name="menu">The menu handle, no longer valid.</param>
+    internal void MenuRemoved(IntPtr menu) {
+        if (!_menus.Remove(menu)) {
+            return;
         }
+
+        Log.Line("menu bar withdrawn");
+
+        if (_activeMenu == menu) {
+            _activeMenu = IntPtr.Zero;
+        }
+
+        RefreshMenuBar();
     }
 
     /// <summary>Begins dragging a window at the client's request.</summary>
@@ -403,12 +493,18 @@ sealed class WindowManager {
         // protocol makes: a shortcut on a menu item works whether or not the
         // menu has ever been opened, so the shell has to claim the key before
         // the focused client sees it.
-        if (Focused != IntPtr.Zero && _menus.TryGetValue(Focused, out var bar)) {
+        //
+        // Against the resolved bar, and it has to be: the accelerators a key
+        // press is offered to must be exactly the ones the user can see, or a
+        // shortcut fires from a menu that is not on screen. That is why this
+        // reads _activeMenu rather than asking the focused window again — one
+        // resolution, used by both the drawing and the keyboard.
+        if (_activeMenu != IntPtr.Zero && _menus.TryGetValue(_activeMenu, out var bar)) {
             var item = bar.FindAccelerator(keysym, modifiers);
             if (item != 0) {
                 if (pressed) {
                     Log.Line($"accelerator activated menu item {item}");
-                    Wlroots.MenuSendActivated(Focused, item);
+                    Wlroots.MenuSendActivated(_activeMenu, item);
                 }
 
                 return true;

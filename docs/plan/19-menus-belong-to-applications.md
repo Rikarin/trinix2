@@ -1,5 +1,12 @@
 # 19 — Menus Belong to Applications
 
+**✅ Carried out.** All four places below have changed: `trinix-menu-v1` splits `get_menu_bar(id)`
+from `get_toplevel_menu_bar(id, toplevel)`, the wlroots shim tracks a menu on the `wl_client` with a
+second list for overrides, the compositor resolves on focus change and looks accelerators up through
+the same resolution, and `TrinixMenu.ForApplication()` is the entry point with `ForWindow` as the
+override. [The contract](../vixen-platform-contract.md) § 5 is now written against what the protocol
+does, and this document is kept for the reasoning.
+
 ⚠️ **Amends [the Vixen ⇄ Trinix contract](../vixen-platform-contract.md) § 5, the
 `trinix-menu-v1` protocol, and [02](02-services-architecture.md) § The transport decision.**
 

@@ -36,6 +36,7 @@
 
 struct trinix_wl_client;
 struct trinix_wl_window;
+struct trinix_wl_menu;
 
 /* Which optional globals the compositor offered. A missing one is a capability
  * the platform does not report, not an error: docs/vixen-platform-contract.md
@@ -138,11 +139,15 @@ struct trinix_wl_callbacks {
      *
      * `activated` is leaf items only, and deliberately does not toggle
      * anything: whether a click on a checkbox changes its state is the
-     * application's business, and it says so with trinix_wl_window_menu_update.
+     * application's business, and it says so with trinix_wl_menu_update.
+     *
+     * These name a menu rather than a window because a menu bar is the
+     * application's: the same one is shown for every window, and it exists
+     * while the application has no window at all.
      */
-    void (*menu_activated)(struct trinix_wl_window *window, uint32_t id);
-    void (*menu_about_to_show)(struct trinix_wl_window *window, uint32_t id);
-    void (*menu_closed)(struct trinix_wl_window *window);
+    void (*menu_activated)(struct trinix_wl_menu *menu, uint32_t id);
+    void (*menu_about_to_show)(struct trinix_wl_menu *menu, uint32_t id);
+    void (*menu_closed)(struct trinix_wl_menu *menu);
 };
 
 /* --- lifecycle ---------------------------------------------------------- */
@@ -273,14 +278,37 @@ void trinix_wl_window_unset_control(struct trinix_wl_window *window, uint32_t co
  *
  * The shell holds the whole model and renders it. Changes accumulate until
  * commit, so a menu bar is never drawn half-built.
+ *
+ * A menu bar belongs to the application, and trinix_wl_client_menu_create is
+ * how one is asked for. It covers every window the client opens, it does not
+ * change when the user moves between two of them, and it goes on existing when
+ * they are all closed — which is how the user opens one again.
+ *
+ * ⚠ trinix_wl_window_menu_create is the exception, not the shorthand. It gives
+ * one window a menu bar of its own, shown in place of the client's while that
+ * window is active. Reach for it when a window's menus genuinely are not the
+ * application's; reaching for it per window rebuilds the mistake the client
+ * scope exists to avoid — N copies of one tree, and every state change applied
+ * N times.
+ *
+ * Both are idempotent and both return NULL if the compositor offered no
+ * trinix_menu_manager_v1, which is a system with no menu bar and an
+ * application that is otherwise fine.
  */
-void trinix_wl_window_menu_insert(struct trinix_wl_window *window, uint32_t id, uint32_t parent,
-                                  int32_t index, uint32_t kind, const char *label);
-void trinix_wl_window_menu_update(struct trinix_wl_window *window, uint32_t id,
-                                  const char *label, uint32_t state);
-void trinix_wl_window_menu_accelerator(struct trinix_wl_window *window, uint32_t id,
-                                       uint32_t keysym, uint32_t modifiers);
-void trinix_wl_window_menu_remove(struct trinix_wl_window *window, uint32_t id);
-void trinix_wl_window_menu_commit(struct trinix_wl_window *window);
+struct trinix_wl_menu *trinix_wl_client_menu_create(struct trinix_wl_client *client);
+struct trinix_wl_menu *trinix_wl_window_menu_create(struct trinix_wl_window *window);
+
+/* Withdraws the bar. A window's override is destroyed with the window; the
+ * client's own bar lives until the client disconnects, or until this. */
+void trinix_wl_menu_destroy(struct trinix_wl_menu *menu);
+
+void trinix_wl_menu_insert(struct trinix_wl_menu *menu, uint32_t id, uint32_t parent,
+                           int32_t index, uint32_t kind, const char *label);
+void trinix_wl_menu_update(struct trinix_wl_menu *menu, uint32_t id,
+                           const char *label, uint32_t state);
+void trinix_wl_menu_accelerator(struct trinix_wl_menu *menu, uint32_t id,
+                                uint32_t keysym, uint32_t modifiers);
+void trinix_wl_menu_remove(struct trinix_wl_menu *menu, uint32_t id);
+void trinix_wl_menu_commit(struct trinix_wl_menu *menu);
 
 #endif /* TRINIX_WL_CLIENT_H */

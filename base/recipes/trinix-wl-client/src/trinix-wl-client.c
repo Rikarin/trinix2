@@ -44,6 +44,24 @@ struct trinix_wl_output {
     bool used;
 };
 
+/*
+ * One exported menu bar, and what it is scoped to.
+ *
+ * `window` is NULL for the client's own bar, which is the ordinary kind: the
+ * menus are the application's and every window it opens is under them. Only a
+ * window whose menus genuinely differ gets one of its own, and then `window`
+ * names it.
+ *
+ * The indirection exists so that one listener serves both scopes and so that
+ * everything above this library holds a menu rather than a window — which is
+ * what lets an application with nothing open still have a menu bar.
+ */
+struct trinix_wl_menu {
+    struct trinix_wl_client *client;
+    struct trinix_wl_window *window;
+    struct trinix_menu_v1 *proxy;
+};
+
 struct trinix_wl_client {
     struct wl_display *display;
     struct wl_registry *registry;
@@ -54,6 +72,7 @@ struct trinix_wl_client {
     struct wl_pointer *pointer;
     struct trinix_shell_v1 *shell;
     struct trinix_menu_manager_v1 *menu_manager;
+    struct trinix_wl_menu *menu;
     struct wl_data_device_manager *data_device_manager;
 
     struct trinix_wl_output outputs[MAX_OUTPUTS];
@@ -93,7 +112,10 @@ struct trinix_wl_window {
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *toplevel;
     struct trinix_shell_surface_v1 *shell_surface;
-    struct trinix_menu_v1 *menu;
+
+    /* An override, and null on almost every window: the menus are the
+     * client's unless this one said otherwise. */
+    struct trinix_wl_menu *menu;
     struct wl_region *drag_region;
 
     /* The size the compositor last asked for, and the one to use when it asks
@@ -690,29 +712,29 @@ static const struct trinix_shell_surface_v1_listener shell_surface_listener = {
 };
 
 static void menu_activated(void *data, struct trinix_menu_v1 *proxy, uint32_t id) {
-    struct trinix_wl_window *window = data;
+    struct trinix_wl_menu *menu = data;
     (void) proxy;
 
-    if (window->client->callbacks.menu_activated != NULL) {
-        window->client->callbacks.menu_activated(window, id);
+    if (menu->client->callbacks.menu_activated != NULL) {
+        menu->client->callbacks.menu_activated(menu, id);
     }
 }
 
 static void menu_about_to_show(void *data, struct trinix_menu_v1 *proxy, uint32_t id) {
-    struct trinix_wl_window *window = data;
+    struct trinix_wl_menu *menu = data;
     (void) proxy;
 
-    if (window->client->callbacks.menu_about_to_show != NULL) {
-        window->client->callbacks.menu_about_to_show(window, id);
+    if (menu->client->callbacks.menu_about_to_show != NULL) {
+        menu->client->callbacks.menu_about_to_show(menu, id);
     }
 }
 
 static void menu_closed(void *data, struct trinix_menu_v1 *proxy) {
-    struct trinix_wl_window *window = data;
+    struct trinix_wl_menu *menu = data;
     (void) proxy;
 
-    if (window->client->callbacks.menu_closed != NULL) {
-        window->client->callbacks.menu_closed(window);
+    if (menu->client->callbacks.menu_closed != NULL) {
+        menu->client->callbacks.menu_closed(menu);
     }
 }
 
@@ -868,6 +890,9 @@ void trinix_wl_client_destroy(struct trinix_wl_client *client) {
     if (client->keyboard != NULL) { wl_keyboard_release(client->keyboard); }
     if (client->pointer != NULL) { wl_pointer_release(client->pointer); }
     if (client->seat != NULL) { wl_seat_destroy(client->seat); }
+    /* The bar before the manager that handed it out: the protocol says menus
+     * survive their manager, not the other way round. */
+    if (client->menu != NULL) { trinix_wl_menu_destroy(client->menu); }
     if (client->menu_manager != NULL) { trinix_menu_manager_v1_destroy(client->menu_manager); }
     if (client->shell != NULL) { trinix_shell_v1_destroy(client->shell); }
     if (client->data_device_manager != NULL) {
@@ -1009,10 +1034,11 @@ struct trinix_wl_window *trinix_wl_window_create(struct trinix_wl_client *client
         trinix_shell_surface_v1_add_listener(window->shell_surface, &shell_surface_listener, window);
     }
 
-    if (client->menu_manager != NULL) {
-        window->menu = trinix_menu_manager_v1_get_menu_bar(client->menu_manager, window->toplevel);
-        trinix_menu_v1_add_listener(window->menu, &menu_listener, window);
-    }
+    /* No menu is created here. A menu belongs to the application, not to each
+     * of its windows, so creating one per window would export the same tree N
+     * times and leave the application applying every state change N times.
+     * trinix_wl_client_menu_create is where a menu bar comes from; a window
+     * that genuinely needs a different one asks for it by name. */
 
     /* A commit with no buffer, which the protocol requires before the first
      * configure: it is what says "the role is set, tell me how big to be".
@@ -1035,7 +1061,9 @@ void trinix_wl_window_destroy(struct trinix_wl_window *window) {
     if (client->pointer_focus == window) { client->pointer_focus = NULL; }
 
     if (window->drag_region != NULL) { wl_region_destroy(window->drag_region); }
-    if (window->menu != NULL) { trinix_menu_v1_destroy(window->menu); }
+    /* The override goes with the window it overrode. The client's own bar is
+     * not this window's to take down, and does not move. */
+    if (window->menu != NULL) { trinix_wl_menu_destroy(window->menu); }
     if (window->shell_surface != NULL) { trinix_shell_surface_v1_destroy(window->shell_surface); }
     if (window->toplevel != NULL) { xdg_toplevel_destroy(window->toplevel); }
     if (window->xdg_surface != NULL) { xdg_surface_destroy(window->xdg_surface); }
@@ -1158,35 +1186,99 @@ void trinix_wl_window_unset_control(struct trinix_wl_window *window, uint32_t co
 /* trinix-menu-v1                                                           */
 /* ======================================================================== */
 
-void trinix_wl_window_menu_insert(struct trinix_wl_window *window, uint32_t id, uint32_t parent,
-                                  int32_t index, uint32_t kind, const char *label) {
-    if (window != NULL && window->menu != NULL) {
-        trinix_menu_v1_insert(window->menu, id, parent, index, kind, label != NULL ? label : "");
+/* The half both scopes share: wrap a freshly created trinix_menu_v1 in the
+ * record the rest of this library and everything above it hold. */
+static struct trinix_wl_menu *menu_wrap(struct trinix_wl_client *client,
+                                        struct trinix_wl_window *window,
+                                        struct trinix_menu_v1 *proxy) {
+    struct trinix_wl_menu *menu = calloc(1, sizeof *menu);
+    if (menu == NULL) {
+        trinix_menu_v1_destroy(proxy);
+        return NULL;
+    }
+
+    menu->client = client;
+    menu->window = window;
+    menu->proxy = proxy;
+    trinix_menu_v1_add_listener(proxy, &menu_listener, menu);
+    return menu;
+}
+
+struct trinix_wl_menu *trinix_wl_client_menu_create(struct trinix_wl_client *client) {
+    if (client == NULL || client->menu_manager == NULL) {
+        return NULL;
+    }
+
+    /* Idempotent, because asking twice is a protocol error and the caller
+     * above has no cheaper way to know it has already asked. */
+    if (client->menu != NULL) {
+        return client->menu;
+    }
+
+    client->menu = menu_wrap(client, NULL,
+                             trinix_menu_manager_v1_get_menu_bar(client->menu_manager));
+    return client->menu;
+}
+
+struct trinix_wl_menu *trinix_wl_window_menu_create(struct trinix_wl_window *window) {
+    if (window == NULL || window->client->menu_manager == NULL) {
+        return NULL;
+    }
+    if (window->menu != NULL) {
+        return window->menu;
+    }
+
+    window->menu = menu_wrap(
+        window->client, window,
+        trinix_menu_manager_v1_get_toplevel_menu_bar(window->client->menu_manager,
+                                                     window->toplevel));
+    return window->menu;
+}
+
+void trinix_wl_menu_destroy(struct trinix_wl_menu *menu) {
+    if (menu == NULL) {
+        return;
+    }
+
+    if (menu->window != NULL) {
+        menu->window->menu = NULL;
+    } else if (menu->client != NULL) {
+        menu->client->menu = NULL;
+    }
+
+    trinix_menu_v1_destroy(menu->proxy);
+    free(menu);
+}
+
+void trinix_wl_menu_insert(struct trinix_wl_menu *menu, uint32_t id, uint32_t parent,
+                           int32_t index, uint32_t kind, const char *label) {
+    if (menu != NULL) {
+        trinix_menu_v1_insert(menu->proxy, id, parent, index, kind, label != NULL ? label : "");
     }
 }
 
-void trinix_wl_window_menu_update(struct trinix_wl_window *window, uint32_t id,
-                                  const char *label, uint32_t state) {
-    if (window != NULL && window->menu != NULL) {
-        trinix_menu_v1_update(window->menu, id, label != NULL ? label : "", state);
+void trinix_wl_menu_update(struct trinix_wl_menu *menu, uint32_t id,
+                           const char *label, uint32_t state) {
+    if (menu != NULL) {
+        trinix_menu_v1_update(menu->proxy, id, label != NULL ? label : "", state);
     }
 }
 
-void trinix_wl_window_menu_accelerator(struct trinix_wl_window *window, uint32_t id,
-                                       uint32_t keysym, uint32_t modifiers) {
-    if (window != NULL && window->menu != NULL) {
-        trinix_menu_v1_set_accelerator(window->menu, id, keysym, modifiers);
+void trinix_wl_menu_accelerator(struct trinix_wl_menu *menu, uint32_t id,
+                                uint32_t keysym, uint32_t modifiers) {
+    if (menu != NULL) {
+        trinix_menu_v1_set_accelerator(menu->proxy, id, keysym, modifiers);
     }
 }
 
-void trinix_wl_window_menu_remove(struct trinix_wl_window *window, uint32_t id) {
-    if (window != NULL && window->menu != NULL) {
-        trinix_menu_v1_remove(window->menu, id);
+void trinix_wl_menu_remove(struct trinix_wl_menu *menu, uint32_t id) {
+    if (menu != NULL) {
+        trinix_menu_v1_remove(menu->proxy, id);
     }
 }
 
-void trinix_wl_window_menu_commit(struct trinix_wl_window *window) {
-    if (window != NULL && window->menu != NULL) {
-        trinix_menu_v1_commit(window->menu);
+void trinix_wl_menu_commit(struct trinix_wl_menu *menu) {
+    if (menu != NULL) {
+        trinix_menu_v1_commit(menu->proxy);
     }
 }

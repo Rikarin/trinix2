@@ -92,7 +92,8 @@ trinix_check() {
                   trinix_wl_window_begin_move trinix_wl_window_begin_resize \
                   trinix_wl_window_set_shadow trinix_wl_window_set_corner_radius \
                   trinix_wl_window_set_drag_region trinix_wl_window_set_control \
-                  trinix_wl_window_menu_insert trinix_wl_window_menu_commit; do
+                  trinix_wl_client_menu_create trinix_wl_window_menu_create \
+                  trinix_wl_menu_insert trinix_wl_menu_commit trinix_wl_menu_destroy; do
         grep -qx "$symbol" <<<"$symbols" || missing="$missing $symbol"
     done
     [ -z "$missing" ] || { echo "trinix-wl-client: missing entry point(s):$missing" >&2; return 1; }
