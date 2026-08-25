@@ -8,9 +8,13 @@ kernel is an implementation detail that a user never has to learn.
 This directory is the authoritative design record for the half of that which is not built yet: what
 each subsystem is meant to be, and why each decision was taken.
 
-**These documents do not say what is built.** [`../../README.md`](../../README.md) does, and
-[`../../IMPLEMENTATION_PLAN.md`](../../IMPLEMENTATION_PLAN.md) is the record of Phases 0–6 — the
-toolchain, the base system, the image, .NET and PowerShell, the compositor, the Vixen platform
+**These documents do not say what is built.** [`../overview.md`](../overview.md) does, and it is the
+only place that carries per-subsystem status: what exists, where it lives, what is owed, and — in its
+Part 3 — every place a document here has been found to disagree with the tree. Read it before
+believing any sentence in this directory that is written in the present tense.
+[`../../README.md`](../../README.md) is the introduction, and
+[`../../IMPLEMENTATION_PLAN.md`](../../IMPLEMENTATION_PLAN.md) is the original record of Phases 0–6 —
+the toolchain, the base system, the image, .NET and PowerShell, the compositor, the Vixen platform
 backend, and the bundle format. Where a document here and the code disagree, the code wins and the
 document is wrong; say so in a pull request rather than in a comment.
 
