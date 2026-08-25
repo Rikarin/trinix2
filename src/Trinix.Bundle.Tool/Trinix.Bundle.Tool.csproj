@@ -25,6 +25,13 @@
 
     <ItemGroup>
         <ProjectReference Include="../Trinix.Bundle/Trinix.Bundle.csproj"/>
+        <!--
+          `doctor` only. It brings Trinix.Sandbox in behind it, which is the point:
+          the check worth having is not "is this JSON valid" but "which of the
+          permissions you declared will be enforced by nothing", and the only thing
+          that knows that is the code the launcher builds its unit with.
+        -->
+        <ProjectReference Include="../Trinix.Conformance/Trinix.Conformance.csproj"/>
     </ItemGroup>
 
 </Project>

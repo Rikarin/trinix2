@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using Trinix.Bundle;
 using Trinix.Bundle.Tool;
+using Trinix.Conformance;
 
 // trinix-bundle — create, sign, package, verify and install Trinix applications.
 //
@@ -36,6 +37,7 @@ try {
         "uninstall" => Uninstall(rest),
         "list" => List(),
         "info" => await Info(rest).ConfigureAwait(false),
+        "doctor" => await Doctor(rest).ConfigureAwait(false),
         _ => Unknown(verb)
     };
 } catch (UsageException e) {
@@ -80,6 +82,13 @@ void Usage() {
           uninstall     <bundle.app>
           list          Installed applications, from their receipts.
           info          <bundle.app | image.tdi>
+
+        Conformance:
+          doctor        <bundle.app> [--trust DIR] [--store] [--strict] [--width N]
+                        Everything wrong with a bundle, and what to do about it.
+                        --store  doc 09 § Submission's subset: the repository's gates
+                                 are reported as errors rather than warnings.
+                        --strict warnings fail too. For CI, not for a person.
 
         --trust defaults to /usr/share/trinix/pki/roots, which the system image carries.
         """
@@ -390,6 +399,50 @@ async Task<int> Info(string[] arguments) {
     }
 
     return problems.Count == 0 ? ExitOk : ExitRejected;
+}
+
+// --- doctor -----------------------------------------------------------------
+
+async Task<int> Doctor(string[] arguments) {
+    var line = CommandLine.Parse(
+        arguments,
+        new HashSet<string>(StringComparer.Ordinal) { "trust", "width" },
+        new HashSet<string>(StringComparer.Ordinal) { "store", "strict" }
+    );
+
+    var report = await Trinix.Conformance.Doctor
+        .RunAsync(
+            line.PositionalAt(0, "a bundle directory"),
+            new DoctorOptions { TrustDirectory = line.Value("trust"), Store = line.Has("store") }
+        )
+        .ConfigureAwait(false);
+
+    DoctorWriter.Write(Console.Out, report, Width(line.Value("width")));
+
+    // ⚠ Errors fail, warnings do not, and --strict is how CI asks for the stricter
+    // rule rather than the tool asking everyone for it. A conformance tool whose
+    // warnings fail the build is one whose warnings get deleted; doc 16 runs this
+    // over Trinix's own applications, which is the caller that should be strict.
+    if (!report.Ok) {
+        return ExitRejected;
+    }
+
+    return line.Has("strict") && report.Count(Severity.Warning) > 0 ? ExitRejected : ExitOk;
+}
+
+// A UsageException rather than letting int.Parse throw: `--width wide` is somebody
+// writing the command wrong, and it should read as that rather than as a crash in
+// the tool that was about to tell them what is wrong with their bundle.
+static int Width(string? value) {
+    if (value is null) {
+        return DoctorWriter.DefaultWidth;
+    }
+
+    if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var width) || width < 48) {
+        throw new UsageException($"--width takes a number of columns, at least 48 (got '{value}')");
+    }
+
+    return width;
 }
 
 // ISO 8601, or @<unix seconds> — the second form because every caller here is a

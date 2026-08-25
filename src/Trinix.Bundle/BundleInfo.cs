@@ -96,6 +96,45 @@ public sealed class BundleInfo {
     public IReadOnlyList<string> Categories { get => field ?? []; init; } = [];
 
     /// <summary>
+    ///     Why the application asks for each permission, keyed by the permission
+    ///     string — the sentence the consent dialog shows.
+    /// </summary>
+    /// <remarks>
+    ///     <para>
+    ///         Doc 04 § Consent: "the dialog names the application, the thing, and —
+    ///         where it can — the why the app declared. <c>Info.json</c> may carry a
+    ///         <c>usageDescription</c> per permission; <c>trinix doctor</c> warns when
+    ///         it is missing, the Store requires it." This is that field, spelled as a
+    ///         map because "per permission" is what it is.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Optional, and deliberately not validated by
+    ///         <see cref="Validate" />.</b> A missing description, or one for a
+    ///         permission that was never declared, is a conformance finding rather than
+    ///         a reason to refuse a launch — the permission set is what the sandbox is
+    ///         built from, and this is the prose next to it. Making it a refusal here
+    ///         would mean a bundle already in the field stops running because its
+    ///         author left out a sentence. <c>Trinix.Conformance</c> is where every rule
+    ///         about it lives, at the severity each one has earned.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ Additive to a signed format, which is only safe because the signature
+    ///         covers <i>file bytes</i>: a bundle sealed before this field existed has
+    ///         an <c>Info.json</c> that simply lacks it, verifies unchanged, and arrives
+    ///         here as an empty map. Coalesced in the getter for the reason
+    ///         <see cref="Permissions" /> gives.
+    ///     </para>
+    /// </remarks>
+    [JsonPropertyName("usageDescriptions")]
+    public IReadOnlyDictionary<string, string> UsageDescriptions {
+        get => field ?? EmptyDescriptions;
+        init;
+    } = EmptyDescriptions;
+
+    static readonly IReadOnlyDictionary<string, string> EmptyDescriptions =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
     ///     Everything wrong with this file, or an empty list.
     /// </summary>
     /// <remarks>
@@ -110,7 +149,7 @@ public sealed class BundleInfo {
             problems.Add($"schema is '{Schema}', expected '{BundleSchema.Info}'");
         }
 
-        if (!IsReverseDns(Identifier)) {
+        if (!IsReverseDnsIdentifier(Identifier)) {
             problems.Add($"identifier '{Identifier}' is not a reverse-DNS name (e.g. io.trinix.hello)");
         }
 
@@ -118,7 +157,7 @@ public sealed class BundleInfo {
             problems.Add("name is empty");
         }
 
-        if (!IsDottedNumeric(Version)) {
+        if (!IsOrderedVersion(Version)) {
             problems.Add($"version '{Version}' is not dotted-numeric");
         }
 
@@ -137,7 +176,25 @@ public sealed class BundleInfo {
         return problems;
     }
 
-    static bool IsReverseDns(string value) {
+    /// <summary>
+    ///     Is <paramref name="value" /> shaped like an application identity?
+    /// </summary>
+    /// <param name="value">The candidate, e.g. <c>io.trinix.hello</c>.</param>
+    /// <remarks>
+    ///     ⚠ Public so that <c>trinix doctor</c> can ask the same question this type
+    ///     answers, rather than carrying a second predicate that agrees with this one
+    ///     until somebody changes one of them. The tool that <i>reports</i> a malformed
+    ///     identity and the sealer that <i>refuses</i> one disagreeing about what
+    ///     malformed means is the worst outcome available: a bundle that passes
+    ///     conformance and fails packaging.
+    ///     <para>
+    ///         Deliberately permissive about things a reverse-DNS name would not
+    ///         actually allow — an underscore, a leading digit, an uppercase letter —
+    ///         because tightening it here would refuse bundles that already exist.
+    ///         Doctor warns about each of those separately.
+    ///     </para>
+    /// </remarks>
+    public static bool IsReverseDnsIdentifier(string value) {
         if (string.IsNullOrEmpty(value)) {
             return false;
         }
@@ -163,7 +220,15 @@ public sealed class BundleInfo {
         return true;
     }
 
-    static bool IsDottedNumeric(string value) {
+    /// <summary>
+    ///     Is <paramref name="value" /> a version the package manager can order?
+    /// </summary>
+    /// <param name="value">The candidate, e.g. <c>1.2.0</c>.</param>
+    /// <remarks>
+    ///     Dotted numeric and nothing else. Public for the reason
+    ///     <see cref="IsReverseDnsIdentifier" /> gives.
+    /// </remarks>
+    public static bool IsOrderedVersion(string value) {
         if (string.IsNullOrEmpty(value)) {
             return false;
         }
