@@ -243,6 +243,21 @@ build privileges at all: `mkfs.btrfs` has had `--rootdir` for years, and since
 6.11 it has `--subvol`, so a whole subvolume layout can be built from a staging
 directory the same way `mke2fs -d` builds an ext4 tree.
 
+⚠ **Where that tool has to live, and what it costs.** `mkfs.btrfs` comes from
+Debian's `btrfs-progs` in [`docker/host-tools.Dockerfile`](../docker/host-tools.Dockerfile),
+next to `e2fsprogs` and `mtools` for the same reason they are there. But this
+script runs inside the *base* image, and the chain is
+`image ← base ← toolchain ← host-tools` — so a tool added to host-tools does
+not reach image assembly until the toolchain has been rebuilt on top of it,
+and rebuilding the toolchain means rebuilding LLVM. Adding `btrfs-progs`
+therefore cost one full `-Stage toolchain` (~4400 ninja targets) before
+`-Stage image` could run at all; a `-Stage base` on its own rebuilds
+host-tools, which looks like it ought to be enough and is not. It is a one-time
+cost — every build after it is a cache hit again — but it is the kind of thing
+that reads as a mysterious `mkfs.btrfs: command not found` if nobody wrote it
+down. The order that works from a stale tree is
+`-Stage toolchain`, then `-Stage base`, then `-Stage image`.
+
 Partition GUIDs, filesystem UUIDs and the ext4 hash seed are fixed constants
 rather than values a tool generated from `/dev/urandom` — so two builds of the
 same tree differ only where file timestamps do. Closing that last gap needs
