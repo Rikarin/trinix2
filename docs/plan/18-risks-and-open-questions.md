@@ -97,11 +97,17 @@ controls, markup, styling and text**, and doc 01 explicitly forbids forking them
 computed rather than stored"*. The ask in [Vixen's doc 46](../../../Vixen/docs/plan/46-what-an-application-needs.md)
 was made and answered.
 
-⚠ **Trinix cannot see it yet.** `vendor/vixen/` is **81 commits behind** and the pinned `Vixen.Ui.dll`
-contains none of those symbols, so everything doc [15](15-accessibility.md) says about a greenfield
-remains true *of this repository* until the pin moves. The fix is a `scripts/update-vixen.ps1` bump,
-not an edit — and the bump is its own risk, since 81 commits can move `IPlatform` under
-`Trinix.Platform`.
+✅ **And Trinix can now see it.** The pin moved to `a17fb05016a2` on 2026-08-26; the vendored
+`Vixen.Ui` package documents the accessibility surface, and `StringId`/`StringCatalog` came with it in
+the same assembly. The bump cost **no analyser warnings and no closure growth** — `Vixen.Ui.Desktop`'s
+closure is the same 41 packages at both commits — and `Core/Vixen.Platform` has a **zero-byte diff
+across all 81 commits**, which is the platform contract's firewall doing precisely what it was written
+for.
+
+⚠ Two caveats on the pin itself, both in [`vendor/vixen/README.md`](../../vendor/vixen/README.md): it
+was packed on a Mac with the host SDK and needs a container re-pack before its bytes are load-bearing,
+and `a17fb05016a2` was chosen for being *current* rather than right — Vixen's `master` moved between
+two of the packing run's own `git log` calls.
 
 ## R6 (historical) — how this entry was wrong twice
 

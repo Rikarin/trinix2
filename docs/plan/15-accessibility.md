@@ -14,9 +14,19 @@ Trinix.Sdk           the AT-SPI bridge, the system settings, the checker
 Assistive tools      screen reader, magnifier, switch control, voice control
 ```
 
-⚠ **The bottom layer is Vixen's, and this document was wrong about it in both halves.** Corrected
-2026-08-25 against the code. It said Vixen's controls "have accessibility in the design (doc 09 lists
-it as part of every control's base API)" and that what exists "is not audited". Neither is true:
+✅ **The bottom layer now exists, and this document was wrong about it twice on the way here.**
+
+**As of 2026-08-26** `Vixen.Ui` carries an accessibility surface — a WAI-ARIA 1.2 role vocabulary, with
+an element carrying role, name, value and state, and the ones a control already knows computed rather
+than stored — and Trinix's pin includes it. It was asked for as A2 of
+[Vixen's doc 46](../../../Vixen/docs/plan/46-what-an-application-needs.md) and built upstream.
+
+The AT-SPI bridge below is therefore unblocked, and its shape should be checked against what Vixen
+actually built rather than against what this document imagined.
+
+⚠ **The history is worth keeping**, because this document was wrong in two different directions inside
+a week. It first said Vixen's controls "have accessibility in the design (doc 09 lists it as part of
+every control's base API)" and that what exists "is not audited". Neither was true:
 
 - Vixen's doc 09 mentions accessibility **once**, in the *Testing* table's Controls row, as an
   "ARIA-role snapshot" — a promise about a test, not a base API. There is no § Accessibility in it.
