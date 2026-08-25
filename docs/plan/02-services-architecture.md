@@ -90,7 +90,9 @@ capability, not a guideline.
 
 | | Decision |
 |---|---|
-| Model | A notification is a record with an identity, not a string: `(app, id, title, body, urgency, actions[], reply?, group, timestamp, expiry)` |
+| Model | A notification is a record with an identity, not a string: `(app, id, title, body, urgency, actions[], reply?, group, timestamp, expiry)`. ⚠ **Three of those an application may not author** — `app` comes from the connection's credentials so the sandbox can attribute it (doc 04 § Attribution), `id` is the service's, and `timestamp` is the service's because a notification stamped by its poster is one whose position in a history sorted by time can be forged by a clock. Built 2026-08-25 as `NotificationId` + `NotificationRequest` for exactly that reason |
+| Update is a **replacement**, not a patch | A patch shape needs every field optional, and then "clear the body" and "leave the body alone" are the same message |
+| ⚠ D-Bus has no null | An optional member is an **array of zero or one**, the standard encoding, restricted to record types so a `string?` cannot silently marshal as `as`. `Expiry` is a `TimeSpan` where `Zero` means *never* — a notification that expires immediately is not a notification |
 | Update and withdraw | First-class. An application updates its own notification by id rather than posting a second one — the reason every Linux desktop has a download notification per percent |
 | Grouping | By app, then by the app's own `group` key. Collapsed after three |
 | Actions | Named, and they **activate the application** rather than running a callback in the shell. A notification that survives its app's exit still works |
@@ -126,6 +128,12 @@ That has two consequences.
 | Text, rich text, image, files, colour | Materialised and in history |
 | Anything over 8 MB, or a type not on the list | Passed through live, not in history |
 | Marked sensitive | Passed through live, never in history, cleared from the current clipboard after 45 s |
+
+⚠ **The contract's load-bearing feature is an absence.** `IClipboard` has no history member at all — an
+application reads the *current* clipboard when focused and can never reach the history, which is the
+shell's. An absence cannot be reviewed, so it is pinned by a test rather than by this paragraph. Bulk
+data crosses as a `SafeFileHandle`, never a byte array, and an offer carries a serial so that
+*get-then-read* is race-free against the user copying something else in between.
 
 Cross-device sync is post-1.0 and is doc 17's; the record shape above is designed to be
 serialisable so that it does not need to change then.
