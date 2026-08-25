@@ -227,3 +227,42 @@ jobs:
 
       - name: Test
         run: dotnet test src/Trinix.slnx --configuration Release --no-build
+
+      # Every library's public surface, against the PublicAPI.*.txt files committed
+      # beside it. Last because it needs the build and because a failing test is the
+      # more urgent news; --no-build for the same reason the steps above use
+      # --no-restore. Both directions: an unapproved addition fails, and so does a
+      # removal — which is the half that compiles cleanly, passes every test above,
+      # and breaks whoever was calling.
+      - name: Public API baseline
+        shell: pwsh
+        run: ./scripts/check-api.ps1 -NoBuild
+
+  # ---------------------------------------------------------------------------
+  # Two builds of the same source must put the same bytes inside an application
+  # bundle. A sibling of `dotnet` rather than another step in it, for one reason:
+  # it builds everything twice, from cold intermediates both times, and the value
+  # of the `dotnet` job is that it answers in about ninety seconds. Run in
+  # parallel it costs a pull request nothing.
+  #
+  # No toolchain, no image, no Docker and no key — src/pack-apps.sh --seal-only
+  # stops before the .tdi, which is the only part that needs mkfs.erofs, and the
+  # script makes its own throwaway signing identity in a temporary directory. So
+  # this is the same command a developer runs, on the same inputs, which is what
+  # docs/plan/16 asks of every gate.
+  #
+  # ⚠ The signature is *not* reproducible and is not expected to be — ECDSA is
+  # randomised and the manifest records when it was signed. The Merkle root over
+  # the sealed file list is the subject. src/pack-apps.sh's header explains why.
+  # ---------------------------------------------------------------------------
+  determinism:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Two builds, one set of bundle contents
+        shell: pwsh
+        run: ./scripts/check-determinism.ps1

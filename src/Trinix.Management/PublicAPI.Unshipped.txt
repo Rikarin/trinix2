@@ -1,0 +1,92 @@
+#nullable enable
+Trinix.Management.GetTrinixNetworkInterfaceCommand -> sealed class
+Trinix.Management.GetTrinixNetworkInterfaceCommand : System.Management.Automation.PSCmdlet
+Trinix.Management.GetTrinixNetworkInterfaceCommand.GetTrinixNetworkInterfaceCommand() -> void
+Trinix.Management.GetTrinixNetworkInterfaceCommand.IncludeLoopback.get -> System.Management.Automation.SwitchParameter
+Trinix.Management.GetTrinixNetworkInterfaceCommand.IncludeLoopback.set -> System.Management.Automation.SwitchParameter
+Trinix.Management.GetTrinixNetworkInterfaceCommand.Name.get -> string[]?
+Trinix.Management.GetTrinixNetworkInterfaceCommand.Name.set -> string[]?
+Trinix.Management.GetTrinixServiceCommand -> sealed class
+Trinix.Management.GetTrinixServiceCommand : System.Management.Automation.PSCmdlet
+Trinix.Management.GetTrinixServiceCommand.Failed.get -> System.Management.Automation.SwitchParameter
+Trinix.Management.GetTrinixServiceCommand.Failed.set -> System.Management.Automation.SwitchParameter
+Trinix.Management.GetTrinixServiceCommand.GetTrinixServiceCommand() -> void
+Trinix.Management.GetTrinixServiceCommand.Name.get -> string[]?
+Trinix.Management.GetTrinixServiceCommand.Name.set -> string[]?
+Trinix.Management.GetTrinixSystemCommand -> sealed class
+Trinix.Management.GetTrinixSystemCommand : System.Management.Automation.PSCmdlet
+Trinix.Management.GetTrinixSystemCommand.GetTrinixSystemCommand() -> void
+Trinix.Management.RestartTrinixServiceCommand -> sealed class
+Trinix.Management.RestartTrinixServiceCommand : System.Management.Automation.PSCmdlet
+Trinix.Management.RestartTrinixServiceCommand.PassThru.get -> System.Management.Automation.SwitchParameter
+Trinix.Management.RestartTrinixServiceCommand.PassThru.set -> System.Management.Automation.SwitchParameter
+Trinix.Management.RestartTrinixServiceCommand.RestartTrinixServiceCommand() -> void
+Trinix.Management.TestTrinixSystemCommand -> sealed class
+Trinix.Management.TestTrinixSystemCommand : System.Management.Automation.PSCmdlet
+Trinix.Management.TestTrinixSystemCommand.Quiet.get -> System.Management.Automation.SwitchParameter
+Trinix.Management.TestTrinixSystemCommand.Quiet.set -> System.Management.Automation.SwitchParameter
+Trinix.Management.TestTrinixSystemCommand.TestTrinixSystemCommand() -> void
+Trinix.Management.TrinixCheck -> sealed class
+Trinix.Management.TrinixCheck.TrinixCheck() -> void
+Trinix.Management.TrinixNetworkInterface -> sealed class
+Trinix.Management.TrinixNetworkInterface.MacAddress.get -> string?
+Trinix.Management.TrinixNetworkInterface.MacAddress.init -> string?
+Trinix.Management.TrinixNetworkInterface.Mtu.get -> int
+Trinix.Management.TrinixNetworkInterface.Mtu.init -> int
+Trinix.Management.TrinixNetworkInterface.TrinixNetworkInterface() -> void
+Trinix.Management.TrinixService -> sealed class
+Trinix.Management.TrinixService.IsHealthy.get -> bool
+Trinix.Management.TrinixService.ProcessId.get -> int?
+Trinix.Management.TrinixService.ProcessId.init -> int?
+Trinix.Management.TrinixService.TrinixService() -> void
+Trinix.Management.TrinixSystemInfo -> sealed class
+Trinix.Management.TrinixSystemInfo.TrinixSystemInfo() -> void
+override Trinix.Management.GetTrinixNetworkInterfaceCommand.EndProcessing() -> void
+override Trinix.Management.GetTrinixServiceCommand.EndProcessing() -> void
+override Trinix.Management.GetTrinixSystemCommand.EndProcessing() -> void
+override Trinix.Management.RestartTrinixServiceCommand.ProcessRecord() -> void
+override Trinix.Management.TestTrinixSystemCommand.EndProcessing() -> void
+required Trinix.Management.RestartTrinixServiceCommand.Name.get -> string
+required Trinix.Management.RestartTrinixServiceCommand.Name.set -> string
+required Trinix.Management.TrinixCheck.Component.get -> string
+required Trinix.Management.TrinixCheck.Component.init -> string
+required Trinix.Management.TrinixCheck.Detail.get -> string
+required Trinix.Management.TrinixCheck.Detail.init -> string
+required Trinix.Management.TrinixCheck.Ok.get -> bool
+required Trinix.Management.TrinixCheck.Ok.init -> bool
+required Trinix.Management.TrinixNetworkInterface.Addresses.get -> string[]
+required Trinix.Management.TrinixNetworkInterface.Addresses.init -> string[]
+required Trinix.Management.TrinixNetworkInterface.IsUp.get -> bool
+required Trinix.Management.TrinixNetworkInterface.IsUp.init -> bool
+required Trinix.Management.TrinixNetworkInterface.Name.get -> string
+required Trinix.Management.TrinixNetworkInterface.Name.init -> string
+required Trinix.Management.TrinixNetworkInterface.State.get -> string
+required Trinix.Management.TrinixNetworkInterface.State.init -> string
+required Trinix.Management.TrinixService.Description.get -> string
+required Trinix.Management.TrinixService.Description.init -> string
+required Trinix.Management.TrinixService.Enabled.get -> string
+required Trinix.Management.TrinixService.Enabled.init -> string
+required Trinix.Management.TrinixService.Name.get -> string
+required Trinix.Management.TrinixService.Name.init -> string
+required Trinix.Management.TrinixService.State.get -> string
+required Trinix.Management.TrinixService.State.init -> string
+required Trinix.Management.TrinixService.SubState.get -> string
+required Trinix.Management.TrinixService.SubState.init -> string
+required Trinix.Management.TrinixSystemInfo.Architecture.get -> string
+required Trinix.Management.TrinixSystemInfo.Architecture.init -> string
+required Trinix.Management.TrinixSystemInfo.BootSlot.get -> string
+required Trinix.Management.TrinixSystemInfo.BootSlot.init -> string
+required Trinix.Management.TrinixSystemInfo.HostName.get -> string
+required Trinix.Management.TrinixSystemInfo.HostName.init -> string
+required Trinix.Management.TrinixSystemInfo.Kernel.get -> string
+required Trinix.Management.TrinixSystemInfo.Kernel.init -> string
+required Trinix.Management.TrinixSystemInfo.Name.get -> string
+required Trinix.Management.TrinixSystemInfo.Name.init -> string
+required Trinix.Management.TrinixSystemInfo.RootIsReadOnly.get -> bool
+required Trinix.Management.TrinixSystemInfo.RootIsReadOnly.init -> bool
+required Trinix.Management.TrinixSystemInfo.Runtime.get -> string
+required Trinix.Management.TrinixSystemInfo.Runtime.init -> string
+required Trinix.Management.TrinixSystemInfo.Uptime.get -> System.TimeSpan
+required Trinix.Management.TrinixSystemInfo.Uptime.init -> System.TimeSpan
+required Trinix.Management.TrinixSystemInfo.Version.get -> string
+required Trinix.Management.TrinixSystemInfo.Version.init -> string

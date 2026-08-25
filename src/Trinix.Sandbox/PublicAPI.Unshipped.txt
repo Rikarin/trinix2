@@ -1,0 +1,156 @@
+#nullable enable
+Trinix.Sandbox.BundleRuntime -> enum : int
+Trinix.Sandbox.BundleRuntime.BundleRuntime() -> void
+Trinix.Sandbox.BundleRuntime.Managed = 1 -> Trinix.Sandbox.BundleRuntime
+Trinix.Sandbox.BundleRuntime.Native = 2 -> Trinix.Sandbox.BundleRuntime
+Trinix.Sandbox.BundleRuntime.Unknown = 0 -> Trinix.Sandbox.BundleRuntime
+Trinix.Sandbox.BundleRuntimeDetection -> static class
+Trinix.Sandbox.SandboxCapabilities -> sealed record
+Trinix.Sandbox.SandboxCapabilities : System.IEquatable<Trinix.Sandbox.SandboxCapabilities>
+Trinix.Sandbox.SandboxCapabilities.PrivatePids.get -> bool
+Trinix.Sandbox.SandboxCapabilities.PrivatePids.init -> bool
+Trinix.Sandbox.SandboxCapabilities.SandboxCapabilities() -> void
+Trinix.Sandbox.SandboxCapabilities.Seccomp.get -> bool
+Trinix.Sandbox.SandboxCapabilities.Seccomp.init -> bool
+Trinix.Sandbox.SandboxGap -> sealed record
+Trinix.Sandbox.SandboxGap : System.IEquatable<Trinix.Sandbox.SandboxGap>
+Trinix.Sandbox.SandboxGap.SandboxGap() -> void
+Trinix.Sandbox.SandboxGapKind -> enum : int
+Trinix.Sandbox.SandboxGapKind.Broker = 0 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxGapKind.BundleFormat = 6 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxGapKind.Compositor = 1 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxGapKind.NoSuchProperty = 4 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxGapKind.Runtime = 5 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxGapKind.SandboxGapKind() -> void
+Trinix.Sandbox.SandboxGapKind.SessionManager = 2 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxGapKind.SystemCapability = 3 -> Trinix.Sandbox.SandboxGapKind
+Trinix.Sandbox.SandboxLayout -> sealed record
+Trinix.Sandbox.SandboxLayout : System.IEquatable<Trinix.Sandbox.SandboxLayout>
+Trinix.Sandbox.SandboxLayout.ComposedRoot.get -> string
+Trinix.Sandbox.SandboxLayout.ComposedRoot.init -> string
+Trinix.Sandbox.SandboxLayout.HomeInside.get -> string
+Trinix.Sandbox.SandboxLayout.NetworkNamespace.get -> string
+Trinix.Sandbox.SandboxLayout.NetworkNamespace.init -> string
+Trinix.Sandbox.SandboxLayout.RuntimeDirectory.get -> string
+Trinix.Sandbox.SandboxLayout.RuntimePaths.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxLayout.RuntimePaths.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxLayout.SandboxLayout() -> void
+Trinix.Sandbox.SandboxLayout.Validate() -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxOptions -> sealed record
+Trinix.Sandbox.SandboxOptions : System.IEquatable<Trinix.Sandbox.SandboxOptions>
+Trinix.Sandbox.SandboxOptions.Arguments.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxOptions.Arguments.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxOptions.Capabilities.get -> Trinix.Sandbox.SandboxCapabilities
+Trinix.Sandbox.SandboxOptions.Capabilities.init -> Trinix.Sandbox.SandboxCapabilities
+Trinix.Sandbox.SandboxOptions.Instance.get -> string?
+Trinix.Sandbox.SandboxOptions.Instance.init -> string?
+Trinix.Sandbox.SandboxOptions.Resources.get -> Trinix.Sandbox.SandboxResourceBounds
+Trinix.Sandbox.SandboxOptions.Resources.init -> Trinix.Sandbox.SandboxResourceBounds
+Trinix.Sandbox.SandboxOptions.Runtime.get -> Trinix.Sandbox.BundleRuntime
+Trinix.Sandbox.SandboxOptions.Runtime.init -> Trinix.Sandbox.BundleRuntime
+Trinix.Sandbox.SandboxOptions.SandboxOptions() -> void
+Trinix.Sandbox.SandboxOptions.WaylandDisplay.get -> string
+Trinix.Sandbox.SandboxOptions.WaylandDisplay.init -> string
+Trinix.Sandbox.SandboxResourceBounds -> sealed record
+Trinix.Sandbox.SandboxResourceBounds : System.IEquatable<Trinix.Sandbox.SandboxResourceBounds>
+Trinix.Sandbox.SandboxResourceBounds.CpuWeight.get -> uint
+Trinix.Sandbox.SandboxResourceBounds.CpuWeight.init -> uint
+Trinix.Sandbox.SandboxResourceBounds.MemoryMax.get -> string
+Trinix.Sandbox.SandboxResourceBounds.MemoryMax.init -> string
+Trinix.Sandbox.SandboxResourceBounds.SandboxResourceBounds() -> void
+Trinix.Sandbox.SandboxResourceBounds.TasksMax.get -> uint
+Trinix.Sandbox.SandboxResourceBounds.TasksMax.init -> uint
+Trinix.Sandbox.SandboxUnit -> sealed record
+Trinix.Sandbox.SandboxUnit : System.IEquatable<Trinix.Sandbox.SandboxUnit>
+Trinix.Sandbox.SandboxUnit.Arguments.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxUnit.Arguments.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxUnit.Environment.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxUnit.Environment.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxUnit.Gaps.get -> System.Collections.Generic.IReadOnlyList<Trinix.Sandbox.SandboxGap>
+Trinix.Sandbox.SandboxUnit.Gaps.init -> System.Collections.Generic.IReadOnlyList<Trinix.Sandbox.SandboxGap>
+Trinix.Sandbox.SandboxUnit.Properties.get -> System.Collections.Generic.IReadOnlyList<Trinix.Sandbox.UnitProperty>
+Trinix.Sandbox.SandboxUnit.Properties.init -> System.Collections.Generic.IReadOnlyList<Trinix.Sandbox.UnitProperty>
+Trinix.Sandbox.SandboxUnit.SandboxUnit() -> void
+Trinix.Sandbox.SandboxUnit.Sets(string name) -> bool
+Trinix.Sandbox.SandboxUnit.ToSystemdRunArguments() -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxUnit.ToUnitFile() -> string
+Trinix.Sandbox.SandboxUnit.ValueOf(string name) -> string?
+Trinix.Sandbox.SandboxUnit.ValuesOf(string name) -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Sandbox.SandboxUnitBuilder -> static class
+Trinix.Sandbox.SandboxUser -> sealed record
+Trinix.Sandbox.SandboxUser : System.IEquatable<Trinix.Sandbox.SandboxUser>
+Trinix.Sandbox.SandboxUser.SandboxUser() -> void
+Trinix.Sandbox.UnitProperty -> sealed record
+Trinix.Sandbox.UnitProperty : System.IEquatable<Trinix.Sandbox.UnitProperty>
+Trinix.Sandbox.UnitProperty.NeedsSeccomp.get -> bool
+Trinix.Sandbox.UnitProperty.NeedsSeccomp.init -> bool
+Trinix.Sandbox.UnitProperty.UnitProperty() -> void
+const Trinix.Sandbox.BundleRuntimeDetection.RuntimeConfigSuffix = ".runtimeconfig.json" -> string
+const Trinix.Sandbox.SandboxLayout.ContainerDataDirectory = "Data" -> string
+const Trinix.Sandbox.SandboxLayout.ContainersDirectory = "Library/Containers" -> string
+const Trinix.Sandbox.SandboxLayout.DefaultComposedRoot = "/usr/share/trinix/sandbox/root" -> string
+const Trinix.Sandbox.SandboxLayout.DefaultNetworkNamespace = "/run/netns/trinix-apps" -> string
+const Trinix.Sandbox.SandboxLayout.DefaultWaylandDisplay = "wayland-0" -> string
+const Trinix.Sandbox.SandboxUnitBuilder.UnitPrefix = "trinix-app-" -> string
+required Trinix.Sandbox.SandboxGap.Kind.get -> Trinix.Sandbox.SandboxGapKind
+required Trinix.Sandbox.SandboxGap.Kind.init -> Trinix.Sandbox.SandboxGapKind
+required Trinix.Sandbox.SandboxGap.Reason.get -> string
+required Trinix.Sandbox.SandboxGap.Reason.init -> string
+required Trinix.Sandbox.SandboxGap.Subject.get -> string
+required Trinix.Sandbox.SandboxGap.Subject.init -> string
+required Trinix.Sandbox.SandboxLayout.BundlePath.get -> string
+required Trinix.Sandbox.SandboxLayout.BundlePath.init -> string
+required Trinix.Sandbox.SandboxLayout.ContainerData.get -> string
+required Trinix.Sandbox.SandboxLayout.ContainerData.init -> string
+required Trinix.Sandbox.SandboxLayout.ContainerRoot.get -> string
+required Trinix.Sandbox.SandboxLayout.ContainerRoot.init -> string
+required Trinix.Sandbox.SandboxLayout.GroupName.get -> string
+required Trinix.Sandbox.SandboxLayout.GroupName.init -> string
+required Trinix.Sandbox.SandboxLayout.Identifier.get -> string
+required Trinix.Sandbox.SandboxLayout.Identifier.init -> string
+required Trinix.Sandbox.SandboxLayout.UserId.get -> uint
+required Trinix.Sandbox.SandboxLayout.UserId.init -> uint
+required Trinix.Sandbox.SandboxLayout.UserName.get -> string
+required Trinix.Sandbox.SandboxLayout.UserName.init -> string
+required Trinix.Sandbox.SandboxLayout.WaylandSocket.get -> string
+required Trinix.Sandbox.SandboxLayout.WaylandSocket.init -> string
+required Trinix.Sandbox.SandboxUnit.Description.get -> string
+required Trinix.Sandbox.SandboxUnit.Description.init -> string
+required Trinix.Sandbox.SandboxUnit.Permissions.get -> Trinix.Bundle.PermissionSet
+required Trinix.Sandbox.SandboxUnit.Permissions.init -> Trinix.Bundle.PermissionSet
+required Trinix.Sandbox.SandboxUnit.Program.get -> string
+required Trinix.Sandbox.SandboxUnit.Program.init -> string
+required Trinix.Sandbox.SandboxUnit.Runtime.get -> Trinix.Sandbox.BundleRuntime
+required Trinix.Sandbox.SandboxUnit.Runtime.init -> Trinix.Sandbox.BundleRuntime
+required Trinix.Sandbox.SandboxUnit.UnitName.get -> string
+required Trinix.Sandbox.SandboxUnit.UnitName.init -> string
+required Trinix.Sandbox.SandboxUser.GroupId.get -> uint
+required Trinix.Sandbox.SandboxUser.GroupId.init -> uint
+required Trinix.Sandbox.SandboxUser.GroupName.get -> string
+required Trinix.Sandbox.SandboxUser.GroupName.init -> string
+required Trinix.Sandbox.SandboxUser.Home.get -> string
+required Trinix.Sandbox.SandboxUser.Home.init -> string
+required Trinix.Sandbox.SandboxUser.Name.get -> string
+required Trinix.Sandbox.SandboxUser.Name.init -> string
+required Trinix.Sandbox.SandboxUser.UserId.get -> uint
+required Trinix.Sandbox.SandboxUser.UserId.init -> uint
+required Trinix.Sandbox.UnitProperty.Name.get -> string
+required Trinix.Sandbox.UnitProperty.Name.init -> string
+required Trinix.Sandbox.UnitProperty.Rationale.get -> string
+required Trinix.Sandbox.UnitProperty.Rationale.init -> string
+required Trinix.Sandbox.UnitProperty.Value.get -> string
+required Trinix.Sandbox.UnitProperty.Value.init -> string
+static Trinix.Sandbox.BundleRuntimeDetection.DetectFrom(System.Collections.Generic.IEnumerable<string> bundleRelativePaths) -> Trinix.Sandbox.BundleRuntime
+static Trinix.Sandbox.BundleRuntimeDetection.DetectFrom(Trinix.Bundle.BundleManifest manifest) -> Trinix.Sandbox.BundleRuntime
+static Trinix.Sandbox.SandboxCapabilities.Designed.get -> Trinix.Sandbox.SandboxCapabilities
+static Trinix.Sandbox.SandboxCapabilities.TrinixToday.get -> Trinix.Sandbox.SandboxCapabilities
+static Trinix.Sandbox.SandboxLayout.DefaultRuntimePaths.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Sandbox.SandboxLayout.For(Trinix.Bundle.BundleInfo info, string bundlePath, Trinix.Sandbox.SandboxUser user) -> Trinix.Sandbox.SandboxLayout
+static Trinix.Sandbox.SandboxLayout.For(Trinix.Bundle.BundleInfo info, string bundlePath, string userName, uint userId, string userHome, string? groupName = null) -> Trinix.Sandbox.SandboxLayout
+static Trinix.Sandbox.SandboxLayout.ForCurrentUser(Trinix.Bundle.BundleInfo info, string bundlePath) -> Trinix.Sandbox.SandboxLayout
+static Trinix.Sandbox.SandboxResourceBounds.Default.get -> Trinix.Sandbox.SandboxResourceBounds
+static Trinix.Sandbox.SandboxUnitBuilder.Build(Trinix.Bundle.BundleInfo info, Trinix.Sandbox.SandboxLayout layout, Trinix.Sandbox.SandboxOptions? options = null) -> Trinix.Sandbox.SandboxUnit
+static Trinix.Sandbox.SandboxUnitBuilder.UnitNameFor(string identifier, string? instance = null) -> string
+static Trinix.Sandbox.SandboxUser.Current() -> Trinix.Sandbox.SandboxUser
+static Trinix.Sandbox.SandboxUser.TryCurrent(out Trinix.Sandbox.SandboxUser? user, out string? problem) -> bool
+static Trinix.Sandbox.SandboxUser.TryResolve(uint userId, out Trinix.Sandbox.SandboxUser? user, out string? problem) -> bool

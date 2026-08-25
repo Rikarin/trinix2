@@ -1,0 +1,296 @@
+#nullable enable
+Trinix.Services.Contracts.Appearance -> sealed record
+Trinix.Services.Contracts.Appearance : System.IEquatable<Trinix.Services.Contracts.Appearance>
+Trinix.Services.Contracts.Appearance.AccentColor.get -> string
+Trinix.Services.Contracts.Appearance.AccentColor.init -> string
+Trinix.Services.Contracts.Appearance.Appearance(Trinix.Services.Contracts.ColorScheme Scheme, string AccentColor, bool ReduceMotion, bool IncreaseContrast) -> void
+Trinix.Services.Contracts.Appearance.IncreaseContrast.get -> bool
+Trinix.Services.Contracts.Appearance.IncreaseContrast.init -> bool
+Trinix.Services.Contracts.Appearance.ReduceMotion.get -> bool
+Trinix.Services.Contracts.Appearance.ReduceMotion.init -> bool
+Trinix.Services.Contracts.Appearance.Scheme.get -> Trinix.Services.Contracts.ColorScheme
+Trinix.Services.Contracts.Appearance.Scheme.init -> Trinix.Services.Contracts.ColorScheme
+Trinix.Services.Contracts.ClipboardHandler -> abstract class
+Trinix.Services.Contracts.ClipboardHandler.ClipboardHandler(Tmds.DBus.Protocol.DBusConnection connection) -> void
+Trinix.Services.Contracts.ClipboardHandler.ClipboardHandler(Tmds.DBus.Protocol.DBusConnection connection, string path) -> void
+Trinix.Services.Contracts.ClipboardHandler.Connection.get -> Tmds.DBus.Protocol.DBusConnection
+Trinix.Services.Contracts.ClipboardHandler.EmitChanged(Trinix.Services.Contracts.ClipboardOffer value) -> void
+Trinix.Services.Contracts.ClipboardHandler.EmitChanged(string destination, Trinix.Services.Contracts.ClipboardOffer value) -> void
+Trinix.Services.Contracts.ClipboardHandler.HandleMethodAsync(Tmds.DBus.Protocol.MethodContext context) -> System.Threading.Tasks.ValueTask
+Trinix.Services.Contracts.ClipboardHandler.Path.get -> string
+Trinix.Services.Contracts.ClipboardIntrospection -> static class
+Trinix.Services.Contracts.ClipboardOffer -> sealed record
+Trinix.Services.Contracts.ClipboardOffer : System.IEquatable<Trinix.Services.Contracts.ClipboardOffer>
+Trinix.Services.Contracts.ClipboardOffer.ClipboardOffer(System.Collections.Generic.IReadOnlyList<string> MimeTypes, bool Sensitive, ulong Serial) -> void
+Trinix.Services.Contracts.ClipboardOffer.MimeTypes.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Services.Contracts.ClipboardOffer.MimeTypes.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Services.Contracts.ClipboardOffer.Sensitive.get -> bool
+Trinix.Services.Contracts.ClipboardOffer.Sensitive.init -> bool
+Trinix.Services.Contracts.ClipboardOffer.Serial.get -> ulong
+Trinix.Services.Contracts.ClipboardOffer.Serial.init -> ulong
+Trinix.Services.Contracts.ClipboardProxy -> sealed class
+Trinix.Services.Contracts.ClipboardProxy : Trinix.Services.Contracts.IClipboard
+Trinix.Services.Contracts.ClipboardProxy.ClipboardProxy(Tmds.DBus.Protocol.DBusConnection connection) -> void
+Trinix.Services.Contracts.ClipboardProxy.ClipboardProxy(Tmds.DBus.Protocol.DBusConnection connection, string destination, string path) -> void
+Trinix.Services.Contracts.ClipboardProxy.GetOfferAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.ClipboardOffer>
+Trinix.Services.Contracts.ClipboardProxy.OfferAsync(System.Collections.Generic.IReadOnlyList<Trinix.Services.Contracts.ClipboardRepresentation> representations, bool sensitive, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<ulong>
+Trinix.Services.Contracts.ClipboardProxy.ReadAsync(string mimeType, ulong serial, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.Win32.SafeHandles.SafeFileHandle>
+Trinix.Services.Contracts.ClipboardProxy.WatchChangedAsync(System.Action<Trinix.Services.Contracts.ClipboardOffer> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.ClipboardRepresentation -> sealed record
+Trinix.Services.Contracts.ClipboardRepresentation : System.IEquatable<Trinix.Services.Contracts.ClipboardRepresentation>
+Trinix.Services.Contracts.ClipboardRepresentation.ClipboardRepresentation(string MimeType, Microsoft.Win32.SafeHandles.SafeFileHandle Data) -> void
+Trinix.Services.Contracts.ClipboardRepresentation.Data.get -> Microsoft.Win32.SafeHandles.SafeFileHandle
+Trinix.Services.Contracts.ClipboardRepresentation.Data.init -> Microsoft.Win32.SafeHandles.SafeFileHandle
+Trinix.Services.Contracts.ClipboardRepresentation.MimeType.get -> string
+Trinix.Services.Contracts.ClipboardRepresentation.MimeType.init -> string
+Trinix.Services.Contracts.ColorScheme -> enum : uint
+Trinix.Services.Contracts.ColorScheme.ColorScheme() -> void
+Trinix.Services.Contracts.ColorScheme.Dark = 1 -> Trinix.Services.Contracts.ColorScheme
+Trinix.Services.Contracts.ColorScheme.Light = 0 -> Trinix.Services.Contracts.ColorScheme
+Trinix.Services.Contracts.Generated.ServiceWire -> static class
+Trinix.Services.Contracts.IClipboard -> interface
+Trinix.Services.Contracts.IClipboard.GetOfferAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.ClipboardOffer>
+Trinix.Services.Contracts.IClipboard.OfferAsync(System.Collections.Generic.IReadOnlyList<Trinix.Services.Contracts.ClipboardRepresentation> representations, bool sensitive, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<ulong>
+Trinix.Services.Contracts.IClipboard.ReadAsync(string mimeType, ulong serial, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.Win32.SafeHandles.SafeFileHandle>
+Trinix.Services.Contracts.IClipboard.WatchChangedAsync(System.Action<Trinix.Services.Contracts.ClipboardOffer> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.INotifications -> interface
+Trinix.Services.Contracts.INotifications.PostAsync(Trinix.Services.Contracts.NotificationRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.NotificationId>
+Trinix.Services.Contracts.INotifications.UpdateAsync(Trinix.Services.Contracts.NotificationId id, Trinix.Services.Contracts.NotificationRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+Trinix.Services.Contracts.INotifications.WatchActivatedAsync(System.Action<Trinix.Services.Contracts.NotificationActivation> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.INotifications.WatchRepliedAsync(System.Action<Trinix.Services.Contracts.NotificationSubmission> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.INotifications.WithdrawAsync(Trinix.Services.Contracts.NotificationId id, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+Trinix.Services.Contracts.ISystem -> interface
+Trinix.Services.Contracts.ISystem.GetAppearanceAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.Appearance>
+Trinix.Services.Contracts.ISystem.GetReleaseAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.SystemRelease>
+Trinix.Services.Contracts.ISystem.WatchAppearanceChangedAsync(System.Action<Trinix.Services.Contracts.Appearance> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.NotificationAction -> sealed record
+Trinix.Services.Contracts.NotificationAction : System.IEquatable<Trinix.Services.Contracts.NotificationAction>
+Trinix.Services.Contracts.NotificationAction.Key.get -> string
+Trinix.Services.Contracts.NotificationAction.Key.init -> string
+Trinix.Services.Contracts.NotificationAction.NotificationAction(string Key, string Title) -> void
+Trinix.Services.Contracts.NotificationAction.Title.get -> string
+Trinix.Services.Contracts.NotificationAction.Title.init -> string
+Trinix.Services.Contracts.NotificationActivation -> sealed record
+Trinix.Services.Contracts.NotificationActivation : System.IEquatable<Trinix.Services.Contracts.NotificationActivation>
+Trinix.Services.Contracts.NotificationActivation.ActionKey.get -> string
+Trinix.Services.Contracts.NotificationActivation.ActionKey.init -> string
+Trinix.Services.Contracts.NotificationActivation.Id.get -> Trinix.Services.Contracts.NotificationId
+Trinix.Services.Contracts.NotificationActivation.Id.init -> Trinix.Services.Contracts.NotificationId
+Trinix.Services.Contracts.NotificationActivation.NotificationActivation(Trinix.Services.Contracts.NotificationId Id, string ActionKey) -> void
+Trinix.Services.Contracts.NotificationId -> readonly struct
+Trinix.Services.Contracts.NotificationId : System.IEquatable<Trinix.Services.Contracts.NotificationId>
+Trinix.Services.Contracts.NotificationId.Application.get -> string
+Trinix.Services.Contracts.NotificationId.Application.init -> string
+Trinix.Services.Contracts.NotificationId.NotificationId() -> void
+Trinix.Services.Contracts.NotificationId.NotificationId(string Application, uint Sequence) -> void
+Trinix.Services.Contracts.NotificationId.Sequence.get -> uint
+Trinix.Services.Contracts.NotificationId.Sequence.init -> uint
+Trinix.Services.Contracts.NotificationReply -> sealed record
+Trinix.Services.Contracts.NotificationReply : System.IEquatable<Trinix.Services.Contracts.NotificationReply>
+Trinix.Services.Contracts.NotificationReply.NotificationReply(string Placeholder, string SubmitTitle) -> void
+Trinix.Services.Contracts.NotificationReply.Placeholder.get -> string
+Trinix.Services.Contracts.NotificationReply.Placeholder.init -> string
+Trinix.Services.Contracts.NotificationReply.SubmitTitle.get -> string
+Trinix.Services.Contracts.NotificationReply.SubmitTitle.init -> string
+Trinix.Services.Contracts.NotificationRequest -> sealed record
+Trinix.Services.Contracts.NotificationRequest : System.IEquatable<Trinix.Services.Contracts.NotificationRequest>
+Trinix.Services.Contracts.NotificationRequest.Actions.get -> System.Collections.Generic.IReadOnlyList<Trinix.Services.Contracts.NotificationAction>
+Trinix.Services.Contracts.NotificationRequest.Actions.init -> System.Collections.Generic.IReadOnlyList<Trinix.Services.Contracts.NotificationAction>
+Trinix.Services.Contracts.NotificationRequest.Body.get -> string
+Trinix.Services.Contracts.NotificationRequest.Body.init -> string
+Trinix.Services.Contracts.NotificationRequest.Expiry.get -> System.TimeSpan
+Trinix.Services.Contracts.NotificationRequest.Expiry.init -> System.TimeSpan
+Trinix.Services.Contracts.NotificationRequest.Group.get -> string
+Trinix.Services.Contracts.NotificationRequest.Group.init -> string
+Trinix.Services.Contracts.NotificationRequest.NotificationRequest(string Title, string Body, Trinix.Services.Contracts.NotificationUrgency Urgency, System.Collections.Generic.IReadOnlyList<Trinix.Services.Contracts.NotificationAction> Actions, Trinix.Services.Contracts.NotificationReply? Reply, string Group, System.TimeSpan Expiry) -> void
+Trinix.Services.Contracts.NotificationRequest.Reply.get -> Trinix.Services.Contracts.NotificationReply?
+Trinix.Services.Contracts.NotificationRequest.Reply.init -> Trinix.Services.Contracts.NotificationReply?
+Trinix.Services.Contracts.NotificationRequest.Title.get -> string
+Trinix.Services.Contracts.NotificationRequest.Title.init -> string
+Trinix.Services.Contracts.NotificationRequest.Urgency.get -> Trinix.Services.Contracts.NotificationUrgency
+Trinix.Services.Contracts.NotificationRequest.Urgency.init -> Trinix.Services.Contracts.NotificationUrgency
+Trinix.Services.Contracts.NotificationSubmission -> sealed record
+Trinix.Services.Contracts.NotificationSubmission : System.IEquatable<Trinix.Services.Contracts.NotificationSubmission>
+Trinix.Services.Contracts.NotificationSubmission.Id.get -> Trinix.Services.Contracts.NotificationId
+Trinix.Services.Contracts.NotificationSubmission.Id.init -> Trinix.Services.Contracts.NotificationId
+Trinix.Services.Contracts.NotificationSubmission.NotificationSubmission(Trinix.Services.Contracts.NotificationId Id, string Text) -> void
+Trinix.Services.Contracts.NotificationSubmission.Text.get -> string
+Trinix.Services.Contracts.NotificationSubmission.Text.init -> string
+Trinix.Services.Contracts.NotificationUrgency -> enum : uint
+Trinix.Services.Contracts.NotificationUrgency.Critical = 2 -> Trinix.Services.Contracts.NotificationUrgency
+Trinix.Services.Contracts.NotificationUrgency.Low = 0 -> Trinix.Services.Contracts.NotificationUrgency
+Trinix.Services.Contracts.NotificationUrgency.Normal = 1 -> Trinix.Services.Contracts.NotificationUrgency
+Trinix.Services.Contracts.NotificationUrgency.NotificationUrgency() -> void
+Trinix.Services.Contracts.NotificationsHandler -> abstract class
+Trinix.Services.Contracts.NotificationsHandler.Connection.get -> Tmds.DBus.Protocol.DBusConnection
+Trinix.Services.Contracts.NotificationsHandler.EmitActivated(Trinix.Services.Contracts.NotificationActivation value) -> void
+Trinix.Services.Contracts.NotificationsHandler.EmitActivated(string destination, Trinix.Services.Contracts.NotificationActivation value) -> void
+Trinix.Services.Contracts.NotificationsHandler.EmitReplied(Trinix.Services.Contracts.NotificationSubmission value) -> void
+Trinix.Services.Contracts.NotificationsHandler.EmitReplied(string destination, Trinix.Services.Contracts.NotificationSubmission value) -> void
+Trinix.Services.Contracts.NotificationsHandler.HandleMethodAsync(Tmds.DBus.Protocol.MethodContext context) -> System.Threading.Tasks.ValueTask
+Trinix.Services.Contracts.NotificationsHandler.NotificationsHandler(Tmds.DBus.Protocol.DBusConnection connection) -> void
+Trinix.Services.Contracts.NotificationsHandler.NotificationsHandler(Tmds.DBus.Protocol.DBusConnection connection, string path) -> void
+Trinix.Services.Contracts.NotificationsHandler.Path.get -> string
+Trinix.Services.Contracts.NotificationsIntrospection -> static class
+Trinix.Services.Contracts.NotificationsProxy -> sealed class
+Trinix.Services.Contracts.NotificationsProxy : Trinix.Services.Contracts.INotifications
+Trinix.Services.Contracts.NotificationsProxy.NotificationsProxy(Tmds.DBus.Protocol.DBusConnection connection) -> void
+Trinix.Services.Contracts.NotificationsProxy.NotificationsProxy(Tmds.DBus.Protocol.DBusConnection connection, string destination, string path) -> void
+Trinix.Services.Contracts.NotificationsProxy.PostAsync(Trinix.Services.Contracts.NotificationRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.NotificationId>
+Trinix.Services.Contracts.NotificationsProxy.UpdateAsync(Trinix.Services.Contracts.NotificationId id, Trinix.Services.Contracts.NotificationRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+Trinix.Services.Contracts.NotificationsProxy.WatchActivatedAsync(System.Action<Trinix.Services.Contracts.NotificationActivation> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.NotificationsProxy.WatchRepliedAsync(System.Action<Trinix.Services.Contracts.NotificationSubmission> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.NotificationsProxy.WithdrawAsync(Trinix.Services.Contracts.NotificationId id, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+Trinix.Services.Contracts.PermissionDeniedException -> sealed class
+Trinix.Services.Contracts.PermissionDeniedException : Trinix.Services.Contracts.TrinixServiceException
+Trinix.Services.Contracts.PermissionDeniedException.Explanation.get -> string
+Trinix.Services.Contracts.PermissionDeniedException.Permission.get -> Trinix.Bundle.Permissions
+Trinix.Services.Contracts.PermissionDeniedException.PermissionDeniedException() -> void
+Trinix.Services.Contracts.PermissionDeniedException.PermissionDeniedException(Trinix.Bundle.Permissions permission, string explanation) -> void
+Trinix.Services.Contracts.PermissionDeniedException.PermissionDeniedException(string message) -> void
+Trinix.Services.Contracts.PermissionDeniedException.PermissionDeniedException(string message, System.Exception innerException) -> void
+Trinix.Services.Contracts.PermissionDeniedException.PermissionName.get -> string
+Trinix.Services.Contracts.PermissionDeniedException.ToErrorMessage() -> string
+Trinix.Services.Contracts.ServiceErrors -> static class
+Trinix.Services.Contracts.ServiceRecordAttribute -> sealed class
+Trinix.Services.Contracts.ServiceRecordAttribute : System.Attribute
+Trinix.Services.Contracts.ServiceRecordAttribute.ServiceRecordAttribute() -> void
+Trinix.Services.Contracts.ServiceSignalAttribute -> sealed class
+Trinix.Services.Contracts.ServiceSignalAttribute : System.Attribute
+Trinix.Services.Contracts.ServiceSignalAttribute.Name.get -> string
+Trinix.Services.Contracts.ServiceSignalAttribute.ServiceSignalAttribute(string name) -> void
+Trinix.Services.Contracts.ServiceVersionException -> sealed class
+Trinix.Services.Contracts.ServiceVersionException : Trinix.Services.Contracts.TrinixServiceException
+Trinix.Services.Contracts.ServiceVersionException.Available.get -> int
+Trinix.Services.Contracts.ServiceVersionException.InterfaceName.get -> string
+Trinix.Services.Contracts.ServiceVersionException.Required.get -> int
+Trinix.Services.Contracts.ServiceVersionException.ServiceVersionException() -> void
+Trinix.Services.Contracts.ServiceVersionException.ServiceVersionException(string interfaceName, int required, int available) -> void
+Trinix.Services.Contracts.ServiceVersionException.ServiceVersionException(string message) -> void
+Trinix.Services.Contracts.ServiceVersionException.ServiceVersionException(string message, System.Exception innerException) -> void
+Trinix.Services.Contracts.SystemHandler -> abstract class
+Trinix.Services.Contracts.SystemHandler.Connection.get -> Tmds.DBus.Protocol.DBusConnection
+Trinix.Services.Contracts.SystemHandler.EmitAppearanceChanged(Trinix.Services.Contracts.Appearance value) -> void
+Trinix.Services.Contracts.SystemHandler.EmitAppearanceChanged(string destination, Trinix.Services.Contracts.Appearance value) -> void
+Trinix.Services.Contracts.SystemHandler.HandleMethodAsync(Tmds.DBus.Protocol.MethodContext context) -> System.Threading.Tasks.ValueTask
+Trinix.Services.Contracts.SystemHandler.Path.get -> string
+Trinix.Services.Contracts.SystemHandler.SystemHandler(Tmds.DBus.Protocol.DBusConnection connection) -> void
+Trinix.Services.Contracts.SystemHandler.SystemHandler(Tmds.DBus.Protocol.DBusConnection connection, string path) -> void
+Trinix.Services.Contracts.SystemIntrospection -> static class
+Trinix.Services.Contracts.SystemProxy -> sealed class
+Trinix.Services.Contracts.SystemProxy : Trinix.Services.Contracts.ISystem
+Trinix.Services.Contracts.SystemProxy.GetAppearanceAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.Appearance>
+Trinix.Services.Contracts.SystemProxy.GetReleaseAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.SystemRelease>
+Trinix.Services.Contracts.SystemProxy.SystemProxy(Tmds.DBus.Protocol.DBusConnection connection) -> void
+Trinix.Services.Contracts.SystemProxy.SystemProxy(Tmds.DBus.Protocol.DBusConnection connection, string destination, string path) -> void
+Trinix.Services.Contracts.SystemProxy.WatchAppearanceChangedAsync(System.Action<Trinix.Services.Contracts.Appearance> handler, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.IDisposable>
+Trinix.Services.Contracts.SystemRelease -> sealed record
+Trinix.Services.Contracts.SystemRelease : System.IEquatable<Trinix.Services.Contracts.SystemRelease>
+Trinix.Services.Contracts.SystemRelease.BuildId.get -> string
+Trinix.Services.Contracts.SystemRelease.BuildId.init -> string
+Trinix.Services.Contracts.SystemRelease.PrettyName.get -> string
+Trinix.Services.Contracts.SystemRelease.PrettyName.init -> string
+Trinix.Services.Contracts.SystemRelease.SystemRelease(string VersionId, string BuildId, string PrettyName) -> void
+Trinix.Services.Contracts.SystemRelease.VersionId.get -> string
+Trinix.Services.Contracts.SystemRelease.VersionId.init -> string
+Trinix.Services.Contracts.TrinixServiceAttribute -> sealed class
+Trinix.Services.Contracts.TrinixServiceAttribute : System.Attribute
+Trinix.Services.Contracts.TrinixServiceAttribute.BusName.get -> string
+Trinix.Services.Contracts.TrinixServiceAttribute.BusName.set -> string
+Trinix.Services.Contracts.TrinixServiceAttribute.InterfaceName.get -> string
+Trinix.Services.Contracts.TrinixServiceAttribute.ObjectPath.get -> string
+Trinix.Services.Contracts.TrinixServiceAttribute.ObjectPath.set -> string
+Trinix.Services.Contracts.TrinixServiceAttribute.TrinixServiceAttribute(string interfaceName) -> void
+Trinix.Services.Contracts.TrinixServiceAttribute.Version.get -> int
+Trinix.Services.Contracts.TrinixServiceAttribute.Version.set -> int
+Trinix.Services.Contracts.TrinixServiceException -> class
+Trinix.Services.Contracts.TrinixServiceException : System.Exception
+Trinix.Services.Contracts.TrinixServiceException.ErrorName.get -> string
+Trinix.Services.Contracts.TrinixServiceException.TrinixServiceException() -> void
+Trinix.Services.Contracts.TrinixServiceException.TrinixServiceException(string errorName, string message) -> void
+Trinix.Services.Contracts.TrinixServiceException.TrinixServiceException(string message) -> void
+Trinix.Services.Contracts.TrinixServiceException.TrinixServiceException(string message, System.Exception innerException) -> void
+abstract Trinix.Services.Contracts.ClipboardHandler.GetOfferAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.ClipboardOffer>
+abstract Trinix.Services.Contracts.ClipboardHandler.OfferAsync(System.Collections.Generic.IReadOnlyList<Trinix.Services.Contracts.ClipboardRepresentation> representations, bool sensitive, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<ulong>
+abstract Trinix.Services.Contracts.ClipboardHandler.ReadAsync(string mimeType, ulong serial, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Microsoft.Win32.SafeHandles.SafeFileHandle>
+abstract Trinix.Services.Contracts.NotificationsHandler.PostAsync(Trinix.Services.Contracts.NotificationRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.NotificationId>
+abstract Trinix.Services.Contracts.NotificationsHandler.UpdateAsync(Trinix.Services.Contracts.NotificationId id, Trinix.Services.Contracts.NotificationRequest request, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+abstract Trinix.Services.Contracts.NotificationsHandler.WithdrawAsync(Trinix.Services.Contracts.NotificationId id, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+abstract Trinix.Services.Contracts.SystemHandler.GetAppearanceAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.Appearance>
+abstract Trinix.Services.Contracts.SystemHandler.GetReleaseAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<Trinix.Services.Contracts.SystemRelease>
+const Trinix.Services.Contracts.ClipboardHandler.ContractVersion = 1 -> int
+const Trinix.Services.Contracts.ClipboardHandler.DefaultBusName = "io.trinix.Shell" -> string
+const Trinix.Services.Contracts.ClipboardHandler.DefaultObjectPath = "/io/trinix/Clipboard" -> string
+const Trinix.Services.Contracts.ClipboardHandler.InterfaceName = "io.trinix.Clipboard" -> string
+const Trinix.Services.Contracts.ClipboardIntrospection.InterfaceXml = "<interface name=\"io.trinix.Clipboard\">\n  <annotation name=\"io.trinix.Version\" value=\"1\"/>\n  <method name=\"GetOffer\">\n    <arg name=\"result\" type=\"(asbt)\" direction=\"out\"/>\n  </method>\n  <method name=\"Read\">\n    <arg name=\"mimeType\" type=\"s\" direction=\"in\"/>\n    <arg name=\"serial\" type=\"t\" direction=\"in\"/>\n    <arg name=\"result\" type=\"h\" direction=\"out\"/>\n  </method>\n  <method name=\"Offer\">\n    <arg name=\"representations\" type=\"a(sh)\" direction=\"in\"/>\n    <arg name=\"sensitive\" type=\"b\" direction=\"in\"/>\n    <arg name=\"result\" type=\"t\" direction=\"out\"/>\n  </method>\n  <signal name=\"Changed\">\n    <arg name=\"value\" type=\"(asbt)\"/>\n  </signal>\n</interface>\n" -> string
+const Trinix.Services.Contracts.ClipboardIntrospection.NodeXml = "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n<node name=\"/io/trinix/Clipboard\">\n<interface name=\"io.trinix.Clipboard\">\n  <annotation name=\"io.trinix.Version\" value=\"1\"/>\n  <method name=\"GetOffer\">\n    <arg name=\"result\" type=\"(asbt)\" direction=\"out\"/>\n  </method>\n  <method name=\"Read\">\n    <arg name=\"mimeType\" type=\"s\" direction=\"in\"/>\n    <arg name=\"serial\" type=\"t\" direction=\"in\"/>\n    <arg name=\"result\" type=\"h\" direction=\"out\"/>\n  </method>\n  <method name=\"Offer\">\n    <arg name=\"representations\" type=\"a(sh)\" direction=\"in\"/>\n    <arg name=\"sensitive\" type=\"b\" direction=\"in\"/>\n    <arg name=\"result\" type=\"t\" direction=\"out\"/>\n  </method>\n  <signal name=\"Changed\">\n    <arg name=\"value\" type=\"(asbt)\"/>\n  </signal>\n</interface>\n</node>\n" -> string
+const Trinix.Services.Contracts.ClipboardProxy.ContractVersion = 1 -> int
+const Trinix.Services.Contracts.ClipboardProxy.DefaultBusName = "io.trinix.Shell" -> string
+const Trinix.Services.Contracts.ClipboardProxy.DefaultObjectPath = "/io/trinix/Clipboard" -> string
+const Trinix.Services.Contracts.ClipboardProxy.InterfaceName = "io.trinix.Clipboard" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.AppearanceSignature = "(usbb)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.ClipboardOfferSignature = "(asbt)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.ClipboardRepresentationSignature = "(sh)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.NotificationActionSignature = "(ss)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.NotificationActivationSignature = "((su)s)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.NotificationIdSignature = "(su)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.NotificationReplySignature = "(ss)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.NotificationRequestSignature = "(ssua(ss)a(ss)sx)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.NotificationSubmissionSignature = "((su)s)" -> string
+const Trinix.Services.Contracts.Generated.ServiceWire.SystemReleaseSignature = "(sss)" -> string
+const Trinix.Services.Contracts.NotificationsHandler.ContractVersion = 1 -> int
+const Trinix.Services.Contracts.NotificationsHandler.DefaultBusName = "io.trinix.Shell" -> string
+const Trinix.Services.Contracts.NotificationsHandler.DefaultObjectPath = "/io/trinix/Notifications" -> string
+const Trinix.Services.Contracts.NotificationsHandler.InterfaceName = "io.trinix.Notifications" -> string
+const Trinix.Services.Contracts.NotificationsIntrospection.InterfaceXml = "<interface name=\"io.trinix.Notifications\">\n  <annotation name=\"io.trinix.Version\" value=\"1\"/>\n  <method name=\"Post\">\n    <arg name=\"request\" type=\"(ssua(ss)a(ss)sx)\" direction=\"in\"/>\n    <arg name=\"result\" type=\"(su)\" direction=\"out\"/>\n  </method>\n  <method name=\"Update\">\n    <arg name=\"id\" type=\"(su)\" direction=\"in\"/>\n    <arg name=\"request\" type=\"(ssua(ss)a(ss)sx)\" direction=\"in\"/>\n  </method>\n  <method name=\"Withdraw\">\n    <arg name=\"id\" type=\"(su)\" direction=\"in\"/>\n  </method>\n  <signal name=\"Activated\">\n    <arg name=\"value\" type=\"((su)s)\"/>\n  </signal>\n  <signal name=\"Replied\">\n    <arg name=\"value\" type=\"((su)s)\"/>\n  </signal>\n</interface>\n" -> string
+const Trinix.Services.Contracts.NotificationsIntrospection.NodeXml = "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n<node name=\"/io/trinix/Notifications\">\n<interface name=\"io.trinix.Notifications\">\n  <annotation name=\"io.trinix.Version\" value=\"1\"/>\n  <method name=\"Post\">\n    <arg name=\"request\" type=\"(ssua(ss)a(ss)sx)\" direction=\"in\"/>\n    <arg name=\"result\" type=\"(su)\" direction=\"out\"/>\n  </method>\n  <method name=\"Update\">\n    <arg name=\"id\" type=\"(su)\" direction=\"in\"/>\n    <arg name=\"request\" type=\"(ssua(ss)a(ss)sx)\" direction=\"in\"/>\n  </method>\n  <method name=\"Withdraw\">\n    <arg name=\"id\" type=\"(su)\" direction=\"in\"/>\n  </method>\n  <signal name=\"Activated\">\n    <arg name=\"value\" type=\"((su)s)\"/>\n  </signal>\n  <signal name=\"Replied\">\n    <arg name=\"value\" type=\"((su)s)\"/>\n  </signal>\n</interface>\n</node>\n" -> string
+const Trinix.Services.Contracts.NotificationsProxy.ContractVersion = 1 -> int
+const Trinix.Services.Contracts.NotificationsProxy.DefaultBusName = "io.trinix.Shell" -> string
+const Trinix.Services.Contracts.NotificationsProxy.DefaultObjectPath = "/io/trinix/Notifications" -> string
+const Trinix.Services.Contracts.NotificationsProxy.InterfaceName = "io.trinix.Notifications" -> string
+const Trinix.Services.Contracts.ServiceErrors.InvalidArgument = "io.trinix.Error.InvalidArgument" -> string
+const Trinix.Services.Contracts.ServiceErrors.NoSuchObject = "io.trinix.Error.NoSuchObject" -> string
+const Trinix.Services.Contracts.ServiceErrors.PermissionDenied = "io.trinix.Error.PermissionDenied" -> string
+const Trinix.Services.Contracts.ServiceErrors.Unsupported = "io.trinix.Error.Unsupported" -> string
+const Trinix.Services.Contracts.ServiceErrors.VersionTooOld = "io.trinix.Error.VersionTooOld" -> string
+const Trinix.Services.Contracts.SystemHandler.ContractVersion = 1 -> int
+const Trinix.Services.Contracts.SystemHandler.DefaultBusName = "io.trinix.Daemon" -> string
+const Trinix.Services.Contracts.SystemHandler.DefaultObjectPath = "/io/trinix/System" -> string
+const Trinix.Services.Contracts.SystemHandler.InterfaceName = "io.trinix.System" -> string
+const Trinix.Services.Contracts.SystemIntrospection.InterfaceXml = "<interface name=\"io.trinix.System\">\n  <annotation name=\"io.trinix.Version\" value=\"1\"/>\n  <method name=\"GetRelease\">\n    <arg name=\"result\" type=\"(sss)\" direction=\"out\"/>\n  </method>\n  <method name=\"GetAppearance\">\n    <arg name=\"result\" type=\"(usbb)\" direction=\"out\"/>\n  </method>\n  <signal name=\"AppearanceChanged\">\n    <arg name=\"value\" type=\"(usbb)\"/>\n  </signal>\n</interface>\n" -> string
+const Trinix.Services.Contracts.SystemIntrospection.NodeXml = "<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n \"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n<node name=\"/io/trinix/System\">\n<interface name=\"io.trinix.System\">\n  <annotation name=\"io.trinix.Version\" value=\"1\"/>\n  <method name=\"GetRelease\">\n    <arg name=\"result\" type=\"(sss)\" direction=\"out\"/>\n  </method>\n  <method name=\"GetAppearance\">\n    <arg name=\"result\" type=\"(usbb)\" direction=\"out\"/>\n  </method>\n  <signal name=\"AppearanceChanged\">\n    <arg name=\"value\" type=\"(usbb)\"/>\n  </signal>\n</interface>\n</node>\n" -> string
+const Trinix.Services.Contracts.SystemProxy.ContractVersion = 1 -> int
+const Trinix.Services.Contracts.SystemProxy.DefaultBusName = "io.trinix.Daemon" -> string
+const Trinix.Services.Contracts.SystemProxy.DefaultObjectPath = "/io/trinix/System" -> string
+const Trinix.Services.Contracts.SystemProxy.InterfaceName = "io.trinix.System" -> string
+static Trinix.Services.Contracts.ClipboardIntrospection.InterfaceXmlUtf8.get -> System.ReadOnlyMemory<byte>
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadAppearance(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.Appearance
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadClipboardOffer(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.ClipboardOffer
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadClipboardRepresentation(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.ClipboardRepresentation
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadNotificationAction(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.NotificationAction
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadNotificationActivation(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.NotificationActivation
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadNotificationId(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.NotificationId
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadNotificationReply(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.NotificationReply
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadNotificationRequest(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.NotificationRequest
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadNotificationSubmission(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.NotificationSubmission
+static Trinix.Services.Contracts.Generated.ServiceWire.ReadSystemRelease(ref Tmds.DBus.Protocol.Reader reader) -> Trinix.Services.Contracts.SystemRelease
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteAppearance(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.Appearance value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteClipboardOffer(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.ClipboardOffer value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteClipboardRepresentation(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.ClipboardRepresentation value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteNotificationAction(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.NotificationAction value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteNotificationActivation(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.NotificationActivation value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteNotificationId(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.NotificationId value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteNotificationReply(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.NotificationReply value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteNotificationRequest(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.NotificationRequest value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteNotificationSubmission(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.NotificationSubmission value) -> void
+static Trinix.Services.Contracts.Generated.ServiceWire.WriteSystemRelease(ref Tmds.DBus.Protocol.MessageWriter writer, Trinix.Services.Contracts.SystemRelease value) -> void
+static Trinix.Services.Contracts.NotificationsIntrospection.InterfaceXmlUtf8.get -> System.ReadOnlyMemory<byte>
+static Trinix.Services.Contracts.PermissionDeniedException.FromErrorMessage(string errorMessage) -> Trinix.Services.Contracts.PermissionDeniedException
+static Trinix.Services.Contracts.ServiceErrors.FromErrorReply(Tmds.DBus.Protocol.DBusErrorReplyException reply) -> System.Exception
+static Trinix.Services.Contracts.ServiceErrors.ToErrorReply(System.Exception exception) -> (string Name, string Message)
+static Trinix.Services.Contracts.ServiceErrors.TranslateAsync(System.Threading.Tasks.Task call, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task
+static Trinix.Services.Contracts.ServiceErrors.TranslateAsync<T>(System.Threading.Tasks.Task<T> call, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<T>
+static Trinix.Services.Contracts.SystemIntrospection.InterfaceXmlUtf8.get -> System.ReadOnlyMemory<byte>
+virtual Trinix.Services.Contracts.ClipboardHandler.HandlesChildPaths.get -> bool
+virtual Trinix.Services.Contracts.NotificationsHandler.HandlesChildPaths.get -> bool
+virtual Trinix.Services.Contracts.SystemHandler.HandlesChildPaths.get -> bool

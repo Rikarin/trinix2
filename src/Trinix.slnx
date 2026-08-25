@@ -5,6 +5,7 @@
         the tree is a project whose compile errors surface during a two-hour
         image build instead of in the ninety-second `dotnet` job.
     -->
+    <Project Path="Trinix.ApiCheck/Trinix.ApiCheck.csproj"/>
     <Project Path="Trinix.Apps.Hello/Trinix.Apps.Hello.csproj"/>
     <Project Path="Trinix.Apps.HelloUi/Trinix.Apps.HelloUi.csproj"/>
     <Project Path="Trinix.Bundle/Trinix.Bundle.csproj"/>

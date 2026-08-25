@@ -1,0 +1,69 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.ApiCheck — the subject of scripts/check-api.ps1.
+
+      It reads the public surface of a compiled assembly and compares it with the
+      PublicAPI.Shipped.txt / PublicAPI.Unshipped.txt pair committed beside the
+      project that produced it. Doc 16 § The gates asks for this "Vixen-style", and
+      this is an adaptation of Vixen's Tools/Vixen.ApiCheck rather than of the
+      Microsoft.CodeAnalysis.PublicApiAnalyzers package whose file format both of
+      them speak. Three reasons, in the order they mattered:
+
+        * The surface that most needs the gate is generated. Trinix.Sdk.Generators
+          writes the proxies and dispatchers that are Trinix.Services.Contracts'
+          public face, and a change to those *is* a protocol change. The analyser
+          reports at a symbol's declaration site, which for generated output is a
+          file the build treats as generated code; reading the built assembly
+          covers it by construction, because the assembly is what the other end
+          binds to.
+
+        * ../Directory.Build.props sets TreatWarningsAsErrors, so an analyser
+          package would make an unapproved public member a *build* error — and the
+          builds it would break include the two-hour image build, which packages
+          these same assemblies. A gate belongs where a person can run it and CI
+          can run it, not in the path of everything that compiles.
+
+        * Trinix.Bundle's own rule, stated in its .csproj, is that the component
+          deciding whether code may run references nothing a package feed can
+          reach. An analyser is a package whose code executes inside the compiler
+          that builds it, which is a longer way round to the same place.
+
+      ⚠ Not a library and not shipped: nothing in an image has any use for a tool
+      that diffs the surface of other assemblies.
+    -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <RootNamespace>Trinix.ApiCheck</RootNamespace>
+        <AssemblyName>trinix-api-check</AssemblyName>
+
+        <!-- A build-time tool. It never lands in an image, so the deployment
+             analysers inherited from ../Directory.Build.props have nothing to say
+             about it, and a RID list would only describe machines it never runs on. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <RuntimeIdentifiers></RuntimeIdentifiers>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!--
+          Roslyn reads the metadata and formats the signatures. Writing a C#
+          signature formatter by hand over System.Reflection.Metadata was the
+          alternative, and it would have to agree line for line with the format
+          Microsoft.CodeAnalysis.PublicApiAnalyzers writes — because that is the
+          format of the files this tool maintains, and the day Trinix wants the
+          analyser instead, the baselines should already be the right shape.
+
+          ⚠ Pinned exactly, and for an unusual reason: this package decides the
+          *text* of every baseline line. A version that spells a nullable
+          annotation or a default parameter value differently would move thousands
+          of lines at once and report it as an API change. Moving the pin is a
+          deliberate regeneration — `./scripts/check-api.ps1 -Update` — with the
+          diff read, not a routine bump.
+        -->
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="[4.14.0]"/>
+    </ItemGroup>
+
+</Project>

@@ -19,7 +19,9 @@ The C# side was one line — `dotnet build src/Trinix.slnx` — and as of **2026
 | `Trinix.Management.Tests` | 33 tests over `Cli` parsing, the `ip -json` shapes and service health |
 | `scripts/check-solution.ps1` | Asserts every `.csproj` under `src/` is in `Trinix.slnx`. **A script, not a test**, and deliberately: a test asserting "every project is in the solution" is the one assertion defeated by leaving its own project out of the solution. CI runs it before restore, so it does not depend on the state it checks |
 | `.editorconfig` | The repo had none, so `dotnet format` applied Allman defaults and reported 646 "errors" against correct code. Formatting only — no `dotnet_diagnostic` severities, because `EnforceCodeStyleInBuild` and `TreatWarningsAsErrors` together would turn any rule raised to warning into a tree-wide build failure |
-| The `dotnet` job | check-solution → restore → format → build → test, cheapest first, still independent of the toolchain and image stages |
+| `scripts/check-api.ps1` and `src/Trinix.ApiCheck` | The public surface of six libraries against a `PublicAPI.Shipped.txt`/`PublicAPI.Unshipped.txt` pair committed beside each. **Both directions**: an addition nobody approved, and a removal — the one that compiles here and breaks somebody else. See below for which six and why |
+| `scripts/check-determinism.ps1` | Builds the applications twice with separate intermediates, seals both, and compares the manifests. Measured 2026-08-25: both bundles, 80 files, identical. ⚠ The *signature* is not reproducible and must not be |
+| The `dotnet` job | check-solution → restore → format → build → test → `check-api.ps1`, cheapest first, still independent of the toolchain and image stages. `check-determinism.ps1` is a **sibling job**, not a seventh step: it builds everything twice from cold, and the value of the `dotnet` job is that it answers in about ninety seconds |
 
 The two projects missing from the solution — `Trinix.Platform` and `Trinix.Apps.HelloUi` — are in it, so the
 Vixen platform backend is compiled by the job that gates a pull request rather than only by an image build.
@@ -31,6 +33,45 @@ Vixen platform backend is compiled by the job that gates a pull request rather t
   `null` and `Validate()` threw `NullReferenceException` out of `BundleVerifier`. **A crash in the
   component that decides whether code may run, rather than a refusal.** Fixed.
 - `SystemVersion.Satisfies` disagrees with its own comment. See doc 18's decision list; pinned, not changed.
+
+### The two decisions inside `CheckApi`
+
+**A tool that reads the assembly, not the analyser that shares its file format.** Vixen's
+`Tools/Vixen.ApiCheck` was adapted rather than adopting `Microsoft.CodeAnalysis.PublicApiAnalyzers`,
+and the deciding reason is Trinix-specific: **the surface most worth gating is generated.**
+`Trinix.Sdk.Generators` writes the proxies, the dispatchers and the D-Bus introspection XML that are
+`Trinix.Services.Contracts`' public face, and a change to those *is* a protocol change. The analyser
+reports at a symbol's declaration site, which for generated output is a file the build treats as
+generated code; reading the built assembly covers it by construction, because the assembly is what
+the other end binds to. Proved rather than argued: adding one method to `IClipboard` moves five
+baseline lines, three of them generated, and one of the three is the introspection XML with a new
+`<method name="Clear">` in it — the wire change, visible as a diff.
+
+Two smaller reasons point the same way. `src/Directory.Build.props` sets `TreatWarningsAsErrors`, so
+an analyser would make an unapproved `public` a *build* error — including in the two-hour image build,
+which packages these same assemblies. And `Trinix.Bundle`'s own rule is that the component deciding
+whether code may run references nothing a package feed can reach; an analyser is a package whose code
+runs inside the compiler that builds it.
+
+**Six libraries, and why not the rest.** Covered by default and opted out by declaration, which is
+the same direction `check-solution.ps1` runs in: a new library is gated before anyone remembers to
+ask. Covered are `Trinix.Bundle`, `Trinix.Interop`, `Trinix.Management`, `Trinix.Platform`,
+`Trinix.Sandbox` and `Trinix.Services.Contracts` — everything under `src/` that produces a library
+something else compiles against. Not covered:
+
+- **The programs.** `trinixd`, the compositor, `trinix-bundle`, `trinix-open` and the two
+  applications are `OutputType Exe`; nothing links against them, so their `public` members promise
+  nobody anything.
+- **The test projects.** Their surface is xunit's business.
+- **`Trinix.Sdk.Generators`**, the one deliberate exception, declared in its own `.csproj` with the
+  reason beside it. Nothing references that assembly — the compiler loads it. What a consumer
+  depends on is the shape of the code it emits and the diagnostic ids it raises; the ids are already
+  tracked in `AnalyzerReleases.Shipped.md` (which is what RS2008 asks for), and the emitted shape is
+  gated where it lands, in `Trinix.Services.Contracts`' baseline.
+
+⚠ Every `PublicAPI.Shipped.txt` is empty, and that is the honest state: Trinix has released nothing,
+so nothing is a compatibility promise yet and everything lives in `Unshipped`. `-Fold` is the release
+ritual that moves it across, and from that day a removal is a breaking change rather than a decision.
 
 ⚠ **Nothing has yet run on Linux.** Everything above was measured on macOS/arm64, and two tests already had
 to be rewritten because a case-insensitive filesystem made them pass for the wrong reason. CI is the first
@@ -82,24 +123,35 @@ read `~/Documents`, and uninstalls it, runs there in seconds and needs no VM.
 
 | Gate | What it stops |
 |---|---|
-| `dotnet test` on every PR, all four projects in the solution | The obvious |
-| **Every project in the solution** | The `Trinix.Platform`/`HelloUi` omission above, permanently — the check is that the set of `.csproj` under `src/` equals the set in `Trinix.slnx` |
-| `dotnet format --verify-no-changes` | Style arguments in review |
-| **`CheckApi`** — a shipped/unshipped public API baseline, Vixen-style | An accidental breaking change to `Trinix.Sdk`, which doc 01 § Open already names as its biggest missing gate |
+| ✔ `dotnet test` on every PR, every test project in the solution | The obvious |
+| ✔ **Every project in the solution** — `scripts/check-solution.ps1` | The `Trinix.Platform`/`HelloUi` omission above, permanently — the check is that the set of `.csproj` under `src/` equals the set in `Trinix.slnx` |
+| ✔ `dotnet format --verify-no-changes` | Style arguments in review |
+| ✔ **`CheckApi`** — `scripts/check-api.ps1`, a shipped/unshipped public API baseline per library, Vixen-style | An accidental breaking change to what doc 01 § Open names as the biggest missing gate — and, now that the service surface is generated, a change to the D-Bus protocol that nobody wrote down |
 | **`CheckAot`** — publish the NativeAOT components for both RIDs | An AOT-hostile dependency reaching the compositor. The analysers warn; only a publish proves it |
 | **`trinix doctor`** over every first-party bundle | Doc 01: permission drift, missing menu items, unlocalised strings, keyboard traps, missing icons |
 | **The sandbox escape suite** — an application that tries all fourteen permissions and must fail all fourteen | Doc 04's entire value |
 | **Screenshot goldens** via `wlr-screencopy` | The shell rendering wrong, which no other test can see. Vixen's golden-image approach applies directly, including generating on one platform and verifying on another |
 | **Latency gates**: app launch, search keystroke→results, terminal tab open, boot | Doc 00's quality bars, which are worthless as prose |
-| **Determinism**: two builds of the same source produce identical `.tdi` contents | `pack-apps.sh` already reasons carefully about timestamps and about why a *signature* is not reproducible; the contents should be, and nothing checks it |
+| ✔ **Determinism** — `scripts/check-determinism.ps1`: two builds of the same source produce identical bundle contents | `pack-apps.sh` reasons carefully about timestamps and about why a *signature* is not reproducible. The contents should be, and now something checks it: two builds with separate intermediates, both sealed, compared by the Merkle root the seal already computes |
+
+✔ is a gate that exists and that CI runs. The rest are still owed.
+
+⚠ **One of the ✔ is red.** `dotnet format --verify-no-changes` exits 2 on `master`, measured
+2026-08-25: it loads the solution through MSBuildWorkspace, which does not run source generators, so
+`Trinix.Services.Contracts.Tests` reports twelve `CS0246` for `NotificationsProxy` and its siblings —
+types the generator writes. Building first does not help. It is not a formatting failure; no file
+needs reformatting. Nothing reported it because CI has never run, and it is a small illustration of
+this document's own argument: a gate that has not been watched go green is worth about as much as one
+that has not been watched go red.
 
 ### 3. Fixing the workflow
 
-The `dotnet` job becomes: restore, format check, build the whole solution, test, `CheckApi`, publish
-AOT for both RIDs. It stays fast because it has no toolchain dependency, which is already why it is a
-separate job. The container tier becomes a job that consumes the base image artifact the
-`base-and-image` job already uploads. The VM tier grows the update/rollback and screenshot tests, and
-the expensive parts go nightly — the schedule trigger already exists.
+The `dotnet` job is now: check-solution, restore, format check, build, test, `CheckApi`. What it
+still owes is the AOT publish for both RIDs. It stays fast because it has no toolchain dependency,
+which is already why it is a separate job — and why determinism, which builds everything twice, is a
+sibling job rather than a step inside it. The container tier becomes a job that consumes the base
+image artifact the `base-and-image` job already uploads. The VM tier grows the update/rollback and
+screenshot tests, and the expensive parts go nightly — the schedule trigger already exists.
 
 ## Two structural things worth fixing at the same time
 
@@ -107,6 +159,11 @@ the expensive parts go nightly — the schedule trigger already exists.
   bare `dotnet build` plus two shell scripts. As the gates above accumulate, they need somewhere to
   live that is not a YAML file, so that a developer can run the same gate locally. Vixen uses Nuke and
   it works; the requirement is only that CI runs no logic a person cannot run.
+
+  Three gates now live in `scripts/*.ps1`, each a single `pwsh` command with its own `.DESCRIPTION`,
+  and the requirement is met — every CI step is a command a developer can type. Whether that stays
+  true at ten gates is the open question; `check-api.ps1` already had to discover project properties
+  through `dotnet msbuild -getProperty`, which is the sort of thing an orchestrator would own.
 - **A status document.** Vixen keeps [`overview.md`](../../../Vixen/docs/overview.md) reconciled
   against the code, deliberately separate from its design documents, and the reason is that three
   places recording the same thing is how they come to disagree. Trinix's README currently carries the

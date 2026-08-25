@@ -40,6 +40,21 @@
              so the compile output must not be packed as a lib/. -->
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <IsPackable>false</IsPackable>
+
+        <!-- ⚠ The one library under src/ that scripts/check-api.ps1 does not gate, and
+             not because its surface does not matter — because its surface is not this.
+             Nothing references this assembly (ReferenceOutputAssembly=false at every
+             call site); the compiler loads it. What a consumer actually depends on is
+             the shape of the code it emits and the diagnostic ids it raises, and the
+             second of those is already tracked, one file down, in
+             AnalyzerReleases.Shipped.md — which is the same discipline in the form
+             Roslyn's own RS2008 asks for.
+
+             The first is covered where it lands: the generated proxies and dispatchers
+             are part of Trinix.Services.Contracts' assembly, and that project *is*
+             gated. A generator whose output changes shape moves lines in that baseline,
+             which is the file somebody would actually be reading. -->
+        <TrinixPublicApi>false</TrinixPublicApi>
     </PropertyGroup>
 
     <ItemGroup>

@@ -1,0 +1,311 @@
+#nullable enable
+Trinix.Bundle.BundleException -> sealed class
+Trinix.Bundle.BundleException : System.Exception
+Trinix.Bundle.BundleException.BundleException() -> void
+Trinix.Bundle.BundleException.BundleException(Trinix.Bundle.BundleFailure failure, string message) -> void
+Trinix.Bundle.BundleException.BundleException(Trinix.Bundle.BundleFailure failure, string message, System.Exception innerException) -> void
+Trinix.Bundle.BundleException.BundleException(string message) -> void
+Trinix.Bundle.BundleException.BundleException(string message, System.Exception innerException) -> void
+Trinix.Bundle.BundleException.Failure.get -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure -> enum : int
+Trinix.Bundle.BundleFailure.BadSignature = 7 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.BundleFailure() -> void
+Trinix.Bundle.BundleFailure.ContentMismatch = 8 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.FileSetMismatch = 9 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.MalformedImage = 11 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.MalformedInfo = 2 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.MalformedSignature = 4 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.NoTrustStore = 5 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.None = 0 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.NotABundle = 1 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.NotPermitted = 12 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.NotSigned = 3 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.UnknownPermission = 13 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.UnsupportedEntry = 10 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleFailure.UntrustedSigner = 6 -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.BundleInfo -> sealed class
+Trinix.Bundle.BundleInfo.BundleInfo() -> void
+Trinix.Bundle.BundleInfo.Categories.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Bundle.BundleInfo.Categories.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Bundle.BundleInfo.MinimumSystemVersion.get -> string?
+Trinix.Bundle.BundleInfo.MinimumSystemVersion.init -> string?
+Trinix.Bundle.BundleInfo.Permissions.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Bundle.BundleInfo.Permissions.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Bundle.BundleInfo.Schema.get -> string
+Trinix.Bundle.BundleInfo.Schema.init -> string
+Trinix.Bundle.BundleInfo.ShortVersion.get -> string?
+Trinix.Bundle.BundleInfo.ShortVersion.init -> string?
+Trinix.Bundle.BundleInfo.Validate() -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Bundle.BundleInstaller -> static class
+Trinix.Bundle.BundleInstaller.InstallResult -> readonly struct
+Trinix.Bundle.BundleInstaller.InstallResult : System.IEquatable<Trinix.Bundle.BundleInstaller.InstallResult>
+Trinix.Bundle.BundleInstaller.InstallResult.InstallResult() -> void
+Trinix.Bundle.BundleInstaller.InstallResult.InstallResult(Trinix.Bundle.InstallReceipt Receipt, Trinix.Bundle.VerificationResult Verification) -> void
+Trinix.Bundle.BundleInstaller.InstallResult.Receipt.get -> Trinix.Bundle.InstallReceipt
+Trinix.Bundle.BundleInstaller.InstallResult.Receipt.init -> Trinix.Bundle.InstallReceipt
+Trinix.Bundle.BundleInstaller.InstallResult.Verification.get -> Trinix.Bundle.VerificationResult
+Trinix.Bundle.BundleInstaller.InstallResult.Verification.init -> Trinix.Bundle.VerificationResult
+Trinix.Bundle.BundleJson -> sealed class
+Trinix.Bundle.BundleJson : System.Text.Json.Serialization.JsonSerializerContext
+Trinix.Bundle.BundleJson : System.Text.Json.Serialization.Metadata.IJsonTypeInfoResolver
+Trinix.Bundle.BundleJson.Boolean.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<bool>
+Trinix.Bundle.BundleJson.BundleInfo.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.BundleInfo>
+Trinix.Bundle.BundleJson.BundleJson() -> void
+Trinix.Bundle.BundleJson.BundleJson(System.Text.Json.JsonSerializerOptions options) -> void
+Trinix.Bundle.BundleJson.BundleManifest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.BundleManifest>
+Trinix.Bundle.BundleJson.DateTimeOffset.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.DateTimeOffset>
+Trinix.Bundle.BundleJson.FsVerityReport.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.FsVerityReport>
+Trinix.Bundle.BundleJson.IReadOnlyListManifestEntry.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Trinix.Bundle.ManifestEntry>>
+Trinix.Bundle.BundleJson.IReadOnlyListString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<string>>
+Trinix.Bundle.BundleJson.InstallReceipt.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.InstallReceipt>
+Trinix.Bundle.BundleJson.Int32.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>
+Trinix.Bundle.BundleJson.Int64.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<long>
+Trinix.Bundle.BundleJson.ManifestEntry.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.ManifestEntry>
+Trinix.Bundle.BundleJson.String.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>
+Trinix.Bundle.BundleLayout -> static class
+Trinix.Bundle.BundleManifest -> sealed class
+Trinix.Bundle.BundleManifest.BundleManifest() -> void
+Trinix.Bundle.BundleManifest.ComputeMerkleRoot() -> byte[]
+Trinix.Bundle.BundleManifest.Schema.get -> string
+Trinix.Bundle.BundleManifest.Schema.init -> string
+Trinix.Bundle.BundlePermissions -> static class
+Trinix.Bundle.BundleScanner -> static class
+Trinix.Bundle.BundleSchema -> static class
+Trinix.Bundle.BundleSealer -> static class
+Trinix.Bundle.BundleVerifier -> static class
+Trinix.Bundle.DeveloperPki -> static class
+Trinix.Bundle.DistributionImage -> static class
+Trinix.Bundle.DistributionImage.Footer -> readonly struct
+Trinix.Bundle.DistributionImage.Footer : System.IEquatable<Trinix.Bundle.DistributionImage.Footer>
+Trinix.Bundle.DistributionImage.Footer.CertificatesLength.get -> int
+Trinix.Bundle.DistributionImage.Footer.CertificatesLength.init -> int
+Trinix.Bundle.DistributionImage.Footer.CertificatesOffset.get -> long
+Trinix.Bundle.DistributionImage.Footer.CertificatesOffset.init -> long
+Trinix.Bundle.DistributionImage.Footer.Footer() -> void
+Trinix.Bundle.DistributionImage.Footer.Footer(long PayloadLength, byte[] PayloadSha256, long SignatureOffset, int SignatureLength, long CertificatesOffset, int CertificatesLength) -> void
+Trinix.Bundle.DistributionImage.Footer.PayloadLength.get -> long
+Trinix.Bundle.DistributionImage.Footer.PayloadLength.init -> long
+Trinix.Bundle.DistributionImage.Footer.PayloadSha256.get -> byte[]
+Trinix.Bundle.DistributionImage.Footer.PayloadSha256.init -> byte[]
+Trinix.Bundle.DistributionImage.Footer.SignatureLength.get -> int
+Trinix.Bundle.DistributionImage.Footer.SignatureLength.init -> int
+Trinix.Bundle.DistributionImage.Footer.SignatureOffset.get -> long
+Trinix.Bundle.DistributionImage.Footer.SignatureOffset.init -> long
+Trinix.Bundle.FsVerity -> static class
+Trinix.Bundle.FsVerityReport -> sealed class
+Trinix.Bundle.FsVerityReport.FsVerityReport() -> void
+Trinix.Bundle.FsVerityReport.Reason.get -> string?
+Trinix.Bundle.FsVerityReport.Reason.init -> string?
+Trinix.Bundle.InstallReceipt -> sealed class
+Trinix.Bundle.InstallReceipt.FsVerity.get -> Trinix.Bundle.FsVerityReport?
+Trinix.Bundle.InstallReceipt.FsVerity.init -> Trinix.Bundle.FsVerityReport?
+Trinix.Bundle.InstallReceipt.InstallReceipt() -> void
+Trinix.Bundle.InstallReceipt.Schema.get -> string
+Trinix.Bundle.InstallReceipt.Schema.init -> string
+Trinix.Bundle.ManifestEntry -> sealed class
+Trinix.Bundle.ManifestEntry.ManifestEntry() -> void
+Trinix.Bundle.MerkleTree -> static class
+Trinix.Bundle.PermissionGroup -> enum : int
+Trinix.Bundle.PermissionGroup.Devices = 3 -> Trinix.Bundle.PermissionGroup
+Trinix.Bundle.PermissionGroup.Display = 0 -> Trinix.Bundle.PermissionGroup
+Trinix.Bundle.PermissionGroup.Files = 2 -> Trinix.Bundle.PermissionGroup
+Trinix.Bundle.PermissionGroup.Network = 1 -> Trinix.Bundle.PermissionGroup
+Trinix.Bundle.PermissionGroup.PermissionGroup() -> void
+Trinix.Bundle.PermissionGroup.System = 4 -> Trinix.Bundle.PermissionGroup
+Trinix.Bundle.PermissionSet -> readonly struct
+Trinix.Bundle.PermissionSet : System.IEquatable<Trinix.Bundle.PermissionSet>
+Trinix.Bundle.PermissionSet.Enumerate() -> System.Collections.Generic.IReadOnlyList<Trinix.Bundle.Permissions>
+Trinix.Bundle.PermissionSet.Equals(Trinix.Bundle.PermissionSet other) -> bool
+Trinix.Bundle.PermissionSet.Flags.get -> Trinix.Bundle.Permissions
+Trinix.Bundle.PermissionSet.Has(Trinix.Bundle.Permissions permission) -> bool
+Trinix.Bundle.PermissionSet.HasAny(Trinix.Bundle.Permissions permission) -> bool
+Trinix.Bundle.PermissionSet.PermissionSet() -> void
+Trinix.Bundle.PermissionSet.PermissionSet(Trinix.Bundle.Permissions flags) -> void
+Trinix.Bundle.PermissionSet.ToNames() -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Bundle.Permissions -> enum : int
+Trinix.Bundle.Permissions.DevicesCamera = 32 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.DevicesLocation = 128 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.DevicesMicrophone = 64 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.DevicesUsb = 256 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.Display = 1 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.FilesHome = 8 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.FilesRemovable = 16 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.NetworkClient = 2 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.NetworkServer = 4 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.None = 0 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.Permissions() -> void
+Trinix.Bundle.Permissions.SystemAutomation = 1024 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.SystemBackground = 2048 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.SystemCapture = 4096 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.SystemInput = 8192 -> Trinix.Bundle.Permissions
+Trinix.Bundle.Permissions.SystemNotificationsCritical = 512 -> Trinix.Bundle.Permissions
+Trinix.Bundle.ScannedFile -> readonly struct
+Trinix.Bundle.ScannedFile : System.IEquatable<Trinix.Bundle.ScannedFile>
+Trinix.Bundle.ScannedFile.Executable.get -> bool
+Trinix.Bundle.ScannedFile.Executable.init -> bool
+Trinix.Bundle.ScannedFile.FullPath.get -> string
+Trinix.Bundle.ScannedFile.FullPath.init -> string
+Trinix.Bundle.ScannedFile.RelativePath.get -> string
+Trinix.Bundle.ScannedFile.RelativePath.init -> string
+Trinix.Bundle.ScannedFile.ScannedFile() -> void
+Trinix.Bundle.ScannedFile.ScannedFile(string RelativePath, string FullPath, long Size, bool Executable) -> void
+Trinix.Bundle.ScannedFile.Size.get -> long
+Trinix.Bundle.ScannedFile.Size.init -> long
+Trinix.Bundle.SystemVersion -> static class
+Trinix.Bundle.TrustStore -> sealed class
+Trinix.Bundle.TrustStore.Count.get -> int
+Trinix.Bundle.TrustStore.Describe() -> System.Collections.Generic.IEnumerable<string>
+Trinix.Bundle.TrustStore.Roots.get -> System.Security.Cryptography.X509Certificates.X509Certificate2Collection
+Trinix.Bundle.TrustStore.Source.get -> string
+Trinix.Bundle.VerificationResult -> readonly struct
+Trinix.Bundle.VerificationResult : System.IEquatable<Trinix.Bundle.VerificationResult>
+Trinix.Bundle.VerificationResult.AnchorSubject.get -> string?
+Trinix.Bundle.VerificationResult.AnchorSubject.init -> string?
+Trinix.Bundle.VerificationResult.Failure.get -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.VerificationResult.Failure.init -> Trinix.Bundle.BundleFailure
+Trinix.Bundle.VerificationResult.Info.get -> Trinix.Bundle.BundleInfo?
+Trinix.Bundle.VerificationResult.Info.init -> Trinix.Bundle.BundleInfo?
+Trinix.Bundle.VerificationResult.Manifest.get -> Trinix.Bundle.BundleManifest?
+Trinix.Bundle.VerificationResult.Manifest.init -> Trinix.Bundle.BundleManifest?
+Trinix.Bundle.VerificationResult.Message.get -> string
+Trinix.Bundle.VerificationResult.Message.init -> string
+Trinix.Bundle.VerificationResult.Ok.get -> bool
+Trinix.Bundle.VerificationResult.SignerSubject.get -> string?
+Trinix.Bundle.VerificationResult.SignerSubject.init -> string?
+Trinix.Bundle.VerificationResult.SignerThumbprint.get -> string?
+Trinix.Bundle.VerificationResult.SignerThumbprint.init -> string?
+Trinix.Bundle.VerificationResult.VerificationResult() -> void
+Trinix.Bundle.VerificationResult.VerificationResult(Trinix.Bundle.BundleFailure Failure, string Message, Trinix.Bundle.BundleInfo? Info, Trinix.Bundle.BundleManifest? Manifest, string? SignerSubject, string? SignerThumbprint, string? AnchorSubject) -> void
+const Trinix.Bundle.BundleInstaller.ApplicationsDirectory = "/Applications" -> string
+const Trinix.Bundle.BundleInstaller.MountRoot = "/run/trinix/images" -> string
+const Trinix.Bundle.BundleInstaller.ReceiptDirectory = "/var/lib/trinix/bundles" -> string
+const Trinix.Bundle.BundleLayout.BinDirectory = "Contents/Bin" -> string
+const Trinix.Bundle.BundleLayout.CertificatesPath = "Contents/_Signature/certificates.pem" -> string
+const Trinix.Bundle.BundleLayout.CodeSigningEku = "1.3.6.1.5.5.7.3.3" -> string
+const Trinix.Bundle.BundleLayout.Contents = "Contents" -> string
+const Trinix.Bundle.BundleLayout.Extension = ".app" -> string
+const Trinix.Bundle.BundleLayout.FrameworksDirectory = "Contents/Frameworks" -> string
+const Trinix.Bundle.BundleLayout.ImageExtension = ".tdi" -> string
+const Trinix.Bundle.BundleLayout.InfoPath = "Contents/Info.json" -> string
+const Trinix.Bundle.BundleLayout.ManifestPath = "Contents/_Signature/manifest.json" -> string
+const Trinix.Bundle.BundleLayout.ResourcesDirectory = "Contents/Resources" -> string
+const Trinix.Bundle.BundleLayout.SignatureDirectory = "Contents/_Signature" -> string
+const Trinix.Bundle.BundleLayout.SignaturePath = "Contents/_Signature/manifest.sig" -> string
+const Trinix.Bundle.BundlePermissions.DevicesCamera = "devices.camera" -> string
+const Trinix.Bundle.BundlePermissions.DevicesLocation = "devices.location" -> string
+const Trinix.Bundle.BundlePermissions.DevicesMicrophone = "devices.microphone" -> string
+const Trinix.Bundle.BundlePermissions.DevicesUsb = "devices.usb" -> string
+const Trinix.Bundle.BundlePermissions.Display = "display" -> string
+const Trinix.Bundle.BundlePermissions.FilesHome = "files.home" -> string
+const Trinix.Bundle.BundlePermissions.FilesRemovable = "files.removable" -> string
+const Trinix.Bundle.BundlePermissions.NetworkClient = "network.client" -> string
+const Trinix.Bundle.BundlePermissions.NetworkServer = "network.server" -> string
+const Trinix.Bundle.BundlePermissions.SystemAutomation = "system.automation" -> string
+const Trinix.Bundle.BundlePermissions.SystemBackground = "system.background" -> string
+const Trinix.Bundle.BundlePermissions.SystemCapture = "system.capture" -> string
+const Trinix.Bundle.BundlePermissions.SystemInput = "system.input" -> string
+const Trinix.Bundle.BundlePermissions.SystemNotificationsCritical = "system.notifications.critical" -> string
+const Trinix.Bundle.BundleSchema.Info = "trinix.bundle/1" -> string
+const Trinix.Bundle.BundleSchema.Manifest = "trinix.signature/1" -> string
+const Trinix.Bundle.BundleSchema.Receipt = "trinix.receipt/1" -> string
+const Trinix.Bundle.BundleSealer.SignatureFormat = System.Security.Cryptography.DSASignatureFormat.Rfc3279DerSequence -> System.Security.Cryptography.DSASignatureFormat
+const Trinix.Bundle.DeveloperPki.IdentityYears = 5 -> int
+const Trinix.Bundle.DeveloperPki.RootYears = 20 -> int
+const Trinix.Bundle.DistributionImage.BlockSize = 4096 -> int
+const Trinix.Bundle.DistributionImage.FooterLength = 96 -> int
+const Trinix.Bundle.DistributionImage.FormatVersion = 1 -> uint
+const Trinix.Bundle.SystemVersion.OsReleasePath = "/usr/lib/os-release" -> string
+const Trinix.Bundle.TrustStore.SystemDirectory = "/usr/share/trinix/pki/roots" -> string
+override Trinix.Bundle.BundleJson.GeneratedSerializerOptions.get -> System.Text.Json.JsonSerializerOptions?
+override Trinix.Bundle.BundleJson.GetTypeInfo(System.Type type) -> System.Text.Json.Serialization.Metadata.JsonTypeInfo?
+override Trinix.Bundle.PermissionSet.Equals(object? obj) -> bool
+override Trinix.Bundle.PermissionSet.GetHashCode() -> int
+override Trinix.Bundle.PermissionSet.ToString() -> string
+required Trinix.Bundle.BundleInfo.EntryPoint.get -> string
+required Trinix.Bundle.BundleInfo.EntryPoint.init -> string
+required Trinix.Bundle.BundleInfo.Identifier.get -> string
+required Trinix.Bundle.BundleInfo.Identifier.init -> string
+required Trinix.Bundle.BundleInfo.Name.get -> string
+required Trinix.Bundle.BundleInfo.Name.init -> string
+required Trinix.Bundle.BundleInfo.Version.get -> string
+required Trinix.Bundle.BundleInfo.Version.init -> string
+required Trinix.Bundle.BundleManifest.Architecture.get -> string
+required Trinix.Bundle.BundleManifest.Architecture.init -> string
+required Trinix.Bundle.BundleManifest.Entries.get -> System.Collections.Generic.IReadOnlyList<Trinix.Bundle.ManifestEntry>
+required Trinix.Bundle.BundleManifest.Entries.init -> System.Collections.Generic.IReadOnlyList<Trinix.Bundle.ManifestEntry>
+required Trinix.Bundle.BundleManifest.Identifier.get -> string
+required Trinix.Bundle.BundleManifest.Identifier.init -> string
+required Trinix.Bundle.BundleManifest.MerkleRoot.get -> string
+required Trinix.Bundle.BundleManifest.MerkleRoot.init -> string
+required Trinix.Bundle.BundleManifest.SignedAt.get -> System.DateTimeOffset
+required Trinix.Bundle.BundleManifest.SignedAt.init -> System.DateTimeOffset
+required Trinix.Bundle.BundleManifest.Version.get -> string
+required Trinix.Bundle.BundleManifest.Version.init -> string
+required Trinix.Bundle.FsVerityReport.Enabled.get -> int
+required Trinix.Bundle.FsVerityReport.Enabled.init -> int
+required Trinix.Bundle.FsVerityReport.Skipped.get -> int
+required Trinix.Bundle.FsVerityReport.Skipped.init -> int
+required Trinix.Bundle.InstallReceipt.Identifier.get -> string
+required Trinix.Bundle.InstallReceipt.Identifier.init -> string
+required Trinix.Bundle.InstallReceipt.InstalledAt.get -> System.DateTimeOffset
+required Trinix.Bundle.InstallReceipt.InstalledAt.init -> System.DateTimeOffset
+required Trinix.Bundle.InstallReceipt.MerkleRoot.get -> string
+required Trinix.Bundle.InstallReceipt.MerkleRoot.init -> string
+required Trinix.Bundle.InstallReceipt.Path.get -> string
+required Trinix.Bundle.InstallReceipt.Path.init -> string
+required Trinix.Bundle.InstallReceipt.SignerSubject.get -> string
+required Trinix.Bundle.InstallReceipt.SignerSubject.init -> string
+required Trinix.Bundle.InstallReceipt.SignerThumbprint.get -> string
+required Trinix.Bundle.InstallReceipt.SignerThumbprint.init -> string
+required Trinix.Bundle.InstallReceipt.Version.get -> string
+required Trinix.Bundle.InstallReceipt.Version.init -> string
+required Trinix.Bundle.ManifestEntry.Executable.get -> bool
+required Trinix.Bundle.ManifestEntry.Executable.init -> bool
+required Trinix.Bundle.ManifestEntry.Path.get -> string
+required Trinix.Bundle.ManifestEntry.Path.init -> string
+required Trinix.Bundle.ManifestEntry.Sha256.get -> string
+required Trinix.Bundle.ManifestEntry.Sha256.init -> string
+required Trinix.Bundle.ManifestEntry.Size.get -> long
+required Trinix.Bundle.ManifestEntry.Size.init -> long
+static Trinix.Bundle.BundleInstaller.InstallAsync(string imagePath, Trinix.Bundle.TrustStore trust, string? destinationDirectory = null, bool enableFsVerity = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.BundleInstaller.InstallResult>
+static Trinix.Bundle.BundleInstaller.Installed() -> System.Collections.Generic.IEnumerable<Trinix.Bundle.InstallReceipt>
+static Trinix.Bundle.BundleInstaller.Uninstall(string bundlePath) -> void
+static Trinix.Bundle.BundleJson.Default.get -> Trinix.Bundle.BundleJson
+static Trinix.Bundle.BundleJson.ToBytes<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo) -> byte[]
+static Trinix.Bundle.BundleLayout.IsSafeRelativePath(string path) -> bool
+static Trinix.Bundle.BundleLayout.IsSignatureMaterial(string bundleRelativePath) -> bool
+static Trinix.Bundle.BundleLayout.NameOf(string bundlePath) -> string
+static Trinix.Bundle.BundlePermissions.GroupOf(Trinix.Bundle.Permissions permission) -> Trinix.Bundle.PermissionGroup
+static Trinix.Bundle.BundlePermissions.IsKnown(string permission) -> bool
+static Trinix.Bundle.BundlePermissions.Known.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Bundle.BundlePermissions.NameOf(Trinix.Bundle.Permissions permission) -> string
+static Trinix.Bundle.BundlePermissions.TryParse(string permission, out Trinix.Bundle.Permissions value) -> bool
+static Trinix.Bundle.BundlePermissions.UserVisibleName(Trinix.Bundle.Permissions permission) -> string?
+static Trinix.Bundle.BundleScanner.IsExecutable(string path) -> bool
+static Trinix.Bundle.BundleScanner.Scan(string bundlePath) -> System.Collections.Generic.IReadOnlyList<Trinix.Bundle.ScannedFile>
+static Trinix.Bundle.BundleSealer.ReadInfoAsync(string bundlePath, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.BundleInfo>
+static Trinix.Bundle.BundleSealer.SealAsync(string bundlePath, System.Security.Cryptography.X509Certificates.X509Certificate2 identity, string architecture, System.DateTimeOffset signedAt, System.Collections.Generic.IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2>? intermediates = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.BundleManifest>
+static Trinix.Bundle.BundleVerifier.VerifyAsync(string bundlePath, Trinix.Bundle.TrustStore trust, System.DateTimeOffset? verificationTime = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.VerificationResult>
+static Trinix.Bundle.DeveloperPki.CreateIdentity(System.Security.Cryptography.X509Certificates.X509Certificate2 issuer, string commonName, string organisation, System.DateTimeOffset notBefore) -> System.Security.Cryptography.X509Certificates.X509Certificate2
+static Trinix.Bundle.DeveloperPki.CreateRoot(string commonName, string organisation, System.DateTimeOffset notBefore) -> System.Security.Cryptography.X509Certificates.X509Certificate2
+static Trinix.Bundle.DeveloperPki.Load(string certificatePath, string keyPath) -> System.Security.Cryptography.X509Certificates.X509Certificate2
+static Trinix.Bundle.DeveloperPki.Save(System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, string certificatePath, string keyPath) -> void
+static Trinix.Bundle.DistributionImage.Magic.get -> System.ReadOnlySpan<byte>
+static Trinix.Bundle.DistributionImage.PackAsync(string bundlePath, string outputPath, System.Security.Cryptography.X509Certificates.X509Certificate2 identity, System.DateTimeOffset buildTime, bool compress = false, System.Collections.Generic.IReadOnlyList<System.Security.Cryptography.X509Certificates.X509Certificate2>? intermediates = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.DistributionImage.Footer>
+static Trinix.Bundle.DistributionImage.ReadFooter(string imagePath) -> Trinix.Bundle.DistributionImage.Footer
+static Trinix.Bundle.DistributionImage.SignedDescriptor(long payloadLength, System.ReadOnlySpan<byte> payloadSha256) -> byte[]
+static Trinix.Bundle.DistributionImage.VerifyAsync(string imagePath, Trinix.Bundle.TrustStore trust, System.DateTimeOffset? verificationTime = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.VerificationResult>
+static Trinix.Bundle.FsVerity.IsEnabled(string path) -> bool
+static Trinix.Bundle.FsVerity.TryEnable(string path, out string? reason) -> bool
+static Trinix.Bundle.MerkleTree.Leaf(string path, long size, bool executable, System.ReadOnlySpan<byte> contentHash) -> byte[]
+static Trinix.Bundle.MerkleTree.Root(System.Collections.Generic.IReadOnlyList<byte[]> leaves) -> byte[]
+static Trinix.Bundle.PermissionSet.Empty.get -> Trinix.Bundle.PermissionSet
+static Trinix.Bundle.PermissionSet.Parse(System.Collections.Generic.IReadOnlyList<string> declared) -> Trinix.Bundle.PermissionSet
+static Trinix.Bundle.PermissionSet.Parse(Trinix.Bundle.BundleInfo info) -> Trinix.Bundle.PermissionSet
+static Trinix.Bundle.PermissionSet.TryParse(System.Collections.Generic.IReadOnlyList<string> declared, out Trinix.Bundle.PermissionSet parsed, out System.Collections.Generic.IReadOnlyList<string> unknown) -> bool
+static Trinix.Bundle.PermissionSet.operator !=(Trinix.Bundle.PermissionSet left, Trinix.Bundle.PermissionSet right) -> bool
+static Trinix.Bundle.PermissionSet.operator ==(Trinix.Bundle.PermissionSet left, Trinix.Bundle.PermissionSet right) -> bool
+static Trinix.Bundle.SystemVersion.Current(string? osReleasePath = null) -> string?
+static Trinix.Bundle.SystemVersion.Satisfies(string? system, string? required) -> bool
+static Trinix.Bundle.TrustStore.FromCertificates(System.Collections.Generic.IEnumerable<System.Security.Cryptography.X509Certificates.X509Certificate2> certificates, string source) -> Trinix.Bundle.TrustStore
+static Trinix.Bundle.TrustStore.Load(string? directory = null) -> Trinix.Bundle.TrustStore
