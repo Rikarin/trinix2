@@ -73,6 +73,26 @@ enforcement when it is there.
 right outcome by luck: it drops all five, and only two needed dropping. Three properties systemd would
 have accepted are being withheld.
 
+### A property has three states, not two
+
+Built 2026-08-25 as `PropertyEnforcement { Rejected, Inert, Enforced }`. The measurement above forces
+the distinction and the type system now carries it: `UnitProperty.Enforcement` is **`required`**, so
+nothing enters the property list without stating which it is.
+
+⚠ That is a correction to a default, and the default was the bug. The field it replaced was a
+`NeedsSeccomp` bool defaulting to `false` — which made *"this protects the application"* the answer you
+got by saying nothing, on a build where three properties protect nothing at all.
+
+**The three inert properties are emitted rather than withheld.** Withholding buys nothing — the
+enforcement is missing from the binary either way — and costs a unit that becomes correct for free the
+day a `libseccomp` recipe lands. The dishonesty was never the property; it was the silence. So each one
+files a `SandboxGapKind.Inert` gap quoting its evidence, `ToUnitFile()` prefixes the line with a warning
+comment, and `SandboxUnit.Enforces()` sits beside `Sets()` because on this build they differ for exactly
+three properties.
+
+⚠ One deliberate exception: `MemoryDenyWriteExecute=no` files no gap. A value claiming *no* restriction
+cannot be theatre, and a journal line true of every correct system is how a log stops being read.
+
 ### Probing what the build supports — and the trap
 
 `systemctl --version` prints the feature string, and `-SECCOMP` is in it, so `TrinixToday` can stop
