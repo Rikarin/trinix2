@@ -75,20 +75,86 @@ dotted-numeric and ordered — it is what a future package manager compares.
 at seal time, because the alternative is an exec failure at launch with nothing
 to say the bundle was always like that.
 
-### Declared permissions are not yet enforced
+### Declared permissions are signed, and almost nothing enforces them yet
 
-`permissions` is recorded, signed, and **not enforced**. There is no sandbox in
-Trinix: nothing stops an application from opening a socket it never declared.
+`permissions` is recorded and signed. The vocabulary is
+[doc 04](plan/04-sandbox-and-permissions.md)'s fourteen, deliberately coarse —
+a permission model finer than the enforcement behind it produces a long list
+nobody reads — and it lives in `BundlePermissions`, beside the flags it parses
+into, the `PermissionSet` that does the parsing, and the phrasing a consent
+dialog will use. Grouped the way doc 04 groups them:
 
-It exists now anyway, and the reason is specific. A permission set is only worth
-something if it is inside the signature — a permission added after the fact by
-whoever is running the application is not a permission — and retrofitting the
-signature to cover a new field would invalidate every bundle signed before it.
-So the field is defined now and the enforcement lands with the sandbox.
+| Group | Permissions |
+|---|---|
+| — | `display` |
+| Network | `network.client`, `network.server` |
+| Files | `files.home`, `files.removable` |
+| Devices | `devices.camera`, `devices.microphone`, `devices.location`, `devices.usb` |
+| System | `system.notifications.critical`, `system.automation`, `system.background`, `system.capture`, `system.input` |
 
-The vocabulary is deliberately coarse (`network.client`, `files.home`,
-`display`, `audio.input`, …); see `BundlePermissions`. A permission model finer
-than the enforcement behind it produces a long list nobody reads.
+⚠ Every one of those strings is **inside a signature**, so renaming one is not a
+refactor; it is a format change that every bundle signed before it predates. The
+vocabulary was replaced exactly once, when the fourteen displaced five
+placeholders — `files.all`, `audio.input`, `audio.output`, `device.input`,
+`system.services` — and that was affordable because Trinix has two applications
+and between them they declare `display` and `files.home`, both of which survived.
+The five that vanished have no replacements: playing audio is something a process
+can do, and reaching Trinix's own services is scoped by the service to the
+caller's identity rather than by a mount, so neither was a permission under doc
+04's test.
+
+The field was defined before anything enforced it, and that reason still holds. A
+permission set is only worth something if it is inside the signature — a
+permission added after the fact by whoever is running the application is not a
+permission — and retrofitting the signature to cover a new field would invalidate
+every bundle signed before it.
+
+#### What enforcement there is
+
+`src/Trinix.Sandbox` turns a verified `Info.json` and a set of resolved paths
+into the transient systemd unit doc 04 describes — as *data*: a list of
+`Name=value` properties, and beside it a list of **gaps**, being what this unit
+does not enforce and who would have to. Nothing calls it. `open` verifies and
+then launches the entry point exactly as § 7 describes, with no unit around it,
+so an application on Trinix today is contained no more than any other process.
+
+The unit that library builds is mostly floor rather than permission, and that is
+the design rather than a shortfall — doc 04's containment is *nothing unless
+declared*, and authority above that floor belongs to a broker:
+
+- the floor is unconditional and permissions only ever add to it:
+  `RootDirectory=` over a composed root, `PrivateNetwork=yes`,
+  `PrivateDevices=yes`, `ProtectProc=invisible`, `NoNewPrivileges=yes`, and the
+  application's `$HOME` bound to `~/Library/Containers/<id>/Data`;
+- **three of the fourteen change the unit at all**: `display` binds the
+  compositor's socket, and the two `network.*` join one shared namespace instead
+  of getting no network stack;
+- **ten are the broker's**, and `trinix-broker` does not exist. For those the
+  grant is the user picking a thing and the application getting an fd back, so
+  declaring one buys the right to ask and nothing yet answers;
+- one, `system.background`, is the session manager's: whether a unit outlives its
+  last window is not an exec property.
+
+⚠ **Two things are missing underneath it, and one is unknown.** The systemd in
+this image is built `-Dseccomp=disabled`, and systemd implements
+`SystemCallFilter=`, `SystemCallArchitectures=`, `MemoryDenyWriteExecute=`,
+`RestrictRealtime=` and `RestrictSUIDSGID=` as seccomp filters — so the whole
+syscall floor is a set of properties this system does not have, and the builder
+records each absence as a gap rather than emitting a line that would do nothing.
+`RootDirectory=` also needs the *system* manager, and the launcher has no
+privileged path to it. The unknown is what a transient unit does with a property
+systemd cannot implement: a unit file on disk logs it and starts anyway, but
+these properties go over D-Bus, where an unknown one may instead fail the method
+call. Those are opposite outcomes — a hardened application, or no application —
+and **nothing here has yet been through a real `systemd-run`**, so none of the
+above is a claim about a running system.
+
+An unknown permission string is refused rather than dropped or approximated.
+Dropping it would run the application with less authority than its developer
+designed for and than its consent screen described; approximating it would grant
+authority nobody wrote down. A bundle asking for something this system has never
+heard of was built for a newer Trinix, and `open` says so in those words rather
+than saying anything about tampering.
 
 ---
 
@@ -161,7 +227,17 @@ attacker chooses what the verifier believes about the bundle it is verifying.
 Failures are enumerated (`BundleFailure`) rather than left to a message,
 because the difference between *this was tampered with* and *this was signed by
 someone we do not know* is the whole content of what the user is told — and the
-difference between an incident and a configuration mistake.
+difference between an incident and a configuration mistake. The newest of them,
+`UnknownPermission`, is neither: the signature was good and the developer was
+careful, and the bundle asks for authority this system has never defined. It
+reads as "this needs a newer Trinix", which is the point of enumerating them at
+all.
+
+A verification that passes hands back the signed manifest and not only a verdict.
+Nothing in § 7 needs it today; doc 04's sandbox does, because the one thing it
+must know about a bundle that `Info.json` cannot say — whether the entry point
+carries a JIT — is legible in the file list, and that list has to be the signed
+one rather than a directory listing taken afterwards.
 
 ### Revocation is not checked
 
@@ -349,6 +425,11 @@ These are built into an explicit `envp`, because
 and never calls `setenv` — a variable set the ordinary way would not survive the
 exec.
 
+⚠ None of this happens inside a sandbox. The transient unit a bundle's signed
+permissions describe is constructed by `Trinix.Sandbox` and started by nothing
+(§ 1), so what `open` produces is an ordinary process of the user's session that
+happens to have been verified first.
+
 ### It verifies on every launch, not the first
 
 Apple's Gatekeeper checks once and then relies on the kernel to enforce code
@@ -410,12 +491,12 @@ built on top; a bind mount would be readable by every later stage.
 
 | | |
 |---|---|
-| **Sandboxing** | Permissions are declared and signed; nothing enforces them. |
+| **Sandboxing** | Half built, and not the enforcing half. `Trinix.Sandbox` constructs the transient unit a bundle's signed permissions describe, and records what that unit would *not* enforce — but nothing in the launch path builds one, and no unit it has produced has been through a `systemd-run` on a booted system. See § 1. |
 | **dm-verity on the base image** | The kernel is configured for it and the A/B layout is in place, but the root filesystem is not yet verity-protected. It belongs with Phase 7's updater, which is what writes the root hash and flips the boot entry. |
 | **Revocation** | No CRL, no OCSP. See §3. |
 | **Timestamping** | `signedAt` is the signer's claim. A timestamping authority matters once certificates start expiring. |
 | **Intermediates** | The chain supports them; the development PKI issues directly from the root. |
-| **A second application** | `Hello.app` is the only bundle. Vixen's applications use this same format unchanged — nothing here is a placeholder except what the program prints. |
+| **An application from outside** | Two bundles ship, and both are Trinix's own: `Hello.app`, and `HelloUi.app`, which carries the whole of Vixen — forty assemblies and two native libraries — and is what showed the format holds a framework and not only a console program. Nothing built elsewhere has been packaged this way. |
 
 ---
 
@@ -427,7 +508,7 @@ On the Mac:
 ./scripts/build.ps1 -Stage app -Arch arm64 -Verify
 ```
 
-Produces `out/apps/arm64/Hello.tdi` and runs the seven tamper assertions in
+Produces `out/apps/arm64/Hello.tdi` and `HelloUi.tdi`, and runs the seven tamper assertions in
 `src/app-sanity.sh` — a modified file, an added file, a removed file, a data
 file made executable, a stripped signature, a valid signature from an untrusted
 authority, and an edited image payload.

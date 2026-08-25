@@ -48,6 +48,30 @@ public class BundleSealAndVerifyTests {
     }
 
     [Fact]
+    public async Task VerificationHandsBackTheSignedManifestAndNotOnlyAVerdict() {
+        // ⚠ The manifest is an output rather than an implementation detail, and the
+        // caller that needs it is the launcher. Doc 04's sandbox decides one property
+        // — MemoryDenyWriteExecute= — from whether the bundle carries a
+        // *.runtimeconfig.json, and it has to read that out of the *signed* file list
+        // rather than off the disk: a directory listing is whatever is there right
+        // now, and the conclusion drawn from it would be exactly as trustworthy.
+        // Narrowing this result to Ok/Failure would take that away with nothing else
+        // failing, so it is asserted here rather than left to the one caller.
+        using var bundle = TestBundle.Create(nameof(VerificationHandsBackTheSignedManifestAndNotOnlyAVerdict));
+        var signedManifest = await bundle.SealAsync();
+
+        var result = await bundle.VerifyAsync();
+
+        Assert.True(result.Ok, result.Message);
+        Assert.NotNull(result.Manifest);
+        Assert.Equal(signedManifest.MerkleRoot, result.Manifest.MerkleRoot);
+        Assert.Equal(
+            signedManifest.Entries.Select(entry => entry.Path),
+            result.Manifest.Entries.Select(entry => entry.Path)
+        );
+    }
+
+    [Fact]
     public async Task TheManifestCoversEveryFileExceptItsOwnSignature() {
         using var bundle = TestBundle.Create(nameof(TheManifestCoversEveryFileExceptItsOwnSignature));
         var manifest = await bundle.SealAsync();

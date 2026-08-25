@@ -22,6 +22,13 @@
       availability depends on how systemd was built, and base/recipes/systemd/
       for how Trinix's was.
 
+      ⚠ SandboxUser is the one file that asks the machine anything — getuid and
+      getpwuid_r, so that a layout resolves against the user who is actually
+      there instead of against a plausible-looking constant. It is deliberately
+      one file, one call site, and separate from the builder: everything the
+      builder sees is still an argument, which is what keeps the containment
+      rules assertable without a passwd database.
+
       It references Trinix.Bundle for the permission vocabulary, and nothing
       else. One vocabulary, in the assembly that already refuses an unknown one
       at seal time, is what stops the packager and the launcher from disagreeing
@@ -31,6 +38,11 @@
     <PropertyGroup>
         <RootNamespace>Trinix.Sandbox</RootNamespace>
         <AssemblyName>Trinix.Sandbox</AssemblyName>
+        <!-- LibraryImport's generated marshalling stubs are unsafe code, whatever
+             the declarations look like — SYSLIB1062 is the compiler saying so. It
+             is on for SandboxUser's three libc calls and nothing else here writes
+             a pointer. -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     </PropertyGroup>
 
     <ItemGroup>

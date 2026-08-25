@@ -341,6 +341,31 @@ public class SandboxUnitBuilderTests {
     }
 
     [Fact]
+    public void ExactlyThreeOfTheFourteenChangeAUnitPropertyAtAll() {
+        // ⚠ This number is quoted in docs/app-bundles.md § 1, which is why it is
+        // asserted rather than counted by hand: a permission that quietly starts or
+        // stops touching the unit would make the document wrong with nothing
+        // failing. It is also the honest shape of doc 04 — the unit is a floor, and
+        // authority above the floor belongs to a broker that does not exist yet.
+        var floor = Rendered(TestSandbox.Unit());
+
+        List<string> changed = [];
+        foreach (var permission in BundlePermissions.Known) {
+            if (!Rendered(TestSandbox.Unit(permission)).SequenceEqual(floor, StringComparer.Ordinal)) {
+                changed.Add(permission);
+            }
+        }
+
+        Assert.Equal(
+            [BundlePermissions.Display, BundlePermissions.NetworkClient, BundlePermissions.NetworkServer],
+            changed
+        );
+
+        static IReadOnlyList<string> Rendered(SandboxUnit unit) =>
+            [.. unit.Properties.Select(property => property.Name + "=" + property.Value)];
+    }
+
+    [Fact]
     public void TheContainerHasNoPathBecauseItHasNoUsrBin() {
         // Setting a PATH that resolves to nothing would turn "this was never going
         // to work here" into a runtime mystery.

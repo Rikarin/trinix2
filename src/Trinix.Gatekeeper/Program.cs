@@ -156,6 +156,17 @@ if (verifyOnly) {
 
 var entry = Path.Combine(bundlePath, result.Info.EntryPoint);
 
+// ⚠ The seam for doc 04's sandbox, and deliberately not crossed here. Everything
+// constructing a transient unit would need is already in hand: result.Info
+// carries the signed permission array, and result.Manifest carries the signed
+// file list that Trinix.Sandbox's BundleRuntimeDetection reads the runtime kind
+// out of. What is missing is not information but an answer — whether systemd-run
+// accepts the properties that library emits on a systemd built without
+// libseccomp, or fails the call, which are opposite outcomes and are settled by
+// one run in a booted VM rather than by reading. Until then `open` execs the
+// entry point directly, exactly as it always has, and an application is no less
+// contained than it was yesterday.
+
 // The application learns where it lives from the environment rather than by
 // inspecting its own argv, so that a bundle's resources are findable the same
 // way from a managed process, a shell script or a native binary.
@@ -253,5 +264,15 @@ static string Explain(BundleFailure failure) =>
         BundleFailure.UnsupportedEntry => "The application contains something Trinix will not run.",
         BundleFailure.MalformedImage => "The distribution image is damaged.",
         BundleFailure.NotPermitted => "That operation needs more privilege than this session has.",
+
+        // ⚠ A version problem wearing a refusal's clothes, and the wording is the
+        // whole point of the arm: nothing is wrong with this bundle. Its signature
+        // was good and its developer did nothing careless — it asks for authority
+        // this system has never heard of, which means it was built for a newer
+        // Trinix. Saying "refused" without saying "newer" sends a person looking
+        // for a compromise that did not happen.
+        BundleFailure.UnknownPermission =>
+            "This application needs a newer version of Trinix: it asks for a permission this system does not define.",
+
         _ => "The application was refused."
     };
