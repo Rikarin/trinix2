@@ -150,14 +150,27 @@ window on — the guest has always had a virtio-gpu with nothing looking at it.
 open vnc://localhost:5900
 ```
 
-macOS has a VNC client built in, so this still needs nothing installed. The port
-is published on loopback only — QEMU's VNC server here has no password.
+The password is `trinix`, and it exists for a reason worth knowing: a QEMU with
+no password offers exactly one VNC security type, `None`, and macOS's built-in
+Screen Sharing refuses to speak to a server that offers only that. A password
+makes QEMU offer VNC authentication as well, which is what Apple's client is
+looking for. `TRINIX_VNC_PASSWORD` overrides it; the port is published on
+loopback only either way.
 
-Then, in the serial console, log in and start an application:
+Then, in the serial console, log in as root and install an application:
+
+```bash
+trinix-bundle install /usr/share/trinix/applications/HelloUi.tdi
+```
 
 ```bash
 systemctl start trinix-helloui.service
 ```
+
+That is the real path: a signed `.tdi` unpacked into `/Applications`, launched
+through `trinix-open`, which verifies the signature before it execs anything.
+The unit is a stand-in for a dock that does not exist yet — what it runs is the
+launcher, not a binary.
 
 Expect it to be slow: the frame is composited in software by the guest, emulated
 without an accelerator, and then encoded for VNC.

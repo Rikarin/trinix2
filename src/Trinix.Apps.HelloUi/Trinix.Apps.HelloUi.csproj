@@ -5,6 +5,13 @@
       platform backend: it is what -GraphicsCheck starts to prove that the chain
       from the compositor to a presented frame is whole.
 
+      ⚠ It ships the way an application ships — src/pack-apps.sh builds it into
+      a HelloUi.app, seals it with a signed Merkle manifest and packages it as a
+      .tdi — rather than being published loose into /usr/lib like the compositor
+      and the daemon. Those are parts of the system; this is an application, and
+      Phase 6 already decided what an application is. Anything that installs and
+      launches by a different route would be proving a path nothing else uses.
+
       Framework-dependent like every other Trinix application. NativeAOT would
       suit a UI application well and cannot cross-compile between architectures,
       which is the property src/publish.sh is organised around.
@@ -13,17 +20,13 @@
     <PropertyGroup>
         <OutputType>Exe</OutputType>
         <RootNamespace>Trinix.Apps.HelloUi</RootNamespace>
-        <AssemblyName>Trinix.HelloUi</AssemblyName>
+        <AssemblyName>helloui</AssemblyName>
         <IsPackable>false</IsPackable>
 
         <!-- Vixen's own trim analyser runs over the packages this pulls in and is
              not clean for a UI application yet; the boot-path components keep it. -->
         <IsAotCompatible>false</IsAotCompatible>
         <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
-
-        <!-- The interface draws text, and text needs a locale-aware comparison
-             somewhere inside the shaper. The system services stay invariant. -->
-        <InvariantGlobalization>false</InvariantGlobalization>
     </PropertyGroup>
 
     <ItemGroup>

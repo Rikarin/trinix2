@@ -1,0 +1,15 @@
+{
+  "schema": "trinix.bundle/1",
+  "identifier": "io.trinix.helloui",
+  "name": "HelloUi",
+  "version": "1.0.0",
+  "shortVersion": "1.0",
+  "entryPoint": "Contents/Bin/helloui",
+  "minimumSystemVersion": "0.3",
+  "permissions": [
+    "display"
+  ],
+  "categories": [
+    "developer"
+  ]
+}

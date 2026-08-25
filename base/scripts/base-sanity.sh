@@ -173,26 +173,18 @@ fi
 log 'Vixen platform'
 
 for essential in usr/lib/libtrinix-wl-client.so.1 \
-                 usr/bin/trinix-helloui \
-                 usr/lib/trinix/helloui/Trinix.Platform.dll \
-                 usr/lib/trinix/helloui/Vixen.Ui.Desktop.dll \
                  usr/lib/systemd/system/trinix-helloui.service; do
     [ -e "$ROOTFS/$essential" ] && pass "$essential" || fail "$essential is missing"
 done
 
-# Vixen shapes its own text and brings HarfBuzz to do it. The package publishes
-# a per-architecture native library, and the wrong one is a publish that picked
-# the wrong RID — which produces an application that starts and dies at the
-# first glyph.
-harfbuzz="$ROOTFS/usr/lib/trinix/helloui/libHarfBuzzSharp.so"
-if [ -e "$harfbuzz" ]; then
-    machine="$(llvm-readelf --file-header "$harfbuzz" | awk -F': +' '/Machine/ { print $2 }')"
-    case "$machine" in
-        *"$expect_machine"*) pass "libHarfBuzzSharp.so is $expect_machine" ;;
-        *) fail "libHarfBuzzSharp.so is '$machine', expected $expect_machine" ;;
-    esac
+# ⚠ The application itself is not in the rootfs, and that is the point: it is a
+# signed .tdi under /usr/share/trinix/applications, installed to /Applications
+# on first use like any other application. What is checked here is that the
+# image ships one to install.
+if [ -e "$ROOTFS/usr/share/trinix/applications/HelloUi.tdi" ]; then
+    pass 'HelloUi.tdi is shipped'
 else
-    fail 'libHarfBuzzSharp.so is missing — Vixen cannot shape text without it'
+    fail 'HelloUi.tdi is missing — the app stage did not package the Vixen application'
 fi
 
 # --- Vulkan, on a machine with no GPU --------------------------------------

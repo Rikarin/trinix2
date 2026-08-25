@@ -172,8 +172,20 @@ args=(
 # whole VM tier is built on. Bound to 0.0.0.0 rather than localhost because
 # "localhost" inside a container is the container.
 if [ "$vnc" -eq 1 ]; then
-    args+=(-display vnc=0.0.0.0:0)
-    echo '==> VNC on port 5900 — connect with: open vnc://localhost:5900'
+    # ⚠ With a password, and not for security — this is loopback-only and the
+    # image's own accounts are published in the README. It is because a QEMU
+    # with no password offers exactly one security type, "None", and macOS's
+    # built-in Screen Sharing refuses to speak to a server that offers only
+    # that. A password makes QEMU offer VNC authentication as well, which is
+    # what Apple's client is looking for.
+    #
+    # `trinix`, for the same reason the accounts use it: a development image
+    # with a known credential is one somebody can actually get into.
+    args+=(
+        -object "secret,id=vncpassword,data=${TRINIX_VNC_PASSWORD:-trinix}"
+        -display vnc=0.0.0.0:0,password-secret=vncpassword
+    )
+    echo '==> VNC on port 5900 — open vnc://localhost:5900 — password: trinix'
 else
     args+=(-display none)
 fi
@@ -367,6 +379,16 @@ if [ "$check" -eq 1 ]; then
                 # engine. It is last because it is the only one that fails when
                 # any of them do, and a verdict that names the lowest broken
                 # layer is worth more than one that names the top.
+                # ⚠ Installed first, from the signed .tdi the image ships, because
+                # HelloUi is an application rather than a part of the system: the
+                # launcher verifies its signature before it execs anything, and a
+                # check that ran the executable directly would be exercising a path
+                # no real application takes.
+                type_line 'trinix-bundle install /usr/share/trinix/applications/HelloUi.tdi'
+                if ! await 'BUNDLE-INSTALLED io.trinix.helloui' 600; then
+                    verdict="$verdict vixen-install"
+                fi
+
                 type_line 'systemctl start trinix-helloui.service; journalctl -u trinix-helloui -o cat --no-pager'
                 if ! await 'TRINIX-VIXEN: window' 600; then
                     verdict="$verdict vixen-window"

@@ -1,14 +1,22 @@
-# The Phase 5 platform gate, as a unit.
+# The Phase 5 platform gate, as a unit — and a stand-in for a dock.
 #
-# Not enabled, for trinix-wl-demo.service's reason: a check that produces a
-# verdict on demand beats one that produces noise at every boot.
+# ⚠ What this starts is `trinix-open` against an installed .app bundle, not a
+# binary in /usr/lib. HelloUi is an *application*: src/pack-apps.sh seals it
+# with a signed Merkle manifest and packages it as a .tdi, `trinix-bundle
+# install` puts it in /Applications, and the launcher verifies the signature
+# before it execs anything. A unit that ran the executable directly would work
+# and would prove a path no real application takes.
 #
+# The unit exists at all because there is nothing else to start an application
+# from yet. On a finished system that is the dock, and it will do exactly this:
+# run trinix-open as the logged-in user, in their session.
+#
+#   trinix-bundle install /usr/share/trinix/applications/HelloUi.tdi
 #   systemctl start trinix-helloui.service
 #   journalctl -u trinix-helloui -o cat --no-pager
 #
-# What it proves is the whole chain — compositor, Wayland client, Trinix's
-# IPlatform, Vixen, lavapipe, swapchain, present — which is why it is the last
-# of the three graphical checks and the only one that fails if any of them do.
+# Not enabled, for trinix-wl-demo.service's reason: a check that produces a
+# verdict on demand beats one that produces noise at every boot.
 
 [Unit]
 Description=Trinix Vixen platform check
@@ -20,13 +28,18 @@ Requires=trinix-compositor.service
 Type=oneshot
 RemainAfterExit=yes
 
+# The user the compositor runs as, which is whose runtime directory holds the
+# Wayland socket. An application started as root would find nothing to draw on.
 User=trinix
 Group=trinix
 
 Environment=XDG_RUNTIME_DIR=/run/user/1000
 Environment=WAYLAND_DISPLAY=wayland-0
 
-ExecStart=/usr/bin/trinix-helloui --frames 10
+# --frames is Vixen's own argument, passed through by the launcher to the
+# application: it draws that many and exits, which is what makes this a check
+# rather than a window somebody has to close.
+ExecStart=/usr/bin/trinix-open /Applications/HelloUi.app --frames 10
 
 StandardOutput=journal+console
 StandardError=journal+console

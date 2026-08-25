@@ -102,6 +102,17 @@ pack_app "$srcdir/Trinix.Apps.Hello/Trinix.Apps.Hello.csproj" \
          "$srcdir/Trinix.Apps.Hello/bundle" \
          'Hello'
 
+# The first application with a window, packaged exactly like the one without.
+#
+# ⚠ It carries the whole of Vixen — forty assemblies and two native libraries,
+# about eighteen megabytes — where Hello is a few hundred kilobytes. That is
+# what a real application looks like and it is the reason this one is worth
+# packaging: a bundle format proved only against a console "Hello" is a format
+# nobody has yet asked to hold a framework.
+pack_app "$srcdir/Trinix.Apps.HelloUi/Trinix.Apps.HelloUi.csproj" \
+         "$srcdir/Trinix.Apps.HelloUi/bundle" \
+         'HelloUi'
+
 echo
 echo "==> packaged:"
 ls -l "$destdir"/*.tdi
