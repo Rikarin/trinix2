@@ -50,16 +50,27 @@ public sealed class BundleInfo {
     /// </summary>
     /// <remarks>
     ///     <para>
-    ///         <b>Declared, recorded, and not yet enforced.</b> There is no sandbox in
-    ///         Trinix, so nothing stops an application from opening a socket it never
-    ///         declared. This exists now because the permission set has to be part of
-    ///         the *signed* manifest to be worth anything later: a permission added
-    ///         after the fact by whoever is running the app is not a permission, and
-    ///         retrofitting the signature to cover it would invalidate every bundle
-    ///         already signed.
+    ///         <b>Declared, signed, and enforced by construction rather than by trust.</b>
+    ///         The field was defined before anything read it, because a permission set
+    ///         is only worth something inside the signature — a permission added after
+    ///         the fact by whoever is running the app is not a permission — and
+    ///         retrofitting the signature to cover a new field would invalidate every
+    ///         bundle already signed. That bet is what lets
+    ///         <c>Trinix.Sandbox</c> derive a transient systemd unit from this array at
+    ///         launch without a format change.
     ///     </para>
     ///     <para>
-    ///         See <see cref="BundlePermissions" /> for the vocabulary.
+    ///         ⚠ Enforcement is still partial, and the honest boundary is drawn in
+    ///         <c>Trinix.Sandbox</c> rather than here: most of the fourteen are
+    ///         broker-mediated and have no systemd property at all, so declaring one
+    ///         buys the right to <i>ask</i>, and the thing that says no is the broker.
+    ///         Until it ships, those permissions are recorded and unenforced.
+    ///     </para>
+    ///     <para>
+    ///         See <see cref="BundlePermissions" /> for the vocabulary and
+    ///         <see cref="PermissionSet" /> for the parsed form. Validation refuses a
+    ///         string it does not know rather than dropping it, for the reason argued
+    ///         on <see cref="PermissionSet" />.
     ///     </para>
     ///     <para>
     ///         ⚠ The getter coalesces rather than trusting the field initialiser, and
@@ -173,52 +184,3 @@ public sealed class BundleInfo {
     }
 }
 
-/// <summary>
-///     The permissions an application may declare.
-/// </summary>
-/// <remarks>
-///     Coarse on purpose. A permission model that is finer than the enforcement
-///     behind it produces a long list nobody reads and no additional safety; these
-///     are the divisions that a future sandbox can actually implement with
-///     namespaces, seccomp and the Wayland protocol surface Trinix already
-///     controls.
-/// </remarks>
-public static class BundlePermissions {
-    /// <summary>Open outbound network connections.</summary>
-    public const string NetworkClient = "network.client";
-
-    /// <summary>Listen for inbound connections.</summary>
-    public const string NetworkServer = "network.server";
-
-    /// <summary>Read and write the user's home directory.</summary>
-    public const string FilesHome = "files.home";
-
-    /// <summary>Read and write anywhere the invoking user can.</summary>
-    public const string FilesAll = "files.all";
-
-    /// <summary>Connect to the Wayland display and put windows on the screen.</summary>
-    public const string Display = "display";
-
-    /// <summary>Capture audio.</summary>
-    public const string AudioInput = "audio.input";
-
-    /// <summary>Play audio.</summary>
-    public const string AudioOutput = "audio.output";
-
-    /// <summary>Read input devices directly, rather than through the compositor.</summary>
-    public const string DeviceInput = "device.input";
-
-    /// <summary>Talk to Trinix's own system services over D-Bus.</summary>
-    public const string SystemServices = "system.services";
-
-    static readonly string[] All = [
-        NetworkClient, NetworkServer, FilesHome, FilesAll,
-        Display, AudioInput, AudioOutput, DeviceInput, SystemServices
-    ];
-
-    /// <summary>Every permission Trinix defines.</summary>
-    public static IReadOnlyList<string> Known => All;
-
-    /// <summary>Is this one of them?</summary>
-    public static bool IsKnown(string permission) => Array.IndexOf(All, permission) >= 0;
-}

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Sandbox.Tests — the containment rules, asserted directly.
+
+      This suite is the reason the sandbox was split into "build a unit" and
+      "start it". Every claim doc 04 makes about what an application can reach is
+      a claim about the properties of a transient unit, and a property is a
+      string in a list: an application with no network.client gets
+      PrivateNetwork=yes, an application with files.home gets no mount of the
+      user's home. Those are assertions that run in milliseconds on any machine
+      with the .NET SDK, with no root, no systemd and no VM.
+
+      ⚠ What this suite therefore does NOT prove, stated here because a green
+      run is otherwise easy to over-read: that systemd accepts any of it. The
+      properties could be misspelled, could want a different value syntax, or
+      could not exist in the systemd this image builds — base/recipes/systemd
+      declines libseccomp, which is how systemd implements five of them. Only a
+      booted Trinix answers that, and docs/plan/16 puts it in the VM tier.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Sandbox.Tests</RootNamespace>
+        <AssemblyName>Trinix.Sandbox.Tests</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <!-- The same three opt-outs Trinix.Bundle.Tests takes, for the same
+             reason: the AOT and trim analysers would be reporting a property of
+             xunit's reflective discovery rather than of Trinix code. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Sandbox\Trinix.Sandbox.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+</Project>

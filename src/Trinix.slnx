@@ -17,4 +17,6 @@
     <Project Path="Trinix.Management/Trinix.Management.csproj"/>
     <Project Path="Trinix.Management.Tests/Trinix.Management.Tests.csproj"/>
     <Project Path="Trinix.Platform/Trinix.Platform.csproj"/>
+    <Project Path="Trinix.Sandbox/Trinix.Sandbox.csproj"/>
+    <Project Path="Trinix.Sandbox.Tests/Trinix.Sandbox.Tests.csproj"/>
 </Solution>
