@@ -1,6 +1,6 @@
 using Trinix.Platform;
 using Vixen.Core.Mathematics;
-using Vixen.Ui.Composition;
+using Vixen.Ui.Controls.Advanced;
 using Vixen.Ui.Desktop;
 
 namespace Trinix.Apps.HelloUi;
@@ -52,6 +52,13 @@ static class Program {
 
                 Content = () => new Greeting(),
 
+                // The advanced control set is a second package and a second stylesheet,
+                // and it reads the base theme's tokens — so it loads after ControlTheme
+                // rather than instead of it. Without this the DataGrid and the TreeView
+                // in Greeting.vxml still build; they draw against custom properties
+                // nothing declared, which substitute to nothing.
+                Configure = document => AdvancedTheme.Install(document),
+
                 Started = application => {
                     Console.WriteLine($"TRINIX-VIXEN: platform {application.Window.Id} on Trinix");
                     Console.WriteLine(
@@ -69,21 +76,5 @@ static class Program {
             },
             arguments
         );
-    }
-}
-
-/// <summary>Something on the screen that is unmistakably text.</summary>
-/// <remarks>
-///     Built in code rather than in <c>.vxml</c>, and only because this is the first
-///     one: markup brings the VXML compiler and the generated utility stylesheet, and
-///     an application proving that a window works should fail for reasons about the
-///     window. The shell and the real applications are markup.
-/// </remarks>
-sealed class Greeting : Component {
-    /// <inheritdoc />
-    protected override void Build(BuildContext ctx) {
-        var root = ctx.Element(null, "div");
-        ctx.Text(root, "Hello from Vixen, on Trinix.");
-        ctx.Text(root, "Rendered by lavapipe, presented through wl_shm.");
     }
 }

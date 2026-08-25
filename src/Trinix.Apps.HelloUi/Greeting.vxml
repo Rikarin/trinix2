@@ -1,0 +1,82 @@
+<!--
+    SPDX-FileCopyrightText: Copyright (c) Trinix
+    SPDX-License-Identifier: Apache-2.0
+
+    Something on the screen that is unmistakably text, and two controls that are
+    unmistakably not primitives.
+
+    ⚠ **This file replaces a C# `Greeting` whose remark was wrong, and saying which part
+    was wrong is the point of this comment.** That remark said markup was avoided because
+    it "brings the VXML compiler and the generated utility stylesheet", so a first
+    application proving a window works should not pay for them. Neither half was true even
+    when it was written. `Vixen.Ui.Markup.Generators.dll` travels inside the `Vixen.Ui`
+    package's `analyzers/dotnet/cs/`, and `buildTransitive/Vixen.Ui.targets` — transitive
+    on purpose, because nobody references `Vixen.Ui` by name — supplies the `**/*.vxml`
+    glob that makes a file like this compiler input. `Vixen.Ui.Styling.Utilities` was
+    likewise already in the closure. Referencing `Vixen.Ui.Desktop` had brought both since
+    the first pin, so writing this in markup costs nothing that was not already paid.
+
+    ⚠ **The `Vixen.Ui.Markup` package is a different thing from the VXML compiler, and
+    that is the confusion worth not repeating.** The package is the parser, binder and
+    emitter as a *runtime* library, for tooling and hot reload. The compiler is the
+    generator inside `Vixen.Ui`. Pinning the package does not make markup compile, and not
+    pinning it never stopped it — see `docs/plan/01-system-sdk.md` § "What already exists".
+
+    ⚠ **The `DataGrid` and the `TreeView` are the half that did need a new package**, and they
+    are here rather than in a test because a control that constructs is not a control
+    that draws: these are mounted in the document the Phase 5 graphics gate presents,
+    so a virtualiser that faults on lavapipe faults where somebody is watching.
+    Deliberately three rows and four nodes — doc 07's Files and doc 11's System Monitor
+    are what the controls are *for*; this is what proves they are reachable.
+-->
+@component Greeting
+@namespace Trinix.Apps.HelloUi
+@tag greeting
+@using Vixen.Ui
+@using Vixen.Ui.Controls.Advanced
+
+<div>
+    <span>Hello from Vixen, on Trinix.</span>
+    <span>Rendered by lavapipe, presented through wl_shm.</span>
+
+    <TreeView ref="@chain" />
+    <DataGrid ref="@links" />
+</div>
+
+@code {
+    /// <summary>One link of the chain this application exists to prove.</summary>
+    /// <param name="Layer">Where in the stack it sits.</param>
+    /// <param name="Provider">What implements it.</param>
+    sealed record Link(string Layer, string Provider);
+
+    TreeView chain = null!;
+    DataGrid links = null!;
+
+    /// <summary>Fills the two controls, which is the whole of what they are here to do.</summary>
+    /// <remarks>
+    ///     ⚠ <b>Both are filled in code rather than nested in the markup above, and that is
+    ///     Vixen's design rather than a shortcut.</b> A virtualiser realises what fits the
+    ///     viewport, so its contents are a model and not an element per row; the sample's own
+    ///     `Hierarchy.vxml` says the same thing at length. What markup buys here is the
+    ///     mounting, the `ref`s and the tag — which is exactly what an application's real
+    ///     views buy from it.
+    /// </remarks>
+    partial void OnComposed() {
+        var compositor = chain.Root.Add("trinix-compositor");
+        var client = compositor.Add("trinix-wl-client");
+
+        client.Add("TrinixPlatform");
+        client.Add("lavapipe");
+
+        chain.Refresh();
+        chain.Expand(compositor);
+
+        links.AddColumn("Layer", item => ((Link)item).Layer);
+        links.AddColumn("Provider", item => ((Link)item).Provider);
+        links.SetItems([
+            new Link("Display", "trinix-compositor"),
+            new Link("Device", "lavapipe"),
+            new Link("Present", "wl_shm")
+        ]);
+    }
+}

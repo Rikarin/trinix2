@@ -35,8 +35,19 @@
 
     <ItemGroup>
         <!-- The window, the device and the four steps of a frame. It brings
-             Vixen.Ui and the control theme behind it. -->
+             Vixen.Ui and the control theme behind it — and, inside Vixen.Ui's own
+             package, the VXML compiler and the buildTransitive .targets that makes
+             Greeting.vxml compiler input. Neither needed adding to the pin. -->
         <PackageReference Include="Vixen.Ui.Desktop" Version="$(VixenVersion)" />
+
+        <!--
+            The tables, trees, docking and code editing doc 01 promises applications.
+            A second package on purpose: an application that is one window of buttons
+            should not link a virtualiser, so Vixen.Ui.Controls.Advanced is referenced
+            by the applications that want it rather than reached transitively. This one
+            wants it in order to prove the 2026-08-26 pin actually carries it.
+        -->
+        <PackageReference Include="Vixen.Ui.Controls.Advanced" Version="$(VixenVersion)" />
     </ItemGroup>
 
 </Project>
