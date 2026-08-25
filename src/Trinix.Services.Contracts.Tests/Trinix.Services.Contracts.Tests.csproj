@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Services.Contracts.Tests — the generated proxy and the generated
+      dispatcher, talking to each other over real D-Bus bytes.
+
+      There is no dbus-daemon on macOS and there is not going to be one, so the
+      suite brings its own: LoopbackBus is a two-peer relay over in-memory pipes
+      that speaks the server half of the SASL handshake and answers
+      org.freedesktop.DBus itself. Everything above that — framing, alignment,
+      padding, the header fields — is Tmds.DBus.Protocol doing exactly what it
+      will do on the device.
+
+      That distinction is the point of the harness. An in-process test that called
+      the generated writer and then the generated reader would agree with itself
+      about a wrong alignment; a test where the bytes go through a frame and come
+      back cannot.
+
+      ⚠ What this suite cannot prove, and does not pretend to:
+
+        * File descriptor passing. `h` travels in SCM_RIGHTS on a Unix socket and
+          there is no socket here. IClipboard's Read and Offer are therefore
+          exercised at the signature level only. Doc 18 R4 proved fds in both
+          directions, including one end of a socketpair, against a real daemon in
+          a linux/arm64 container — that is the evidence, and it is not this file.
+
+        * NativeAOT. The Roslyn trim and AOT analysers run over the contracts
+          assembly (see its .csproj for the negative control that proves they can
+          warn), but ILC does not run here and cannot be run from a Mac.
+
+        * Anything a real daemon enforces: policy files, match-rule validation,
+          name arbitration, activation, per-message credentials. The relay is
+          permissive where a daemon is not, so a test passing here is necessary and
+          not sufficient.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Services.Contracts.Tests</RootNamespace>
+        <AssemblyName>Trinix.Services.Contracts.Tests</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <!-- The same opt-outs Trinix.Bundle.Tests takes: the rules they relax are
+             about shipping, and a test assembly does not ship. The code under test
+             keeps both analysers, which is where they earn anything. -->
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Services.Contracts\Trinix.Services.Contracts.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+</Project>

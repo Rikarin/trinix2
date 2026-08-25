@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Services.Contracts — the native face of every Trinix service, as C#.
+
+      Doc 02 § The two-faces rule: each service has a typed, versioned interface
+      that is ours and a compat interface that is somebody else's. This assembly
+      is the first of those, and doc 01 makes it the *source of truth* — the D-Bus
+      XML is generated from these interfaces rather than the interfaces being
+      transcribed from XML. The compat faces go the other way round and are
+      hand-written, which is why none of them is here.
+
+      Both ends reference this assembly: the daemon derives from the generated
+      handlers, the SDK constructs the generated proxies. That is the whole
+      argument for a contracts assembly existing at all — a service whose client
+      and server are declared separately is a service whose client and server can
+      disagree, and they will.
+
+      Two dependencies, and both are deliberate.
+
+        * Tmds.DBus.Protocol, pinned exactly to 0.95.0. Doc 18 R4 measured it
+          under NativeAOT on linux-arm64 against a real dbus-daemon: method call,
+          signal, and an `h` file descriptor in both directions including a live
+          socket, on both the session and system buses, zero trim warnings, no
+          Requires* attributes anywhere, 2.96 MiB. ⚠ Pin *exactly*: seven releases
+          in 2026 and a renaming break at 0.93.0 — the type that used to be
+          Connection is DBusConnection now.
+
+        * Trinix.Bundle, for the permission vocabulary and nothing else. The same
+          reason Trinix.Sandbox takes it: one vocabulary, defined in the assembly
+          that already refuses an unknown one at seal time, so that the thing that
+          signs a permission, the thing that builds a sandbox from it, and the
+          thing that refuses a call for want of it cannot disagree about what a
+          permission is.
+
+      ⚠ Tmds.DBus — the high-level package, one dot shorter — is not the one, and
+      it will not tell you so. It emits 14+ IL3050/IL2055/IL2060 warnings, then
+      fails at ConnectAsync under AOT, and it carries no Requires* annotation, so
+      TreatWarningsAsErrors in ../Directory.Build.props is the only thing between a
+      developer and that. Sub-trap: it contains its own internal
+      Tmds.DBus.Protocol namespace, so a warning naming
+      Tmds.DBus.Protocol.MessageReader means the *wrong* package is referenced —
+      the real one calls that type Reader and has never had a MessageReader.
+
+      ⚠ This assembly builds with zero trim and AOT warnings — including the
+      generated marshallers, `Reader.ReadHandle<SafeFileHandle>()` among them —
+      and that claim was checked rather than believed, because a zero-warning
+      result from a pipeline nobody has proved *can* warn is not evidence. The
+      control: add a file calling JsonSerializer.Serialize((object)x) and build.
+      It produces IL2026 and IL3050 here, as errors, from the analysers inherited
+      from ../Directory.Build.props. Redo it if this comment ever looks too
+      convenient.
+
+      ⚠ What is *not* checked here: ILC. The Roslyn analysers see this assembly's
+      own call sites; only a PublishAot on a linux RID sees what the whole graph
+      does, and that cannot be run from a Mac. Doc 18 R4 did it for the transport,
+      not for this code.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Services.Contracts</RootNamespace>
+        <AssemblyName>Trinix.Services.Contracts</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Tmds.DBus.Protocol" Version="[0.95.0]"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Bundle\Trinix.Bundle.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The generator runs here, over the interfaces below, and its output is
+             what both the daemon and the SDK end up calling. ReferenceOutputAssembly
+             is false because nothing in this assembly calls into the generator; it
+             is a compiler plugin, not a library. -->
+        <ProjectReference Include="..\Trinix.Sdk.Generators\Trinix.Sdk.Generators.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+    </ItemGroup>
+
+</Project>
