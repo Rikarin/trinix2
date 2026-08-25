@@ -72,6 +72,21 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module (Join-Path $PSScriptRoot 'lib' 'Trinix.Build.psm1') -Force
 
+# ⚠ -WhatIf does not survive the module boundary, and the failure is silent and expensive.
+#
+# Preference variables are scoped, and a function exported from a module runs in the
+# module's scope rather than this script's — so $WhatIfPreference, set for us by
+# [CmdletBinding(SupportsShouldProcess)] above, is simply not visible to
+# Invoke-TrinixDocker. Its ShouldProcess guard is written correctly and was being asked
+# the wrong question: `build.ps1 -Stage base -WhatIf` ran a real multi-hour build.
+#
+# Bridged here, once, rather than by threading -WhatIf:$WhatIfPreference through ~14 call
+# sites where the fourteenth would eventually be forgotten. Keyed on the verb-noun prefix
+# so it reaches every Trinix cmdlet the module exports, present and future.
+if ($WhatIfPreference) {
+    $PSDefaultParameterValues['*-Trinix*:WhatIf'] = $true
+}
+
 $root = Get-TrinixRoot
 $architectures = Get-TrinixArch -Name $Arch
 
