@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Conformance.Tests — every check, watched failing.
+
+      The acceptance criterion for a conformance tool is not that it runs. It is
+      that each individual check has been seen to fire on a bundle broken in
+      exactly the way that check is about, and to stay quiet on one that is not:
+      a check nobody has watched fail is a check nobody knows the polarity of.
+      So DoctorTests is one test per check id, against bundles broken on purpose
+      in a temporary directory, and CheckCoverageTests fails if a check id exists
+      that no test names.
+
+      FindingShapeTests is the other half, and it is about the output rather than
+      the logic. Doc 01's whole argument for doctor is that a conformance tool
+      whose message does not say what to do is one people run once — so "every
+      warning and every error carries a fix" is a property worth asserting
+      mechanically, over every finding every test produced, rather than hoping
+      reviewers notice a missing one.
+
+      The same three opt-outs as Trinix.Bundle.Tests, for the same reasons; read
+      that .csproj for the argument.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Conformance.Tests</RootNamespace>
+        <AssemblyName>Trinix.Conformance.Tests</AssemblyName>
+        <IsPackable>false</IsPackable>
+
+        <IsAotCompatible>false</IsAotCompatible>
+        <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
+        <EnableSingleFileAnalyzer>false</EnableSingleFileAnalyzer>
+        <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+        <!-- The mode bits are the subject of three of these tests; see
+             Trinix.Bundle.Tests for why suppressing CA1416 is better than
+             guarding every call into vacuity. -->
+        <NoWarn>$(NoWarn);CA1416</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Conformance\Trinix.Conformance.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+
+</Project>

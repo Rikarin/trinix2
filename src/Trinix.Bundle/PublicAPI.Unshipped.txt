@@ -35,6 +35,8 @@ Trinix.Bundle.BundleInfo.Schema.get -> string
 Trinix.Bundle.BundleInfo.Schema.init -> string
 Trinix.Bundle.BundleInfo.ShortVersion.get -> string?
 Trinix.Bundle.BundleInfo.ShortVersion.init -> string?
+Trinix.Bundle.BundleInfo.UsageDescriptions.get -> System.Collections.Generic.IReadOnlyDictionary<string, string>
+Trinix.Bundle.BundleInfo.UsageDescriptions.init -> System.Collections.Generic.IReadOnlyDictionary<string, string>
 Trinix.Bundle.BundleInfo.Validate() -> System.Collections.Generic.IReadOnlyList<string>
 Trinix.Bundle.BundleInstaller -> static class
 Trinix.Bundle.BundleInstaller.InstallResult -> readonly struct
@@ -55,6 +57,7 @@ Trinix.Bundle.BundleJson.BundleJson(System.Text.Json.JsonSerializerOptions optio
 Trinix.Bundle.BundleJson.BundleManifest.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.BundleManifest>
 Trinix.Bundle.BundleJson.DateTimeOffset.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.DateTimeOffset>
 Trinix.Bundle.BundleJson.FsVerityReport.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.FsVerityReport>
+Trinix.Bundle.BundleJson.IReadOnlyDictionaryStringString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyDictionary<string, string>>
 Trinix.Bundle.BundleJson.IReadOnlyListManifestEntry.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<Trinix.Bundle.ManifestEntry>>
 Trinix.Bundle.BundleJson.IReadOnlyListString.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<System.Collections.Generic.IReadOnlyList<string>>
 Trinix.Bundle.BundleJson.InstallReceipt.get -> System.Text.Json.Serialization.Metadata.JsonTypeInfo<Trinix.Bundle.InstallReceipt>
@@ -267,6 +270,8 @@ required Trinix.Bundle.ManifestEntry.Sha256.get -> string
 required Trinix.Bundle.ManifestEntry.Sha256.init -> string
 required Trinix.Bundle.ManifestEntry.Size.get -> long
 required Trinix.Bundle.ManifestEntry.Size.init -> long
+static Trinix.Bundle.BundleInfo.IsOrderedVersion(string value) -> bool
+static Trinix.Bundle.BundleInfo.IsReverseDnsIdentifier(string value) -> bool
 static Trinix.Bundle.BundleInstaller.InstallAsync(string imagePath, Trinix.Bundle.TrustStore trust, string? destinationDirectory = null, bool enableFsVerity = true, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Bundle.BundleInstaller.InstallResult>
 static Trinix.Bundle.BundleInstaller.Installed() -> System.Collections.Generic.IEnumerable<Trinix.Bundle.InstallReceipt>
 static Trinix.Bundle.BundleInstaller.Uninstall(string bundlePath) -> void
@@ -279,6 +284,7 @@ static Trinix.Bundle.BundlePermissions.GroupOf(Trinix.Bundle.Permissions permiss
 static Trinix.Bundle.BundlePermissions.IsKnown(string permission) -> bool
 static Trinix.Bundle.BundlePermissions.Known.get -> System.Collections.Generic.IReadOnlyList<string>
 static Trinix.Bundle.BundlePermissions.NameOf(Trinix.Bundle.Permissions permission) -> string
+static Trinix.Bundle.BundlePermissions.NeverGrantedByTheStore(Trinix.Bundle.Permissions permission) -> bool
 static Trinix.Bundle.BundlePermissions.TryParse(string permission, out Trinix.Bundle.Permissions value) -> bool
 static Trinix.Bundle.BundlePermissions.UserVisibleName(Trinix.Bundle.Permissions permission) -> string?
 static Trinix.Bundle.BundleScanner.IsExecutable(string path) -> bool

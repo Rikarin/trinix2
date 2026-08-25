@@ -83,7 +83,13 @@ pack_app() {
 
     echo "==> $name.app ($rid)"
     rm -rf "$app"
-    install -d "$app/Contents/Bin" "$app/Contents/Resources"
+    # ⚠ Contents/Resources is created only when there is something to put in it.
+    # It used to be created unconditionally, which left HelloUi.app carrying an
+    # empty directory — and `trinix-bundle doctor` is right to warn about one: the
+    # manifest lists files, so an empty directory is not signed, not compared at
+    # verification and not guaranteed to survive the .tdi. An application that
+    # expected to find it would fail on a user's machine and not on the builder's.
+    install -d "$app/Contents/Bin"
 
     dotnet publish "$project" \
         --configuration Release --runtime "$rid" --no-self-contained \
@@ -93,6 +99,7 @@ pack_app() {
 
     install -m644 "$metadata/Info.json" "$app/Contents/Info.json"
     if [ -d "$metadata/Resources" ]; then
+        install -d "$app/Contents/Resources"
         cp -a "$metadata/Resources/." "$app/Contents/Resources/"
     fi
 

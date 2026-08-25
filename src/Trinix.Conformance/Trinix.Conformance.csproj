@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+      Trinix.Conformance — `trinix doctor`, as a library.
+
+      Doc 01 on the tool this implements: "trinix doctor matters more than it
+      looks. It is where conformance stops being a document." Doc 09 § Submission
+      makes a subset of it a gate on a repository submission, and doc 16 runs it
+      over Trinix's own applications in CI.
+
+      Three of those four sentences are about somebody *else* running it — a
+      repository operator, a CI job, a developer at a terminal — which is why the
+      checks are a library returning findings rather than a program printing
+      lines. A gate whose only output is stdout can be asserted on with grep and
+      nothing better, and the acceptance criterion for a conformance tool is that
+      each individual check can be watched failing. Trinix.Conformance.Tests does
+      exactly that, one test per check, against bundles broken on purpose.
+
+      ⚠ It references Trinix.Sandbox as well as Trinix.Bundle, and that is the
+      most interesting thing here. The checks that are only worth having are the
+      ones that answer a question the developer cannot answer by reading the
+      format: not "is this JSON valid" but "which of the permissions you declared
+      will be enforced by nothing on the system this ships to". That answer is
+      SandboxUnit.Gaps, and getting it means building the unit — so doctor builds
+      the same unit the launcher would, from the same code, and reports what it
+      says about itself.
+
+      The rendering lives here too (DoctorWriter) rather than in the CLI. A
+      finding's severity, its one-line reason and its fix are the product; a
+      tool whose message does not say what to do is one people run once.
+    -->
+
+    <PropertyGroup>
+        <RootNamespace>Trinix.Conformance</RootNamespace>
+        <AssemblyName>Trinix.Conformance</AssemblyName>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\Trinix.Bundle\Trinix.Bundle.csproj"/>
+        <ProjectReference Include="..\Trinix.Sandbox\Trinix.Sandbox.csproj"/>
+    </ItemGroup>
+
+</Project>

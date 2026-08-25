@@ -12,6 +12,8 @@
     <Project Path="Trinix.Bundle.Tests/Trinix.Bundle.Tests.csproj"/>
     <Project Path="Trinix.Bundle.Tool/Trinix.Bundle.Tool.csproj"/>
     <Project Path="Trinix.Compositor/Trinix.Compositor.csproj"/>
+    <Project Path="Trinix.Conformance/Trinix.Conformance.csproj"/>
+    <Project Path="Trinix.Conformance.Tests/Trinix.Conformance.Tests.csproj"/>
     <Project Path="Trinix.Daemon/Trinix.Daemon.csproj"/>
     <Project Path="Trinix.Gatekeeper/Trinix.Gatekeeper.csproj"/>
     <Project Path="Trinix.Interop/Trinix.Interop.csproj"/>

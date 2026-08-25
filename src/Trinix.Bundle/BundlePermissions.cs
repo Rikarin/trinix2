@@ -313,6 +313,50 @@ public static class BundlePermissions {
         };
 
     /// <summary>
+    ///     Is this one of the permissions a repository will never grant, whatever the
+    ///     bundle asks for?
+    /// </summary>
+    /// <param name="permission">Exactly one flag; not a combination.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Not a single permission.</exception>
+    /// <remarks>
+    ///     <para>
+    ///         There is exactly one today — <see cref="Permissions.SystemInput" />, which
+    ///         doc 04 marks "reserved and never granted by the Store: accessibility tools
+    ///         and remote-control tools only, by explicit user grant in Settings".
+    ///     </para>
+    ///     <para>
+    ///         ⚠ A <c>switch</c> over every member rather than a set containing one, and
+    ///         that is the point of writing it this way: a fifteenth permission does not
+    ///         compile until somebody has answered this question about it. The fact was
+    ///         previously only in an XML comment, which meant <c>trinix doctor</c> could
+    ///         not tell a developer before submission what the repository would tell them
+    ///         after it — and doc 09 § Submission makes exactly this a gate.
+    ///     </para>
+    ///     <para>
+    ///         ⚠ <b>Not a refusal anywhere in this assembly.</b> Sideloading and
+    ///         developer mode still work, and the user can grant it in Settings; what
+    ///         this predicate describes is a distribution policy, not containment. The
+    ///         thing that enforces it is a person reviewing a submission, which doc 09
+    ///         says out loud rather than pretending otherwise.
+    ///     </para>
+    /// </remarks>
+    public static bool NeverGrantedByTheStore(Permissions permission) =>
+        permission switch {
+            Permissions.SystemInput => true,
+            Permissions.Display or Permissions.NetworkClient or Permissions.NetworkServer
+                or Permissions.FilesHome or Permissions.FilesRemovable
+                or Permissions.DevicesCamera or Permissions.DevicesMicrophone
+                or Permissions.DevicesLocation or Permissions.DevicesUsb
+                or Permissions.SystemNotificationsCritical or Permissions.SystemAutomation
+                or Permissions.SystemBackground or Permissions.SystemCapture => false,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(permission),
+                permission,
+                "Not a single Trinix permission."
+            )
+        };
+
+    /// <summary>
     ///     What the consent dialog calls this, or <see langword="null" /> when it is
     ///     never shown.
     /// </summary>

@@ -1,0 +1,77 @@
+#nullable enable
+Trinix.Conformance.Doctor -> static class
+Trinix.Conformance.DoctorOptions -> sealed record
+Trinix.Conformance.DoctorOptions : System.IEquatable<Trinix.Conformance.DoctorOptions>
+Trinix.Conformance.DoctorOptions.Capabilities.get -> Trinix.Sandbox.SandboxCapabilities?
+Trinix.Conformance.DoctorOptions.Capabilities.init -> Trinix.Sandbox.SandboxCapabilities?
+Trinix.Conformance.DoctorOptions.CertificateExpiryWarningDays.get -> int
+Trinix.Conformance.DoctorOptions.CertificateExpiryWarningDays.init -> int
+Trinix.Conformance.DoctorOptions.DoctorOptions() -> void
+Trinix.Conformance.DoctorOptions.Now.get -> System.DateTimeOffset?
+Trinix.Conformance.DoctorOptions.Now.init -> System.DateTimeOffset?
+Trinix.Conformance.DoctorOptions.Store.get -> bool
+Trinix.Conformance.DoctorOptions.Store.init -> bool
+Trinix.Conformance.DoctorOptions.SystemVersion.get -> string?
+Trinix.Conformance.DoctorOptions.SystemVersion.init -> string?
+Trinix.Conformance.DoctorOptions.TrustDirectory.get -> string?
+Trinix.Conformance.DoctorOptions.TrustDirectory.init -> string?
+Trinix.Conformance.DoctorReport -> sealed record
+Trinix.Conformance.DoctorReport : System.IEquatable<Trinix.Conformance.DoctorReport>
+Trinix.Conformance.DoctorReport.At(Trinix.Conformance.Severity severity) -> System.Collections.Generic.IReadOnlyList<Trinix.Conformance.Finding>
+Trinix.Conformance.DoctorReport.ChecksRun.get -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Conformance.DoctorReport.ChecksRun.init -> System.Collections.Generic.IReadOnlyList<string>
+Trinix.Conformance.DoctorReport.Count(Trinix.Conformance.Severity severity) -> int
+Trinix.Conformance.DoctorReport.DoctorReport() -> void
+Trinix.Conformance.DoctorReport.Findings.get -> System.Collections.Generic.IReadOnlyList<Trinix.Conformance.Finding>
+Trinix.Conformance.DoctorReport.Findings.init -> System.Collections.Generic.IReadOnlyList<Trinix.Conformance.Finding>
+Trinix.Conformance.DoctorReport.Info.get -> Trinix.Bundle.BundleInfo?
+Trinix.Conformance.DoctorReport.Info.init -> Trinix.Bundle.BundleInfo?
+Trinix.Conformance.DoctorReport.Ok.get -> bool
+Trinix.Conformance.DoctorReport.Skipped.get -> System.Collections.Generic.IReadOnlyList<Trinix.Conformance.SkippedCheck>
+Trinix.Conformance.DoctorReport.Skipped.init -> System.Collections.Generic.IReadOnlyList<Trinix.Conformance.SkippedCheck>
+Trinix.Conformance.DoctorReport.Store.get -> bool
+Trinix.Conformance.DoctorReport.Store.init -> bool
+Trinix.Conformance.DoctorWriter -> static class
+Trinix.Conformance.Finding -> sealed record
+Trinix.Conformance.Finding : System.IEquatable<Trinix.Conformance.Finding>
+Trinix.Conformance.Finding.Finding() -> void
+Trinix.Conformance.Finding.Fix.get -> string?
+Trinix.Conformance.Finding.Fix.init -> string?
+Trinix.Conformance.Finding.Section.get -> string
+Trinix.Conformance.Finding.SeverityFor(bool store) -> Trinix.Conformance.Severity
+Trinix.Conformance.Finding.StoreGate.get -> bool
+Trinix.Conformance.Finding.StoreGate.init -> bool
+Trinix.Conformance.Finding.Where.get -> string?
+Trinix.Conformance.Finding.Where.init -> string?
+Trinix.Conformance.Severity -> enum : int
+Trinix.Conformance.Severity.Error = 2 -> Trinix.Conformance.Severity
+Trinix.Conformance.Severity.Note = 0 -> Trinix.Conformance.Severity
+Trinix.Conformance.Severity.Severity() -> void
+Trinix.Conformance.Severity.Warning = 1 -> Trinix.Conformance.Severity
+Trinix.Conformance.SkippedCheck -> readonly struct
+Trinix.Conformance.SkippedCheck : System.IEquatable<Trinix.Conformance.SkippedCheck>
+Trinix.Conformance.SkippedCheck.Check.get -> string
+Trinix.Conformance.SkippedCheck.Check.init -> string
+Trinix.Conformance.SkippedCheck.Reason.get -> string
+Trinix.Conformance.SkippedCheck.Reason.init -> string
+Trinix.Conformance.SkippedCheck.SkippedCheck() -> void
+Trinix.Conformance.SkippedCheck.SkippedCheck(string Check, string Reason) -> void
+const Trinix.Conformance.DoctorWriter.DefaultWidth = 96 -> int
+const Trinix.Conformance.DoctorWriter.FailMarker = "DOCTOR-FAILED" -> string
+const Trinix.Conformance.DoctorWriter.PassMarker = "DOCTOR-OK" -> string
+required Trinix.Conformance.DoctorReport.BundleName.get -> string
+required Trinix.Conformance.DoctorReport.BundleName.init -> string
+required Trinix.Conformance.DoctorReport.BundlePath.get -> string
+required Trinix.Conformance.DoctorReport.BundlePath.init -> string
+required Trinix.Conformance.Finding.Check.get -> string
+required Trinix.Conformance.Finding.Check.init -> string
+required Trinix.Conformance.Finding.Severity.get -> Trinix.Conformance.Severity
+required Trinix.Conformance.Finding.Severity.init -> Trinix.Conformance.Severity
+required Trinix.Conformance.Finding.What.get -> string
+required Trinix.Conformance.Finding.What.init -> string
+required Trinix.Conformance.Finding.Why.get -> string
+required Trinix.Conformance.Finding.Why.init -> string
+static Trinix.Conformance.Doctor.RunAsync(string bundlePath, Trinix.Conformance.DoctorOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<Trinix.Conformance.DoctorReport>
+static Trinix.Conformance.DoctorReport.NotChecked.get -> System.Collections.Generic.IReadOnlyList<string>
+static Trinix.Conformance.DoctorWriter.ToText(Trinix.Conformance.DoctorReport report, int width = 96) -> string
+static Trinix.Conformance.DoctorWriter.Write(System.IO.TextWriter writer, Trinix.Conformance.DoctorReport report, int width = 96) -> void
