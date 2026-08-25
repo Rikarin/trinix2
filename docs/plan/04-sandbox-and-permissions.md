@@ -35,6 +35,42 @@ its signed permissions, and start it there.
 | Kernel surfaces | `ProtectKernelTunables`, `ProtectKernelModules`, `ProtectControlGroups`, `RestrictRealtime`, `RestrictSUIDSGID` |
 | Resource bounds | `MemoryMax=`, `CPUWeight=`, `TasksMax=` — which is also what makes doc 11's System Monitor able to say something true per application |
 
+⚠️ **The systemd in the image cannot enforce half of that table.** Measured 2026-08-25, and it is the
+finding that most changes this document's schedule.
+
+`base/sources.json` pins systemd **257** and
+[`base/recipes/systemd/recipe.sh`](../../base/recipes/systemd/recipe.sh) builds it with
+**`-Dseccomp=disabled`**. systemd implements `SystemCallFilter=`, `SystemCallArchitectures=`,
+`MemoryDenyWriteExecute=`, `RestrictRealtime=` and `RestrictSUIDSGID=` **as seccomp filters** — so the
+whole syscall-floor row above, plus two entries of the kernel-surfaces row, are properties this system
+does not have. There is no `libseccomp` recipe either, so enabling it is two changes and a rebuild, not
+a flag.
+
+⚠ **And it is not yet known whether that is a hardened application or no application at all.** A unit
+*file* on disk ignores a property systemd was not built to implement — `trinixd.service` already
+carries `MemoryDenyWriteExecute=no` on this image and starts fine. Whether a **transient** unit over
+D-Bus ignores it or fails the call is untested, and the two answers are opposite: apps that run
+unprotected, or apps that do not run. **Settle this with one `systemd-run` in a booted VM before the
+wiring slice is written**; everything else in this document's schedule depends on which it is.
+
+The same recipe sets `-Dpolkit=disabled`, which doc [05](05-identity-and-keychain.md) § Accounts and
+doc [08](08-settings-and-system-services.md) both assume when they say a privileged operation
+re-authenticates. That mechanism does not exist either, and a `RootDirectory=` unit needs the **system**
+manager, so the launcher needs a privileged path to it that is currently unplanned.
+
+Consequently the first slice of this work — built as `Trinix.Sandbox` — records a **gap per permission**
+rather than pretending: ten of the fourteen have no systemd property behind them at all, each tagged
+with who owes the enforcement (Broker, Compositor, SessionManager, SystemCapability, NoSuchProperty,
+Runtime, BundleFormat). That list *is* audit mode's content, and a permission enforced by nothing
+should be a line in the journal rather than a silence.
+
+| Prerequisite this document did not budget | EM |
+|---|---|
+| `libseccomp` recipe + systemd rebuilt with seccomp | 0.4 |
+| A privileged path to the system manager (polkit, or a `trinixd` verb) | 0.5 |
+| The composed root at `/usr/share/trinix/sandbox/root`, which nothing creates | 0.3 |
+| `/run/netns/trinix-apps` and something that creates it before the first networked app | 0.3 |
+
 | Choice | Reason |
 |---|---|
 | **systemd's sandboxing, not bubblewrap** | Both are namespaces and seccomp underneath. systemd is already PID 1, already supervises, already gives us cgroup accounting for free, and already has the properties audited by a great many people. Shipping bwrap means a second mechanism to keep current and no supervision |
@@ -167,4 +203,5 @@ aspirational.
 | Consent UI + the anchoring protocol + the Privacy pane's backing | 1.5 |
 | Audit mode, the log, and `trinix doctor`'s permission cross-check | 1.0 |
 | Escape-test suite: an app that tries each of the fourteen and fails | 1.0 |
-| **Total** | **11.0** |
+| Prerequisites above (seccomp, privilege path, composed root, netns) | 1.5 |
+| **Total** | **12.5** |
