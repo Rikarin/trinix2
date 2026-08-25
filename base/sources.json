@@ -213,6 +213,13 @@
       "url": "https://ftpmirror.gnu.org/gnu/readline/readline-${version}.tar.gz",
       "sha256": "0e5be4d2937e8bd9b7cd60d46721ce79f88a33415dd68c2d738fb5924638f656"
     },
+    "sqlite": {
+      "version": "3530400",
+      "phase": 2,
+      "url": "https://sqlite.org/2026/sqlite-autoconf-${version}.tar.gz",
+      "sha256": "0e9483900e92cd5de8fd48d16bf9200145a61f7fd5be542a5ac81d8a9516eb9c",
+      "notes": "SQLite 3.53.4. The version here is SQLite's own numeric encoding — 3.53.4 is 3_53_04_00 — because that, not the dotted form, is what appears in the tarball name; base/recipes/sqlite asserts the two agree. The year in the URL is a second directory SQLite files releases under and has to be bumped by hand, which is safe in the way the version is not: a stale year 404s, whereas a stale number would silently re-fetch the previous release and still match this digest. sqlite.org publishes sha3-256 rather than sha256, so this digest was computed locally from a download whose published sha3-256 matched."
+    },
     "iproute2": {
       "version": "6.13.0",
       "phase": 2,
