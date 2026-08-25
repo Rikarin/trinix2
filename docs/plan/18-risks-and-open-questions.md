@@ -90,13 +90,24 @@ controls, markup, styling and text**, and doc 01 explicitly forbids forking them
 - The specific Vixen gaps this plan is exposed to are named where they land: accessibility (doc 15),
   localisation (doc 01 § Open), CSS Grid, and variable-height virtualisation for Files' list view.
 
-## R6 — Accessibility depends on Vixen work that is not scheduled by this plan
+## R6 — Vixen has no accessibility tree at all, and this entry said "unaudited"
 
-Doc 15 is honest that Vixen's accessibility tree is designed and unaudited, and that a Trinix gate
-cannot precede it. **Decision needed:** whether that work happens in Vixen (correct, and it is not
-this repository's schedule) or as a Trinix-side shim (fast, wrong, and permanent). Recommendation:
-Vixen, scheduled explicitly, in time for Phase 13 — about 2 EM upstream, and it must be asked for by
-Phase 9 or it will not be there.
+Corrected 2026-08-25 by reading the code rather than the plan. There is **no accessibility surface in
+Vixen** — no `Role`, `AccessibleName`, `AutomationId` or accessibility namespace in any UI or platform
+assembly — and Vixen's own doc 09 mentions the subject once, in a *testing* table. Doc 15 has the
+detail.
+
+⚠ The correction changes the answer, not just the wording. "Unaudited" would have permitted a
+Trinix-side shim that reads whatever tree is there; **greenfield rules that out**, because there is
+nothing to read. Doc 15's AT-SPI bridge has nothing to cache or push, and its three CI gates cannot be
+written at all, until `UiElement` grows role, name, value, state, relations and a change notification,
+with per-control population behind it.
+
+**Decision unchanged and now more urgent:** it is upstream work, ~2 EM, and it is the least reliable
+number in this plan because nobody has built any of it. It is asked for in **Vixen's doc 46** as A2,
+alongside the command work — deliberately together, because whoever implements Vixen's doc 45 is
+inside `UiElement` and the focus system already, which is the same code an accessibility tree hangs
+off. Two passes over that code costs materially more than one.
 
 ## R7 — ✅ Answered. English-only, but extractable, and decided rather than defaulted
 
@@ -190,7 +201,7 @@ carried a suffix; the first `VERSION_ID` of `0.4-rc1` is when a machine stops la
 
 | | Question | Recommendation |
 |---|---|---|
-| R6 | Where does the accessibility tree get built? | Vixen, requested by Phase 9 |
+| R6 | Where does the accessibility tree get built? | Vixen, and it is a **build not a review** — asked as A2 of Vixen's doc 46, batched with the command work because it is the same code |
 | ~~R7~~ | ✅ Settled by [20](20-localisation.md) — English-only, catalogue from day one, 3.0 EM in Phase 7 | — |
 | R9 | Who maintains the browser bundle? | Flathub's, until someone owns it |
 | R10 | Is there a Store, or a project repository? | A project repository. Call it that |

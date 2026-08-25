@@ -24,12 +24,24 @@ adding anything to `Trinix.Sdk`, check this table:
 | Layout | Flexbox (Yoga algorithm), block, and the grid work in Vixen doc 43 | `Vixen.Ui.Layout` |
 | Text | HarfBuzz shaping, MSDF atlas, bidi, line breaking, wrapping, decorations from the font's own metrics | `Vixen.Ui.Text` |
 | Buttons, menus, toolbars, sidebars, lists, tabs, dialogs, text fields, sliders, toggles, context menus | ~40 controls on a real theme, 259 tests | `Vixen.Ui.Controls` |
-| Tables, trees, docking, property grids, code editing, colour pickers, timelines | 11 advanced controls, 313 tests | `Vixen.Ui.Controls.Advanced` |
+| Tables, trees, docking, property grids, code editing, colour pickers, timelines | 11 advanced controls, 313 tests | `Vixen.Ui.Controls.Advanced` — ⚠ **not in [`vendor/vixen/`](../../vendor/vixen/)**, see below |
 | Virtualisation | `VirtualizingPanel`, `VirtualizingGrid` | `Vixen.Ui.Controls` |
 | Hot reload | State-preserving, file-watched | `Vixen.Ui.HotReload` |
 | UI testing without a screen | A headless document and an assertion library | `Vixen.Ui.Testing` |
 | Windows, input, clipboard, DPI | `IPlatform`, implemented for Trinix already | `Vixen.Platform`, `Trinix.Platform` |
 | Images, audio, video decode | Imaging, `Vixen.Audio.Codecs`, `Vixen.Video.Codecs` | `Vixen.Core.Imaging`, `Vixen.Audio`, `Vixen.Video` |
+
+⚠ **Two of these are not actually vendored.** Checked 2026-08-25: the 41-package pin in
+[`vendor/vixen/`](../../vendor/vixen/) contains neither **`Vixen.Ui.Controls.Advanced`** nor
+**`Vixen.Ui.Markup`**. So the rows above that read as settled are, today, unavailable — and three
+documents lean on them: doc 07's Files needs `DataGrid`/`TreeView` for its list and column views, doc
+11's System Monitor is a table, and both doc 07 § Glance and doc 11's Text Edit call `CodeEditor`
+"free", which it is not until the package is pinned. Markup's absence is the larger one, since doc 01
+says the shell and the real applications are `.vxml`.
+
+Adding them to the pin is a `scripts/update-vixen.ps1` run rather than a project — but it is a
+*decision* about closure size and trim surface that nobody has taken, and it must happen before
+Phase 10 rather than being discovered by the first application that wants a list.
 
 ⚠ **This table is the SDK's scope control.** A proposal to add a control, a layout mode, a styling
 feature or a text capability to `Trinix.Sdk` is a proposal to fork Vixen, and the answer is a pull

@@ -14,11 +14,20 @@ Trinix.Sdk           the AT-SPI bridge, the system settings, the checker
 Assistive tools      screen reader, magnifier, switch control, voice control
 ```
 
-⚠ **The bottom layer is Vixen's and it is not finished.** Vixen's controls have accessibility in the
-design (doc 09 of its plan lists it as part of every control's base API), and what exists is not
-audited. The honest sequencing is that a Trinix accessibility gate cannot be built before Vixen's
-accessibility tree is real, and getting it real is a contribution to Vixen, not work in this
-repository. Doc 18 R6 carries it.
+⚠ **The bottom layer is Vixen's, and this document was wrong about it in both halves.** Corrected
+2026-08-25 against the code. It said Vixen's controls "have accessibility in the design (doc 09 lists
+it as part of every control's base API)" and that what exists "is not audited". Neither is true:
+
+- Vixen's doc 09 mentions accessibility **once**, in the *Testing* table's Controls row, as an
+  "ARIA-role snapshot" — a promise about a test, not a base API. There is no § Accessibility in it.
+- In code there is **nothing**. No `Role`, no `AccessibleName`, no `AutomationId`, no accessibility
+  namespace anywhere in `Vixen.Ui`, `.Controls`, `.Controls.Advanced`, `.Layout`, `.Text`, `.Testing`
+  or `Vixen.Platform`. The entire surface is three doc comments, two of them in the future tense.
+
+"Unaudited" implies an audit could find something. The word is **greenfield** — and the difference
+matters, because it rules out the Trinix-side shim as an option and makes the tree a genuine upstream
+build rather than a review. The AT-SPI bridge below has nothing to cache or push until it exists, and
+the three gates cannot be written at all.
 
 ## The bridge
 
@@ -88,5 +97,5 @@ out loud that no amount of CI substitutes for that.
 | Settings pane | 0.5 |
 | The three gates | 1.0 |
 | Orca + speech-dispatcher packaging | 0.5 |
-| Vixen-side accessibility tree work (⚠ upstream, not counted in Trinix's total) | (2.0) |
+| Vixen-side accessibility tree work — ⚠ **greenfield, not a review**: role/name/value/state and relations on `UiElement`, change notification, and per-control population. Upstream, not counted in Trinix's total, and the least reliable estimate in this document | (2.0) |
 | **Total** | **6.5** |
