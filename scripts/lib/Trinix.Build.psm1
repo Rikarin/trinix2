@@ -246,6 +246,416 @@ function Invoke-TrinixDocker {
     if ($LASTEXITCODE -ne 0) { throw "docker exited with code $LASTEXITCODE" }
 }
 
+# --- Stage provenance and staleness ----------------------------------------
+
+<#
+    Why a stage image records what it was built from.
+
+    Twice in one week a build ran to completion against a cached stage image
+    whose inputs had moved weeks earlier, and both times the symptom pointed
+    nowhere near the cause: mesa reporting `Python >= 3.10 not found` because a
+    three-week-old toolchain predated the commit that added mako/yaml/packaging
+    to host-tools.Dockerfile, and image assembly unable to call `mkfs.btrfs`
+    because the cached toolchain predated the commit that installed
+    btrfs-progs. Nothing in either image *looked* old enough to be wrong.
+
+    So every stage image is stamped, at build time, with the SHA-256 of the
+    Dockerfile that produced it and the identity of the image it was built
+    FROM; before a build consumes a cached stage image, the whole FROM chain is
+    read back and compared. A mismatch refuses the build and names the stage,
+    what moved, and the command to rebuild it. Refuses rather than rebuilds on
+    purpose — the cheapest link in this chain is a 37-minute LLVM build, and a
+    silent cascade into one is its own hazard.
+
+    ⚠ The identity recorded for a base image is a hash of its *rootfs layer
+    digests*, not `docker image inspect --format '{{.Id}}'`. Measured here: two
+    fully-cached rebuilds of the same Dockerfile produce three different image
+    IDs (the config the ID digests is re-serialised each export) while the
+    rootfs layers are byte-identical. Recording `.Id` would mark every
+    descendant stale after any no-op rebuild of its parent, which is a gate
+    that cries wolf until it is disabled.
+#>
+
+# The label names, spelled once. `trinix.dockerfile` is carried alongside the
+# hash so that an image can say what it claims to be built from, not just that
+# something no longer matches.
+$script:ProvenanceLabel = [pscustomobject]@{
+    Stage       = 'trinix.stage'
+    Dockerfile  = 'trinix.dockerfile'
+    Hash        = 'trinix.dockerfile.sha256'
+    BaseImage   = 'trinix.base.image'
+    BaseContent = 'trinix.base.content'
+}
+
+# The FROM chain, as it actually is rather than as the stage list suggests.
+#
+#   host-tools   FROM debian:${DEBIAN_TAG}
+#   llvm         FROM ${HOST_TOOLS_IMAGE}     (toolchain.Dockerfile)
+#   toolchain    FROM ${HOST_TOOLS_IMAGE}     (toolchain.Dockerfile; llvm is an
+#                                              internal stage of the same file,
+#                                              not the tagged trinix/llvm image)
+#   app          FROM ${HOST_TOOLS_IMAGE}
+#   base         FROM ${TOOLCHAIN_IMAGE}
+#   image        FROM ${BASE_IMAGE}
+#
+# `Image` is $null for the stages whose build target exports a local directory
+# from `scratch` rather than loading a tagged image: there is nothing cached
+# under a tag for them to be stale, but they still have ancestors that can be.
+$script:StageGraph = [ordered]@{
+    'host-tools' = [pscustomobject]@{
+        Stage = 'host-tools'; Dockerfile = 'host-tools.Dockerfile'
+        Image = 'host-tools'; Parent = $null; ExternalBase = 'debian:${DEBIAN_TAG}'
+    }
+    'llvm' = [pscustomobject]@{
+        Stage = 'llvm'; Dockerfile = 'toolchain.Dockerfile'
+        Image = 'llvm'; Parent = 'host-tools'; ExternalBase = $null
+    }
+    'toolchain' = [pscustomobject]@{
+        Stage = 'toolchain'; Dockerfile = 'toolchain.Dockerfile'
+        Image = 'toolchain-{arch}'; Parent = 'host-tools'; ExternalBase = $null
+    }
+    'app' = [pscustomobject]@{
+        Stage = 'app'; Dockerfile = 'app.Dockerfile'
+        Image = $null; Parent = 'host-tools'; ExternalBase = $null
+    }
+    'base' = [pscustomobject]@{
+        Stage = 'base'; Dockerfile = 'base.Dockerfile'
+        Image = 'base-{arch}'; Parent = 'toolchain'; ExternalBase = $null
+    }
+    'image' = [pscustomobject]@{
+        Stage = 'image'; Dockerfile = 'image.Dockerfile'
+        Image = $null; Parent = 'base'; ExternalBase = $null
+    }
+}
+
+function Get-TrinixDockerfileHash {
+    <#  .SYNOPSIS  SHA-256 of a Dockerfile's bytes, as `sha256:<hex>`. #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { throw "No such Dockerfile: $Path" }
+    return 'sha256:' + (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Get-TrinixImageContentId {
+    <#
+        .SYNOPSIS  A rebuild-stable identity for a local image, or $null if it is not present.
+        .DESCRIPTION
+            SHA-256 over the image's rootfs layer digests. See the note above on
+            why this is not `.Id`: the layer list survives a cached rebuild
+            unchanged, and the image ID does not.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Image)
+
+    $layers = & docker image inspect $Image --format '{{json .RootFS.Layers}}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($layers)) { return $null }
+
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($layers)
+    $digest = [System.Security.Cryptography.SHA256]::HashData($bytes)
+    return 'sha256:' + [System.Convert]::ToHexString($digest).ToLowerInvariant()
+}
+
+function Get-TrinixImageLabel {
+    <#
+        .SYNOPSIS  The labels on a local image as a hashtable, or $null if the image is not present.
+        .DESCRIPTION
+            An image with no labels at all reports no `Labels` key rather than an
+            empty one, so the two cases are told apart here — $null means absent,
+            an empty hashtable means present and unlabelled.
+    #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$Image)
+
+    $json = & docker image inspect $Image --format '{{json .Config}}' 2>$null
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) { return $null }
+
+    $labels = @{}
+    $config = $json | ConvertFrom-Json
+    if ($config.PSObject.Properties.Name -contains 'Labels' -and $config.Labels) {
+        foreach ($property in $config.Labels.PSObject.Properties) { $labels[$property.Name] = $property.Value }
+    }
+    return $labels
+}
+
+function New-TrinixProvenanceLabel {
+    <#
+        .SYNOPSIS  The `--label` arguments that stamp a stage image with what it was built from.
+        .PARAMETER Dockerfile  Absolute path to the Dockerfile driving the build.
+        .PARAMETER BaseImage   The image ref this stage's FROM resolves to.
+        .DESCRIPTION
+            Labels are image config, not a layer: adding them neither invalidates
+            BuildKit's cache nor changes the rootfs, so stamping is free and does
+            not make a stage look stale to its own children.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param(
+        [Parameter(Mandatory)][string]$Stage,
+        [Parameter(Mandatory)][string]$Dockerfile,
+        [Parameter(Mandatory)][string]$BaseImage
+    )
+
+    $content = Get-TrinixImageContentId -Image $BaseImage
+    if (-not $content) {
+        throw "Cannot stamp stage '$Stage': its base image $BaseImage is not present locally, so there is nothing to record it was built from. Build or pull $BaseImage first."
+    }
+
+    return @(
+        '--label', "$($script:ProvenanceLabel.Stage)=$Stage",
+        '--label', "$($script:ProvenanceLabel.Dockerfile)=$(Get-TrinixRelativePath -Path $Dockerfile)",
+        '--label', "$($script:ProvenanceLabel.Hash)=$(Get-TrinixDockerfileHash -Path $Dockerfile)",
+        '--label', "$($script:ProvenanceLabel.BaseImage)=$BaseImage",
+        '--label', "$($script:ProvenanceLabel.BaseContent)=$content"
+    )
+}
+
+function Get-TrinixRelativePath {
+    <#  .SYNOPSIS  A path spelled relative to the repository root, with forward slashes. #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Path)
+    return ([System.IO.Path]::GetRelativePath((Get-TrinixRoot), $Path) -replace '\\', '/')
+}
+
+function Test-TrinixStageProvenance {
+    <#
+        .SYNOPSIS  Why a cached stage image is stale; an empty result means it is current.
+        .PARAMETER Dockerfile  Absolute path to the Dockerfile that should have built it.
+        .PARAMETER BaseImage   The image ref its FROM resolves to now.
+        .OUTPUTS  One human-readable sentence per problem found.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param(
+        [Parameter(Mandatory)][string]$Image,
+        [Parameter(Mandatory)][string]$Dockerfile,
+        [Parameter(Mandatory)][string]$BaseImage
+    )
+
+    $reasons = [System.Collections.Generic.List[string]]::new()
+    $labels = Get-TrinixImageLabel -Image $Image
+    $relative = Get-TrinixRelativePath -Path $Dockerfile
+
+    if ($null -eq $labels) {
+        $reasons.Add('is not present locally.')
+        return $reasons.ToArray()
+    }
+
+    # An image built before this gate existed carries no labels. Said plainly:
+    # the image is not known to be wrong, it is unverifiable, and an
+    # unverifiable image is exactly the thing that cost hours twice.
+    if (-not $labels.ContainsKey($script:ProvenanceLabel.Hash)) {
+        $reasons.Add("carries no build-provenance labels, so it predates this check and nothing about it can be verified. Rebuild it once to stamp it.")
+        return $reasons.ToArray()
+    }
+
+    $recordedHash = $labels[$script:ProvenanceLabel.Hash]
+    $currentHash = Get-TrinixDockerfileHash -Path $Dockerfile
+    if ($recordedHash -ne $currentHash) {
+        $reasons.Add("$relative has changed since it was built (recorded $recordedHash, current $currentHash).")
+    }
+
+    $recordedBase = if ($labels.ContainsKey($script:ProvenanceLabel.BaseImage)) { $labels[$script:ProvenanceLabel.BaseImage] } else { '(unrecorded)' }
+    if ($recordedBase -ne $BaseImage) {
+        $reasons.Add("was built FROM $recordedBase, but this build would put it on $BaseImage.")
+    } else {
+        $recordedContent = if ($labels.ContainsKey($script:ProvenanceLabel.BaseContent)) { $labels[$script:ProvenanceLabel.BaseContent] } else { $null }
+        $currentContent = Get-TrinixImageContentId -Image $BaseImage
+        if (-not $currentContent) {
+            $reasons.Add("was built on $BaseImage, which is no longer present locally, so it cannot be checked.")
+        } elseif ($recordedContent -ne $currentContent) {
+            $reasons.Add("was built on an older $BaseImage (recorded $recordedContent, current $currentContent).")
+        }
+    }
+
+    return $reasons.ToArray()
+}
+
+function Get-TrinixStage {
+    <#
+        .SYNOPSIS  Resolve one stage of the FROM chain to concrete paths and image refs.
+        .PARAMETER Arch  Required for the per-architecture stages; ignored by the others.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('host-tools', 'llvm', 'toolchain', 'app', 'base', 'image')][string]$Name,
+        [string]$ImagePrefix = 'trinix',
+        [string]$Tag = 'dev',
+        [string]$Arch
+    )
+
+    $node = $script:StageGraph[$Name]
+    $dockerfile = Join-Path (Get-TrinixRoot) 'docker' $node.Dockerfile
+
+    $image = $null
+    if ($node.Image) {
+        if ($node.Image -like '*{arch}*' -and -not $Arch) {
+            throw "Stage '$Name' is per-architecture; Get-TrinixStage needs -Arch."
+        }
+        $image = "$ImagePrefix/$($node.Image -replace '\{arch\}', $Arch):$Tag"
+    }
+
+    $baseImage = if ($node.Parent) {
+        (Get-TrinixStage -Name $node.Parent -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Arch).Image
+    } else {
+        Resolve-TrinixExternalBase -Dockerfile $dockerfile -Reference $node.ExternalBase
+    }
+
+    # The command that fixes this stage, spelled exactly. Non-default prefix and
+    # tag are echoed back so the instruction is runnable as printed rather than
+    # runnable only on the default configuration.
+    $command = "./scripts/build.ps1 -Stage $Name"
+    if ($node.Image -like '*{arch}*') { $command += " -Arch $Arch" }
+    if ($ImagePrefix -ne 'trinix') { $command += " -ImagePrefix $ImagePrefix" }
+    if ($Tag -ne 'dev') { $command += " -Tag $Tag" }
+
+    return [pscustomobject]@{
+        Stage          = $Name
+        Dockerfile     = $dockerfile
+        DockerfilePath = Get-TrinixRelativePath -Path $dockerfile
+        Image          = $image
+        Parent         = $node.Parent
+        BaseImage      = $baseImage
+        RebuildCommand = $command
+    }
+}
+
+function Resolve-TrinixExternalBase {
+    <#
+        .SYNOPSIS  Expand a `${ARG}` in an upstream FROM using the Dockerfile's own ARG default.
+        .DESCRIPTION
+            The upstream tag is spelled once, in the Dockerfile, and read back
+            from there — so the graph above and `FROM debian:${DEBIAN_TAG}`
+            cannot drift into judging a build against a tag it never used.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string]$Dockerfile,
+        [Parameter(Mandatory)][string]$Reference
+    )
+
+    $text = Get-Content -Raw -LiteralPath $Dockerfile
+    $resolved = $Reference
+
+    foreach ($placeholder in ([regex]::Matches($Reference, '\$\{(\w+)\}'))) {
+        $arg = $placeholder.Groups[1].Value
+        $default = [regex]::Match($text, "(?m)^ARG\s+$arg=(\S+)\s*$")
+        if (-not $default.Success) {
+            throw "$Dockerfile declares no default for ARG $arg, so the upstream image behind $Reference cannot be resolved."
+        }
+        $resolved = $resolved.Replace($placeholder.Value, $default.Groups[1].Value)
+    }
+
+    return $resolved
+}
+
+function Get-TrinixStageChain {
+    <#  .SYNOPSIS  A stage and everything it is built on, base first. #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('host-tools', 'llvm', 'toolchain', 'app', 'base', 'image')][string]$Name,
+        [string]$ImagePrefix = 'trinix',
+        [string]$Tag = 'dev',
+        [string]$Arch
+    )
+
+    $chain = [System.Collections.Generic.List[object]]::new()
+    $cursor = $Name
+    while ($cursor) {
+        $stage = Get-TrinixStage -Name $cursor -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Arch
+        $chain.Insert(0, $stage)
+        $cursor = $stage.Parent
+    }
+    return $chain.ToArray()
+}
+
+function Get-TrinixStageLabelArgs {
+    <#  .SYNOPSIS  The `--label` arguments for a stage, resolved from the FROM chain. #>
+    [CmdletBinding(SupportsShouldProcess)]
+    [OutputType([string[]])]
+    param(
+        [Parameter(Mandatory)][ValidateSet('host-tools', 'llvm', 'toolchain', 'app', 'base', 'image')][string]$Name,
+        [string]$ImagePrefix = 'trinix',
+        [string]$Tag = 'dev',
+        [string]$Arch
+    )
+
+    $stage = Get-TrinixStage -Name $Name -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Arch
+
+    # The upstream base on a fresh machine: the build is about to pull it
+    # anyway, and pulling it here means the digest recorded is the digest the
+    # build actually uses rather than one guessed after the fact.
+    if (-not $stage.Parent -and -not (Get-TrinixImageContentId -Image $stage.BaseImage)) {
+        Invoke-TrinixDocker 'image' 'pull' $stage.BaseImage | Out-Host
+    }
+
+    return New-TrinixProvenanceLabel -Stage $Name -Dockerfile $stage.Dockerfile -BaseImage $stage.BaseImage
+}
+
+function Assert-TrinixStageCurrent {
+    <#
+        .SYNOPSIS  Refuse to build on cached stage images whose Dockerfile or base image has moved.
+        .DESCRIPTION
+            Checks every ancestor of the named stage — not just its immediate
+            parent, because `-Stage image` rebuilds nothing below `base` and a
+            host-tools edit three links down is exactly the failure this exists
+            for. The stage itself is not checked: it is about to be rebuilt.
+
+            Reports the whole chain at once. One refusal per stage would mean
+            four round trips to learn what a single message can say.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('host-tools', 'llvm', 'toolchain', 'app', 'base', 'image')][string]$Name,
+        [string]$ImagePrefix = 'trinix',
+        [string]$Tag = 'dev',
+        [string]$Arch
+    )
+
+    $stale = [System.Collections.Generic.List[object]]::new()
+    $checked = 0
+
+    foreach ($stage in (Get-TrinixStageChain -Name $Name -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Arch)) {
+        if ($stage.Stage -eq $Name) { continue }
+        if (-not $stage.Image) { continue }
+
+        $checked++
+        $reasons = @(Test-TrinixStageProvenance -Image $stage.Image -Dockerfile $stage.Dockerfile -BaseImage $stage.BaseImage)
+        if ($reasons.Count -gt 0) { $stale.Add([pscustomobject]@{ Stage = $stage; Reasons = $reasons }) }
+    }
+
+    if ($stale.Count -eq 0) {
+        Write-Host "Stage chain current: $checked cached image(s) below $Name match their Dockerfile and base." -ForegroundColor DarkGray
+        return
+    }
+
+    # Written out before the throw rather than inside it: PowerShell's error view
+    # reflows an exception message into a wrapped paragraph, which turns a list of
+    # stages and the commands that fix them into an unreadable run-on. The throw
+    # below stays a single self-contained sentence, the way every other Assert-
+    # here does; this is the part a person actually reads.
+    Write-Host ''
+    Write-Host "$($stale.Count) of the $checked cached stage image(s) below '$Name' cannot be trusted:" -ForegroundColor Red
+    foreach ($entry in $stale) {
+        Write-Host "  $($entry.Stage.Image)" -ForegroundColor Red
+        foreach ($reason in $entry.Reasons) { Write-Host "    $reason" }
+    }
+    Write-Host ''
+    Write-Host 'Rebuild, in this order, then run this build again:' -ForegroundColor Yellow
+    foreach ($entry in $stale) { Write-Host "  $($entry.Stage.RebuildCommand)" -ForegroundColor Yellow }
+    Write-Host ''
+    Write-Host 'Not rebuilt for you on purpose: the cheapest link in this chain is a 37-minute LLVM build.' -ForegroundColor DarkGray
+    Write-Host ''
+
+    $images = ($stale | ForEach-Object { $_.Stage.Image }) -join ', '
+    $commands = ($stale | ForEach-Object { $_.Stage.RebuildCommand }) -join '; '
+    throw "Refusing to build '$Name': $images cannot be shown to match the Dockerfile and base image recorded in them (details above). Rebuild first: $commands"
+}
+
 # --- Signing (Phase 6) -----------------------------------------------------
 
 <#
@@ -405,4 +815,7 @@ Export-ModuleMember -Function `
     Get-TrinixRoot, Get-TrinixSourceCache, Get-TrinixArch, `
     Get-TrinixSourceManifestPath, Get-TrinixSource, Resolve-TrinixSourceUrl, Resolve-TrinixSourceFileName, Set-TrinixSourceChecksum, `
     Assert-TrinixDocker, Assert-TrinixDiskSpace, Invoke-TrinixDocker, `
+    Get-TrinixDockerfileHash, Get-TrinixImageContentId, Get-TrinixImageLabel, Get-TrinixRelativePath, `
+    New-TrinixProvenanceLabel, Test-TrinixStageProvenance, `
+    Get-TrinixStage, Resolve-TrinixExternalBase, Get-TrinixStageChain, Get-TrinixStageLabelArgs, Assert-TrinixStageCurrent, `
     Get-TrinixSigningDirectory, Get-TrinixSigningIdentity, Assert-TrinixSigningIdentity, Update-TrinixTrustStore

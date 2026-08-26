@@ -99,7 +99,14 @@ $outputDir = if ([System.IO.Path]::IsPathRooted($Output)) { $Output } else { Joi
 function Get-CommonBuildArgs {
     param(
         [Parameter(Mandatory)][string]$Target,
-        [string]$Dockerfile = 'host-tools.Dockerfile'
+        [string]$Dockerfile = 'host-tools.Dockerfile',
+
+        # The stage whose provenance this build should stamp into the image it
+        # produces: the hash of the Dockerfile above, and the identity of the
+        # image it is built FROM. Omitted for the export-only targets, which
+        # write a local directory from `scratch` and leave no image to label.
+        [string]$Stage,
+        [string]$Architecture
     )
     $result = @(
         'buildx', 'build',
@@ -108,6 +115,9 @@ function Get-CommonBuildArgs {
         '--progress', $Progress
     )
     if ($NoCache) { $result += '--no-cache' }
+    if ($Stage) {
+        $result += Get-TrinixStageLabelArgs -Name $Stage -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Architecture
+    }
     return $result
 }
 
@@ -142,7 +152,7 @@ function Build-HostTools {
     $target = if ($Verify) { 'host-tools-verify' } else { 'host-tools' }
     $image = "$ImagePrefix/host-tools:$Tag"
 
-    $dockerArgs = Get-CommonBuildArgs -Target $target
+    $dockerArgs = Get-CommonBuildArgs -Target $target -Stage 'host-tools'
     $dockerArgs += @('--tag', $image)
     # The build container is intentionally native: no --platform.
     if ($target -eq 'host-tools') { $dockerArgs += '--load' }
@@ -153,7 +163,7 @@ function Build-HostTools {
     if ($target -eq 'host-tools-verify') {
         # The verify stage runs the gate during build; also build+load the plain
         # image so the developer is left with something usable.
-        $plain = Get-CommonBuildArgs -Target 'host-tools'
+        $plain = Get-CommonBuildArgs -Target 'host-tools' -Stage 'host-tools'
         $plain += @('--tag', $image, '--load', $root)
         Invoke-TrinixDocker @plain
     }
@@ -170,17 +180,28 @@ function Build-HostTools {
 # resolves its pins from that copy. Rebuilding host-tools first (a no-op when
 # nothing changed) is what makes a version bump actually reach the build instead
 # of silently compiling the previous pin.
+#
+# What this is *not* is a staleness check for anything downstream — that was the
+# confidence it could not deliver, and Assert-TrinixStageCurrent is now the thing
+# that delivers it. Its role here is narrower and load-bearing: the gate judges a
+# cached toolchain against the host-tools image it was built on, and that
+# comparison is worthless if host-tools is itself out of date. It also covers
+# what a Dockerfile hash cannot see — base/sources.json, docker/scripts/*,
+# toolchain/cmake, toolchain/meson are COPYed in, and BuildKit is the only thing
+# that knows whether they moved. A cache hit re-exports byte-identical layers, so
+# a no-op rebuild leaves every descendant's recorded base content id matching.
 function Assert-HostToolsCurrent {
-    $dockerArgs = Get-CommonBuildArgs -Target 'host-tools'
+    $dockerArgs = Get-CommonBuildArgs -Target 'host-tools' -Stage 'host-tools'
     $dockerArgs += @('--tag', "$ImagePrefix/host-tools:$Tag", '--load', $root)
     Invoke-TrinixDocker @dockerArgs
 }
 
 function Build-Llvm {
     Assert-HostToolsCurrent
+    Assert-TrinixStageCurrent -Name 'llvm' -ImagePrefix $ImagePrefix -Tag $Tag
     $image = "$ImagePrefix/llvm:$Tag"
 
-    $dockerArgs = Get-CommonBuildArgs -Target 'llvm' -Dockerfile 'toolchain.Dockerfile'
+    $dockerArgs = Get-CommonBuildArgs -Target 'llvm' -Dockerfile 'toolchain.Dockerfile' -Stage 'llvm'
     $dockerArgs += Get-SourcesContextArg
     $dockerArgs += @('--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag")
     $dockerArgs += @('--tag', $image, '--load', $root)
@@ -197,10 +218,11 @@ function Build-Toolchain {
     param([Parameter(Mandatory)][psobject]$Architecture)
 
     Assert-HostToolsCurrent
+    Assert-TrinixStageCurrent -Name 'toolchain' -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Architecture.Name
     $image = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
     $target = if ($Verify) { 'toolchain-verify' } else { 'toolchain' }
 
-    $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'toolchain.Dockerfile'
+    $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'toolchain.Dockerfile' -Stage 'toolchain' -Architecture $Architecture.Name
     $dockerArgs += Get-SourcesContextArg
     $dockerArgs += @(
         '--build-arg', "HOST_TOOLS_IMAGE=$ImagePrefix/host-tools:$Tag",
@@ -220,6 +242,7 @@ function Build-App {
     param([Parameter(Mandatory)][psobject]$Architecture)
 
     Assert-HostToolsCurrent
+    Assert-TrinixStageCurrent -Name 'app' -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Architecture.Name
     Assert-TrinixSigningIdentity -HostToolsImage "$ImagePrefix/host-tools:$Tag"
     $identity = Get-TrinixSigningIdentity
 
@@ -261,27 +284,31 @@ function Build-App {
 
 # --- Stage: base (Phase 2, per architecture) --------------------------------
 
-# The base image carries both the trust store and the reference application, so
-# a base built before the applications exist would boot a system with nothing to
-# install. Built here for the same reason host-tools is: it is a cache hit when
-# nothing changed, and the alternative is a stage that silently does not reflect
-# an edit.
-function Assert-TrinixAppsCurrent {
-    param([Parameter(Mandatory)][psobject]$Architecture)
-    Build-App -Architecture $Architecture
-}
-
 function Build-Base {
     param([Parameter(Mandatory)][psobject]$Architecture)
 
     Assert-TrinixDiskSpace -Stage "base ($($Architecture.Name))"
-    Assert-TrinixAppsCurrent -Architecture $Architecture
+
+    # host-tools first, the gate second, and the order is the point: the gate
+    # judges the cached toolchain against the host-tools image it was built on,
+    # and that comparison says nothing if host-tools is itself behind the tree.
+    Assert-HostToolsCurrent
+    Assert-TrinixStageCurrent -Name 'base' -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Architecture.Name
+
+    # The base image carries both the trust store and the reference application,
+    # so a base built before the applications exist would boot a system with
+    # nothing to install. Built here for the same reason host-tools is: a cache
+    # hit when nothing changed, and the alternative is a stage that silently does
+    # not reflect an edit. (This was Assert-TrinixAppsCurrent, a one-line
+    # passthrough whose name promised a check it did not perform — the promise is
+    # now kept by the line above, and the build is what it always was.)
+    Build-App -Architecture $Architecture
 
     $toolchainImage = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
     $image = "$ImagePrefix/base-$($Architecture.Name):$Tag"
     $target = if ($Verify) { 'base-verify' } else { 'base' }
 
-    $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'base.Dockerfile'
+    $dockerArgs = Get-CommonBuildArgs -Target $target -Dockerfile 'base.Dockerfile' -Stage 'base' -Architecture $Architecture.Name
     $dockerArgs += Get-SourcesContextArg
     $dockerArgs += Get-TrustContextArg
     $dockerArgs += @('--build-context', "apps=$(Join-Path (Get-AppsDirectory) $Architecture.Name)")
@@ -306,6 +333,11 @@ function Build-Image {
     param([Parameter(Mandatory)][psobject]$Architecture)
 
     Assert-TrinixDiskSpace -Stage "image ($($Architecture.Name))"
+
+    # This stage rebuilds nothing below itself, so the whole chain is read back
+    # from labels rather than refreshed: a host-tools edit three links down is
+    # precisely the failure that reached image assembly twice without a mkfs.
+    Assert-TrinixStageCurrent -Name 'image' -ImagePrefix $ImagePrefix -Tag $Tag -Arch $Architecture.Name
 
     $baseImage = "$ImagePrefix/base-$($Architecture.Name):$Tag"
 
