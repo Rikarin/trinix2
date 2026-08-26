@@ -274,6 +274,7 @@ function Assert-TrinixAppsCurrent {
 function Build-Base {
     param([Parameter(Mandatory)][psobject]$Architecture)
 
+    Assert-TrinixDiskSpace -Stage "base ($($Architecture.Name))"
     Assert-TrinixAppsCurrent -Architecture $Architecture
 
     $toolchainImage = "$ImagePrefix/toolchain-$($Architecture.Name):$Tag"
@@ -303,6 +304,8 @@ function Build-Base {
 
 function Build-Image {
     param([Parameter(Mandatory)][psobject]$Architecture)
+
+    Assert-TrinixDiskSpace -Stage "image ($($Architecture.Name))"
 
     $baseImage = "$ImagePrefix/base-$($Architecture.Name):$Tag"
 

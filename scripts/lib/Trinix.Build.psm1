@@ -198,6 +198,39 @@ function Assert-TrinixDocker {
     }
 }
 
+function Assert-TrinixDiskSpace {
+    <#  .SYNOPSIS  Fail early and legibly if the host volume cannot hold a build. #>
+    [CmdletBinding()]
+    param(
+        # Lower bound 1 on purpose: 0 or a negative would be a guard that passes
+        # unconditionally, which is the failure this function exists to prevent.
+        [ValidateRange(1, 65536)][int]$RequiredGB = 30,
+        [string]$Stage = 'this build'
+    )
+
+    # Measured on the host, never inside the container, and that distinction is
+    # the whole point. Docker Desktop's Linux VM reports the size of its virtual
+    # disk — ~814G on this machine — while the file backing that disk grows on
+    # the host volume, so an in-VM `df` reads hundreds of gigabytes free right up
+    # until the Mac is at zero bytes and needs manual recovery. Any check that
+    # runs in the container is worse than none, because it reassures.
+    #
+    # DriveInfo resolves a path to its containing volume, which on macOS is the
+    # data volume rather than the synthesized root; verified equal to
+    # `df -k /System/Volumes/Data` to within a block. The repository is the path
+    # asked about because stage artifacts are exported into it — and on macOS
+    # Docker's own disk image lives under $HOME on that same volume.
+    $root = Get-TrinixRoot
+    $free = [System.IO.DriveInfo]::new($root).AvailableFreeSpace
+    $freeGB = [math]::Round($free / 1GB, 1)
+
+    if ($free -lt ($RequiredGB * 1GB)) {
+        throw "Only $freeGB GiB free on the host volume holding $root, and $Stage needs about $RequiredGB GiB. Free up space before building: BuildKit will fill this disk to zero rather than stop, because the space it sees is the VM's, not yours."
+    }
+
+    Write-Host "Host disk: $freeGB GiB free, $RequiredGB GiB required for $Stage." -ForegroundColor DarkGray
+}
+
 function Invoke-TrinixDocker {
     <#
         .SYNOPSIS  Run docker with the given arguments, echoing the command and honouring -WhatIf.
@@ -371,5 +404,5 @@ function Update-TrinixTrustStore {
 Export-ModuleMember -Function `
     Get-TrinixRoot, Get-TrinixSourceCache, Get-TrinixArch, `
     Get-TrinixSourceManifestPath, Get-TrinixSource, Resolve-TrinixSourceUrl, Resolve-TrinixSourceFileName, Set-TrinixSourceChecksum, `
-    Assert-TrinixDocker, Invoke-TrinixDocker, `
+    Assert-TrinixDocker, Assert-TrinixDiskSpace, Invoke-TrinixDocker, `
     Get-TrinixSigningDirectory, Get-TrinixSigningIdentity, Assert-TrinixSigningIdentity, Update-TrinixTrustStore
