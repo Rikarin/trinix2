@@ -293,12 +293,19 @@ function Invoke-TrinixDocker {
 # stamped and demand the full host-tools → toolchain → base rebuild that this
 # section exists to avoid. An image without it is judged on the checks it was
 # stamped for, and gains this one when it is next rebuilt for a real reason.
+#
+# `trinix.contexts.sha256` covers the *named* build contexts a stage reads —
+# `trust`, and the two that are deliberately not hashed (see
+# Get-TrinixNamedContextHash) — and is a fourth label for the third time for the
+# same reason. The same rule holds: an image without it is judged on the checks
+# it was stamped for.
 $script:ProvenanceLabel = [pscustomobject]@{
     Stage       = 'trinix.stage'
     Dockerfile  = 'trinix.dockerfile'
     Hash        = 'trinix.dockerfile.sha256'
     Content     = 'trinix.dockerfile.content.sha256'
     Inputs      = 'trinix.inputs.sha256'
+    Contexts    = 'trinix.contexts.sha256'
     BaseImage   = 'trinix.base.image'
     BaseContent = 'trinix.base.content'
 }
@@ -482,7 +489,8 @@ function Get-TrinixDockerfileContentHash {
         repository path; resolving `*.tdi` or `/` against the repo would look
         for files that do not exist. Internal stages are covered because they
         are in the same Dockerfile, whose hash already changed; the tagged
-        images are covered by the base content id.
+        images are covered by the base content id; the named contexts are
+        covered by the next section, which was written because they were not.
       • Anything .dockerignore excludes. BuildKit does not send it, so it
         cannot change the build — and hashing it would mark `base` stale the
         first time somebody ran `dotnet build` on the host and left an
@@ -826,6 +834,156 @@ function Get-TrinixDockerfileInputsHash {
     return 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($content)).ToLowerInvariant()
 }
 
+# --- Named build contexts ---------------------------------------------------
+
+<#
+    The inputs that are not in the repository.
+
+    Three directories reach a build as BuildKit *named contexts*, wired up in
+    scripts/build.ps1 and referenced from a Dockerfile as `--from=<name>` (or
+    `--mount=...,from=<name>`). They are not repository paths, so the COPY-inputs
+    walk above skips them by construction — and for a while nothing else looked
+    at them either. The symptom: adding a trust anchor left `trinix/base-arm64`
+    judged current, so `-Stage image`, which rebuilds nothing below itself, was
+    told the chain was fine and shipped an image without the new root.
+
+    Whether a context needs hashing is one question asked once per context: can
+    a change to it alter the built image without something else already moving?
+    The answers are not the same, so they are not hashed the same.
+
+      • `trust=` — YES, hashed. Get-TrinixTrustAnchor is the sole statement of
+        what goes into the store, and both the staging copy and the hash read
+        it, so the two cannot drift. Hashed from `signing/` rather than from
+        the staged output on purpose: Update-TrinixTrustStore *stages* as a side
+        effect, and a read-only staleness check that rewrites out/pki/roots is
+        a check that is unsafe to run.
+
+        (Note it cannot be hashed via the COPY-inputs walk even in principle:
+        .dockerignore excludes `signing/**/*.pem` — no key material in a build
+        context, ever — so that walk sees an empty directory. The anchors reach
+        an image only through this context.)
+
+      • `sources=` — NO, and not for cost alone, though ~600 MB of tarballs is
+        reason enough to look for another answer. Nothing in the cache can
+        change what is built: every consumer goes through `trinix-fetch`
+        (`trinix-extract` and the recipes included), which re-verifies the
+        sha256 from base/sources.json on *every* use, cache hit or not, and
+        dies on a mismatch. No script reads $TRINIX_SOURCES by path. So a
+        swapped or corrupted tarball fails the build loudly rather than
+        altering the image quietly, and the only thing that can legitimately
+        change what a stage downloads is base/sources.json — which is COPYed
+        in, and therefore already in the inputs hash. Verified against the
+        scripts, not taken from the comment that claimed it.
+
+      • `apps=` — NO, and hashing it would make the gate worse. The .tdi files
+        are outputs of the app stage, whose entire repository input (global.json,
+        vendor, src) base.Dockerfile COPYs in as well — so their source is
+        already in base's inputs hash, and hashing the artefacts adds no
+        coverage of it. What it would add is churn: a .tdi is deliberately not
+        reproducible (an ECDSA signature is randomised and the manifest records
+        when it was signed — see scripts/check-determinism.ps1, which gates the
+        bundle *contents* for exactly this reason), so any real app rebuild
+        moves the bytes with no source change behind it, and `base` would be
+        stale the moment it finished building.
+
+    ⚠ Which contexts a stage reads is derived from its Dockerfile, for the same
+    reason its COPY inputs are: a hand-kept list is correct on the day it is
+    written and silently wrong afterwards. A context named in a Dockerfile but
+    missing from $script:NamedContext is refused, loudly — so wiring up a fourth
+    context cannot quietly go unhashed the way these three did.
+#>
+
+# `FROM <image> AS <name>`. A `--from=` naming one of these is another stage of
+# the same file, already covered by that file's own content hash.
+$script:DockerfileStageName = [regex]::new('(?im)^\s*FROM\s+\S+\s+AS\s+(?<name>\S+)')
+
+# `--from=<ref>` on a COPY, and `,from=<ref>` inside a `--mount=`. Anchored on
+# the `--` or `,` that BuildKit requires, so `from=` occurring in shell text
+# inside a RUN is not mistaken for one. Over-matching costs a named throw below
+# rather than a silent miss, which is the trade this file makes everywhere.
+$script:DockerfileContextRef = [regex]::new('(?i)(?:--|,)from=(?<name>[^,\s]+)')
+
+# Stands in for a context whose digest is deliberately not taken. Recorded
+# rather than omitted so the label still says which contexts the stage read:
+# adding or removing one moves the hash even when nothing is hashed.
+$script:NamedContextUnhashed = 'not-hashed'
+
+# Every named context build.ps1 can hand to a build, and how the gate judges it.
+# `Hash` is a scriptblock returning `sha256:<hex>`, or $null for the contexts
+# the block comment above argues need none.
+$script:NamedContext = [ordered]@{
+    'sources' = [pscustomobject]@{ Hash = $null }
+    'trust'   = [pscustomobject]@{ Hash = { Get-TrinixTrustAnchorHash } }
+    'apps'    = [pscustomobject]@{ Hash = $null }
+}
+
+function Get-TrinixDockerfileContextName {
+    <#
+        .SYNOPSIS  The named build contexts a Dockerfile reads, ordinal-sorted.
+        .DESCRIPTION
+            Internal stages of the same file and `${ARG}`-resolved image refs
+            are not contexts and are dropped; anything left that the gate does
+            not recognise is an error rather than a guess.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { throw "No such Dockerfile: $Path" }
+    $relative = Get-TrinixRelativePath -Path $Path
+    $text = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($Path)).TrimStart([char]0xFEFF)
+
+    # Comments dropped first: these Dockerfiles are half prose, and a `--from=`
+    # in a sentence about a `--from=` is not a build input.
+    $body = Get-TrinixDockerfileContent -Text $text
+
+    $internal = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($match in $script:DockerfileStageName.Matches($body)) { [void]$internal.Add($match.Groups['name'].Value) }
+
+    $contexts = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($match in $script:DockerfileContextRef.Matches($body)) {
+        $name = $match.Groups['name'].Value
+        # `--from=${TOOLCHAIN_IMAGE}` names an image, and an image's identity is
+        # already the base content id.
+        if ($name.Contains('$')) { continue }
+        if ($internal.Contains($name)) { continue }
+        [void]$contexts.Add($name)
+    }
+
+    foreach ($name in $contexts) {
+        if (-not $script:NamedContext.Contains($name)) {
+            throw "$relative reads the named build context '$name', which this gate knows nothing about. Add it to `$script:NamedContext — with a hash, or with the argument for why it needs none — rather than letting a stage's inputs go unhashed."
+        }
+    }
+
+    return @($contexts)
+}
+
+function Get-TrinixNamedContextHash {
+    <#
+        .SYNOPSIS  SHA-256 over the named build contexts a Dockerfile reads, as `sha256:<hex>`.
+        .DESCRIPTION
+            A manifest of `<digest>  <name>` lines, ordinal-sorted by name, in
+            the same shape as Get-TrinixDockerfileInputsHash. A Dockerfile that
+            reads no named context hashes an empty manifest, which is a fixed
+            value that then moves the first time one is added.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $manifest = [System.Text.StringBuilder]::new()
+
+    foreach ($name in (Get-TrinixDockerfileContextName -Path $Path)) {
+        $context = $script:NamedContext[$name]
+        $digest = if ($context.Hash) { & $context.Hash } else { $script:NamedContextUnhashed }
+        [void]$manifest.Append("$digest  $name`n")
+    }
+
+    $content = [System.Text.Encoding]::UTF8.GetBytes($manifest.ToString())
+    return 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($content)).ToLowerInvariant()
+}
+
 function Get-TrinixGitBlob {
     <#  .SYNOPSIS  The bytes of a git blob, or $null if it cannot be read. #>
     [CmdletBinding()]
@@ -976,6 +1134,7 @@ function New-TrinixProvenanceLabel {
         '--label', "$($script:ProvenanceLabel.Hash)=$(Get-TrinixDockerfileByteHash -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.Content)=$(Get-TrinixDockerfileHash -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.Inputs)=$(Get-TrinixDockerfileInputsHash -Path $Dockerfile)",
+        '--label', "$($script:ProvenanceLabel.Contexts)=$(Get-TrinixNamedContextHash -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.BaseImage)=$BaseImage",
         '--label', "$($script:ProvenanceLabel.BaseContent)=$content"
     )
@@ -1058,6 +1217,19 @@ function Test-TrinixStageProvenance {
         $currentInputs = Get-TrinixDockerfileInputsHash -Path $Dockerfile
         if ($recordedInputs -ne $currentInputs) {
             $reasons.Add("was built from older copies of the files $relative COPYs in (recorded $recordedInputs, current $currentInputs).")
+        }
+    }
+
+    # The named build contexts, on the same terms and for the same reason: only
+    # checked when the image says it recorded it, so adding this label does not
+    # invalidate every image already standing. This is the check that was
+    # missing when a new trust anchor left base-<arch> looking current.
+    if ($labels.ContainsKey($script:ProvenanceLabel.Contexts)) {
+        $recordedContexts = $labels[$script:ProvenanceLabel.Contexts]
+        $currentContexts = Get-TrinixNamedContextHash -Path $Dockerfile
+        if ($recordedContexts -ne $currentContexts) {
+            $names = (Get-TrinixDockerfileContextName -Path $Dockerfile) -join ', '
+            $reasons.Add("was built against an older named build context — $relative reads $names (recorded $recordedContexts, current $currentContexts).")
         }
     }
 
@@ -1358,31 +1530,39 @@ dotnet publish src/Trinix.Bundle.Tool/Trinix.Bundle.Tool.csproj \
     ) | Out-Host
 }
 
-function Update-TrinixTrustStore {
+function Get-TrinixTrustAnchor {
     <#
-        .SYNOPSIS  Collect the roots that go into the system image.
+        .SYNOPSIS  The roots that go into the system image, as staged-name → source path.
         .DESCRIPTION
             Two sources, deliberately separate. signing/trusted/ holds anchors
             that are committed — a CI root, eventually a release root — and
-            signing/local/ holds the one this machine generated. They are staged
-            into a single directory because a build context is a directory, and
-            because "the set of roots this image trusts" should be one list that
-            can be read at a glance rather than two rules in a Dockerfile.
-        .OUTPUTS  The staging directory, for use as a named build context.
-    #>
-    [CmdletBinding(SupportsShouldProcess)]
-    param([Parameter(Mandatory)][string]$OutputDirectory)
+            signing/local/ holds the one this machine generated.
 
-    $staging = Join-Path $OutputDirectory 'pki' 'roots'
-    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
-    New-Item -ItemType Directory -Path $staging -Force | Out-Null
+            The one statement of what the `trust` build context contains.
+            Update-TrinixTrustStore stages exactly this and
+            Get-TrinixTrustAnchorHash hashes exactly this, so the gate cannot
+            drift into judging a set of roots other than the one a build ships —
+            which is the only thing that makes hashing the source directories
+            rather than the staged output defensible.
+
+            Reads only. The staleness gate calls it on every invocation, and a
+            read-only check that staged files as a side effect would be a check
+            nobody could afford to run.
+
+            Ordinal-sorted by staged name, later source winning a name
+            collision — which is the overwrite copying both into one directory
+            performs.
+        .OUTPUTS  A sorted name → absolute path dictionary; empty is a legal answer.
+    #>
+    [CmdletBinding()]
+    param()
 
     $sources = @(
         (Join-Path (Get-TrinixRoot) 'signing' 'trusted'),
         (Get-TrinixSigningDirectory)
     )
 
-    $count = 0
+    $anchors = [System.Collections.Generic.SortedDictionary[string, string]]::new([System.StringComparer]::Ordinal)
     foreach ($source in $sources) {
         if (-not (Test-Path -LiteralPath $source)) { continue }
         foreach ($certificate in Get-ChildItem -LiteralPath $source -Filter '*.pub.pem' -File) {
@@ -1402,13 +1582,67 @@ function Update-TrinixTrustStore {
                 $parsed.Dispose()
             }
 
-            Copy-Item -LiteralPath $certificate.FullName -Destination (Join-Path $staging $certificate.Name)
-            $count++
+            $anchors[$certificate.Name] = $certificate.FullName
         }
     }
 
-    if ($count -eq 0) {
+    return $anchors
+}
+
+function Get-TrinixTrustAnchorHash {
+    <#
+        .SYNOPSIS  SHA-256 over the trust anchors a build would stage, as `sha256:<hex>`.
+        .DESCRIPTION
+            A manifest of `<digest>  <staged name>` lines, so a new anchor, a
+            removed one, a renamed one and a reissued one all move the result.
+
+            An empty set hashes rather than throws, unlike the staging path: a
+            fresh clone has no PKI until the first build makes one, and the gate
+            runs before that. The empty hash simply will not match what a
+            stamped image recorded, which reports the trust store as changed —
+            a reason, which is the gate working, rather than a crash.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    $manifest = [System.Text.StringBuilder]::new()
+
+    foreach ($anchor in (Get-TrinixTrustAnchor).GetEnumerator()) {
+        $bytes = [System.IO.File]::ReadAllBytes($anchor.Value)
+        $digest = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+        [void]$manifest.Append("$digest  $($anchor.Key)`n")
+    }
+
+    $content = [System.Text.Encoding]::UTF8.GetBytes($manifest.ToString())
+    return 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($content)).ToLowerInvariant()
+}
+
+function Update-TrinixTrustStore {
+    <#
+        .SYNOPSIS  Stage the roots that go into the system image into one directory.
+        .DESCRIPTION
+            Staged into a single directory because a build context is a
+            directory, and because "the set of roots this image trusts" should
+            be one list that can be read at a glance rather than two rules in a
+            Dockerfile. What goes in it is Get-TrinixTrustAnchor's answer and
+            nothing else.
+        .OUTPUTS  The staging directory, for use as a named build context.
+    #>
+    [CmdletBinding(SupportsShouldProcess)]
+    param([Parameter(Mandatory)][string]$OutputDirectory)
+
+    $anchors = Get-TrinixTrustAnchor
+    if ($anchors.Count -eq 0) {
         throw "No trust anchors found. Expected at least signing/local/dev-root.pub.pem."
+    }
+
+    $staging = Join-Path $OutputDirectory 'pki' 'roots'
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    New-Item -ItemType Directory -Path $staging -Force | Out-Null
+
+    foreach ($anchor in $anchors.GetEnumerator()) {
+        Copy-Item -LiteralPath $anchor.Value -Destination (Join-Path $staging $anchor.Key)
     }
 
     return (Resolve-Path $staging).Path
@@ -1421,7 +1655,9 @@ Export-ModuleMember -Function `
     Get-TrinixDockerfileContent, Get-TrinixDockerfileHash, Get-TrinixDockerfileByteHash, `
     Get-TrinixDockerfileCopyInstruction, Get-TrinixDockerfileCopySource, `
     Get-TrinixDockerfileInput, Get-TrinixDockerfileInputsHash, Test-TrinixContextIgnore, `
+    Get-TrinixDockerfileContextName, Get-TrinixNamedContextHash, `
     Get-TrinixImageContentId, Get-TrinixImageLabel, Get-TrinixRelativePath, `
     New-TrinixProvenanceLabel, Test-TrinixStageProvenance, `
     Get-TrinixStage, Resolve-TrinixExternalBase, Get-TrinixStageChain, Get-TrinixStageLabelArgs, Assert-TrinixStageCurrent, `
-    Get-TrinixSigningDirectory, Get-TrinixSigningIdentity, Assert-TrinixSigningIdentity, Update-TrinixTrustStore
+    Get-TrinixSigningDirectory, Get-TrinixSigningIdentity, Assert-TrinixSigningIdentity, `
+    Get-TrinixTrustAnchor, Get-TrinixTrustAnchorHash, Update-TrinixTrustStore

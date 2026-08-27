@@ -123,7 +123,10 @@ function Get-CommonBuildArgs {
 
 # Sources already downloaded on the host (or restored from CI's cache) are handed
 # to BuildKit as a named context, so a toolchain build does not refetch ~600 MB.
-# Everything is still digest-verified inside the container either way.
+# Everything is still digest-verified inside the container either way — by
+# trinix-fetch, on every use rather than only on download, which is why the
+# staleness gate does not hash this context. See "Named build contexts" in
+# Trinix.Build.psm1 for the argument.
 function Get-SourcesContextArg {
     $cache = Get-TrinixSourceCache
     return @('--build-context', "sources=$cache")
@@ -134,12 +137,23 @@ function Get-SourcesContextArg {
 # than cached: adding a trust anchor should take effect on the next build, and
 # a stale trust store is a failure whose symptom (an application refusing to
 # launch) points nowhere near its cause.
+#
+# Recomputing it on every build is not by itself enough: `-Stage image` rebuilds
+# nothing below itself, so a new anchor only reaches an image if the gate marks
+# base stale first. It does — the trust anchors are hashed into
+# trinix.contexts.sha256 (see "Named build contexts" in Trinix.Build.psm1),
+# read from signing/ rather than from the directory this function stages, so
+# that the check costs no staging.
 function Get-TrustContextArg {
     $staged = Update-TrinixTrustStore -OutputDirectory $outputDir
     return @('--build-context', "trust=$staged")
 }
 
-# Where the app stage's output lands, and where the base stage picks it up.
+# Where the app stage's output lands, and where the base stage picks it up as
+# the `apps` named context. Deliberately not hashed by the staleness gate: a
+# .tdi is a build output whose source base.Dockerfile already COPYs in, and it
+# is deliberately not reproducible, so hashing it would buy no coverage and mark
+# base stale after every app rebuild. Again, see Trinix.Build.psm1.
 function Get-AppsDirectory {
     $apps = Join-Path $outputDir 'apps'
     if (-not (Test-Path $apps)) { New-Item -ItemType Directory -Path $apps -Force | Out-Null }
