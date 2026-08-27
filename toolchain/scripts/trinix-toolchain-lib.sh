@@ -33,26 +33,61 @@ export JOBS
 : "${LINK_JOBS:=2}"
 
 # trinix_prepare_objdir <objdir> <key...> — make an out-of-tree build directory
-# ready, reusing it only if its inputs are unchanged.
+# ready, reusing it only when a *completed* build of the same inputs is in it.
 #
 # Build trees live in a BuildKit cache mount so an interrupted build can resume,
 # and steps skip `configure` when a Makefile already exists. That combination is
-# a trap: bump a pinned version and the stale tree gets reused, so the build
-# silently produces the *previous* version. Keying the directory on its inputs
-# keeps resumability while making a changed pin wipe the tree.
+# a trap in two different ways. Bump a pinned version and the stale tree gets
+# reused, so the build silently produces the *previous* version. Interrupt a
+# build — kill the container, lose the daemon — and the next run resumes into a
+# half-configured tree instead: GCC pass 1 comes back as an installed xgcc with
+# no cc1 beside it, dies with "cannot execute 'cc1'", and dies the same way on
+# every retry forever, because nothing in the loop can tell that tree from a
+# good one.
+#
+# Both failures come from what the stamp was allowed to mean. It used to be
+# written here, before the build, so it recorded "these inputs were configured".
+# It now records "this tree was built and installed" and is written only by
+# trinix_finish_objdir, after the stage's `make install` returns. A directory
+# without a matching stamp is then, by construction, either half-built or built
+# from other inputs — and both want the same treatment.
+#
+# The `[ -f Makefile ] || configure` test at the call sites survives this and
+# means something narrower now: the tree is either empty or complete, so a
+# Makefile can only belong to a complete one. Skipping configure for it is a
+# saving on a known-good tree rather than the licence to resume into rubble it
+# used to be.
+declare -A _trinix_objdir_key
+
 trinix_prepare_objdir() {
     local objdir="$1"; shift
-    local key="$*"
-    local keyfile="$objdir/.trinix-inputs"
+    local stamp="$objdir/.trinix-complete"
 
-    if [ -f "$keyfile" ] && [ "$(cat "$keyfile")" = "$key" ]; then
+    _trinix_objdir_key["$objdir"]="$*"
+
+    if [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$*" ]; then
         return 0
     fi
 
-    [ -e "$objdir" ] && step "inputs changed — discarding stale build tree $objdir"
+    if [ -e "$stamp" ]; then
+        step "inputs changed — discarding stale build tree $objdir"
+    elif [ -e "$objdir" ]; then
+        step "no completed build recorded — discarding partial build tree $objdir"
+    fi
     rm -rf "$objdir"
     mkdir -p "$objdir"
-    printf '%s' "$key" > "$keyfile"
+}
+
+# trinix_finish_objdir <objdir> — record that this tree built and installed.
+#
+# The key is taken from the matching trinix_prepare_objdir rather than passed a
+# second time. A stamp is only worth anything if it covers *every* configure
+# input, and re-spelling a twenty-flag argument list at a second call site is
+# exactly how one of the two copies quietly loses a flag.
+trinix_finish_objdir() {
+    local objdir="${1:?usage: trinix_finish_objdir <objdir>}"
+    printf '%s' "${_trinix_objdir_key[$objdir]?trinix_finish_objdir: no trinix_prepare_objdir ran for $objdir}" \
+        > "$objdir/.trinix-complete"
 }
 
 log()  { printf '\n\033[1;36m==> %s\033[0m\n' "$*"; }

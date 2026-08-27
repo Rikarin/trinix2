@@ -79,6 +79,7 @@ trinix_prepare_objdir "$binutils_obj" "$binutils_src" "${binutils_args[@]}"
     make -j"$JOBS" >/dev/null
     make install >/dev/null
 )
+trinix_finish_objdir "$binutils_obj"
 step "$("$TRINIX_TOOLCHAIN/bin/$TARGET_TRIPLE-as" --version | head -1)"
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,7 @@ trinix_prepare_objdir "$gcc1_obj" "$gcc_src" "${gcc1_args[@]}"
     make -j"$JOBS" all-gcc all-target-libgcc >/dev/null
     make install-gcc install-target-libgcc >/dev/null
 )
+trinix_finish_objdir "$gcc1_obj"
 
 # GCC's internal limits.h is a stub until glibc's headers exist. glibc's own
 # build reads it, so stitch the full version together now (standard LFS step).
@@ -157,6 +159,7 @@ trinix_prepare_objdir "$glibc_obj" "$glibc_src" "$gcc_src" "${glibc_args[@]}"
     make -j"$JOBS" >/dev/null
     make DESTDIR="$SYSROOT" install >/dev/null
 )
+trinix_finish_objdir "$glibc_obj"
 
 # ldd is generated with the build-time prefix baked in; strip it so the script
 # is correct on the installed system.
@@ -191,6 +194,7 @@ trinix_prepare_objdir "$gcc2_obj" "$gcc_src" "${gcc2_args[@]}"
     make -j"$JOBS" >/dev/null
     make install >/dev/null
 )
+trinix_finish_objdir "$gcc2_obj"
 
 # Ship only the runtime libraries into the sysroot — the GCC *driver* stays out
 # of the target entirely.
@@ -271,6 +275,7 @@ trinix_prepare_objdir "$crt_obj" "$llvm_src" "${crt_args[@]}"
 cmake -S "$llvm_src/runtimes" -B "$crt_obj" "${crt_args[@]}" >/dev/null
 ninja -C "$crt_obj" -j"$JOBS" >/dev/null
 ninja -C "$crt_obj" install >/dev/null
+trinix_finish_objdir "$crt_obj"
 
 # 6b. The C++ stack is part of the target system, so it installs into the
 #     sysroot — and with PER_TARGET_RUNTIME_DIR off, so the libraries land in
@@ -295,6 +300,7 @@ trinix_prepare_objdir "$cxx_obj" "$llvm_src" "${cxx_args[@]}"
 cmake -S "$llvm_src/runtimes" -B "$cxx_obj" "${cxx_args[@]}" >/dev/null
 ninja -C "$cxx_obj" -j"$JOBS" >/dev/null
 ninja -C "$cxx_obj" install >/dev/null
+trinix_finish_objdir "$cxx_obj"
 
 # 6c. Make libc++.a self-contained.
 #
