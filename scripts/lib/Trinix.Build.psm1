@@ -279,10 +279,18 @@ function Invoke-TrinixDocker {
 # The label names, spelled once. `trinix.dockerfile` is carried alongside the
 # hash so that an image can say what it claims to be built from, not just that
 # something no longer matches.
+#
+# `trinix.dockerfile.sha256` is the file's raw bytes and always has been; it
+# still names the exact file an image was built from. What the gate *compares*
+# is `trinix.dockerfile.content.sha256`, the hash of the build-relevant content
+# (see Get-TrinixDockerfileHash). Two labels rather than a redefinition of one,
+# so that an image stamped before this existed is recognisable as such instead
+# of silently failing a comparison it was never stamped for.
 $script:ProvenanceLabel = [pscustomobject]@{
     Stage       = 'trinix.stage'
     Dockerfile  = 'trinix.dockerfile'
     Hash        = 'trinix.dockerfile.sha256'
+    Content     = 'trinix.dockerfile.content.sha256'
     BaseImage   = 'trinix.base.image'
     BaseContent = 'trinix.base.content'
 }
@@ -328,14 +336,189 @@ $script:StageGraph = [ordered]@{
     }
 }
 
+<#
+    Why the recorded hash is not a hash of the file's bytes.
+
+    A byte hash marks a stage stale when a *comment* is edited, and these
+    Dockerfiles are half prose: the gate then demands a 39-minute LLVM rebuild
+    to pay for a corrected sentence. That is the failure mode the gate was
+    written to avoid — a guard that fails spuriously trains you to work around
+    it — and it was stricter than BuildKit, whose cache key comes from the
+    parsed instructions and survives a comment edit untouched.
+
+    So what is hashed is the build-relevant content: every line whose first
+    non-whitespace character is `#` is dropped before hashing.
+
+    ⚠ The carve-out that makes this more than a one-liner: a parser directive is
+    *not* a comment. `# syntax=docker/dockerfile:1.10` chooses the frontend that
+    parses the file, `# escape=` changes what a line continuation is, and both
+    genuinely change the build; image.Dockerfile opens with the first. Directives
+    exist only in the leading block, before any instruction, blank line or
+    ordinary comment, and are `# key=value`. They stay in the hash. Do not
+    "simplify" this back to Get-FileHash.
+
+    Everything else is left alone on purpose. Trailing whitespace is load-bearing
+    (a space after a `\` is no longer a line continuation), blank lines cost
+    nothing to keep, and every further normalisation is another chance to call
+    two genuinely different files the same.
+#>
+
+# A parser directive, matched the way BuildKit matches one: `# key=value`, with
+# non-line-breaking whitespace permitted around the key and the `=`, and a
+# non-empty value. Deliberately liberal — leading whitespace before the `#`, and
+# keys BuildKit does not know, are matched here and kept. Over-matching keeps a
+# line in the hash, which can only cost a rebuild that was not needed;
+# under-matching would hide a real change, which is the failure that matters.
+$script:DockerfileDirective = [regex]::new('^\s*#\s*[a-zA-Z][a-zA-Z0-9]*\s*=\s*\S.*$')
+
+# A heredoc opener. Inside a heredoc body a leading `#` is program text — a shell
+# comment the container will run past — and BuildKit keeps it, so stripping it
+# would let two different scripts hash the same. Rather than parse heredoc
+# bodies, a Dockerfile containing anything resembling an opener is hashed whole;
+# `<<` in a string costs that file the comment carve-out, and nothing else. No
+# Dockerfile here uses one today.
+$script:DockerfileHeredoc = [regex]::new('<<')
+
+function Get-TrinixDockerfileContent {
+    <#  .SYNOPSIS  A Dockerfile's build-relevant text: comment lines dropped, parser directives kept. #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][AllowEmptyString()][string]$Text)
+
+    $kept = [System.Collections.Generic.List[string]]::new()
+    $directives = $true
+
+    foreach ($line in $Text.Split("`n")) {
+        # `\r` off the end only for the decision; the line itself is kept exactly
+        # as it was, so a CRLF file and an LF file remain different files.
+        $bare = $line.TrimEnd("`r")
+
+        if ($directives) {
+            if ($script:DockerfileDirective.IsMatch($bare)) { $kept.Add($line); continue }
+            # A comment, a blank line or an instruction closes the block, and
+            # anything directive-shaped after it is an ordinary comment.
+            $directives = $false
+        }
+
+        if ($bare.TrimStart().StartsWith('#')) { continue }
+        if ($script:DockerfileHeredoc.IsMatch($bare)) { return $Text }
+        $kept.Add($line)
+    }
+
+    return ($kept -join "`n")
+}
+
 function Get-TrinixDockerfileHash {
-    <#  .SYNOPSIS  SHA-256 of a Dockerfile's bytes, as `sha256:<hex>`. #>
+    <#  .SYNOPSIS  SHA-256 of a Dockerfile's build-relevant content, as `sha256:<hex>`. #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { throw "No such Dockerfile: $Path" }
+    return Get-TrinixDockerfileContentHash -Bytes ([System.IO.File]::ReadAllBytes($Path))
+}
+
+function Get-TrinixDockerfileByteHash {
+    <#  .SYNOPSIS  SHA-256 of a Dockerfile's raw bytes, as `sha256:<hex>`. #>
     [CmdletBinding()]
     [OutputType([string])]
     param([Parameter(Mandatory)][string]$Path)
 
     if (-not (Test-Path -LiteralPath $Path)) { throw "No such Dockerfile: $Path" }
     return 'sha256:' + (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Get-TrinixDockerfileContentHash {
+    <#  .SYNOPSIS  The build-relevant hash of Dockerfile bytes, wherever they came from. #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][AllowEmptyCollection()][byte[]]$Bytes)
+
+    # A UTF-8 BOM is not content: BuildKit ignores it, and left in place it would
+    # push the first line out of directive position and turn `# syntax=` into a
+    # comment this function then dropped.
+    $text = [System.Text.Encoding]::UTF8.GetString($Bytes).TrimStart([char]0xFEFF)
+    $content = [System.Text.Encoding]::UTF8.GetBytes((Get-TrinixDockerfileContent -Text $text))
+    return 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($content)).ToLowerInvariant()
+}
+
+function Get-TrinixGitBlob {
+    <#  .SYNOPSIS  The bytes of a git blob, or $null if it cannot be read. #>
+    [CmdletBinding()]
+    [OutputType([byte[]])]
+    param(
+        [Parameter(Mandatory)][string]$Root,
+        [Parameter(Mandatory)][string]$Blob
+    )
+
+    # Read as a stream rather than through the pipeline: a native command's
+    # output reaches PowerShell as decoded, re-terminated lines, and a hash of
+    # that is a hash of something other than the file.
+    $start = [System.Diagnostics.ProcessStartInfo]::new('git')
+    $start.WorkingDirectory = $Root
+    $start.UseShellExecute = $false
+    $start.RedirectStandardOutput = $true
+    $start.RedirectStandardError = $true
+    foreach ($argument in @('cat-file', 'blob', $Blob)) { $start.ArgumentList.Add($argument) }
+
+    $process = [System.Diagnostics.Process]::Start($start)
+    $buffer = [System.IO.MemoryStream]::new()
+    $process.StandardOutput.BaseStream.CopyTo($buffer)
+    $process.StandardError.ReadToEnd() | Out-Null
+    $process.WaitForExit()
+    if ($process.ExitCode -ne 0) { return $null }
+
+    return $buffer.ToArray()
+}
+
+function Resolve-TrinixLegacyContentHash {
+    <#
+        .SYNOPSIS  The content hash of the committed revision of a Dockerfile whose bytes hash to $ByteHash, or $null.
+        .DESCRIPTION
+            Only for images stamped before `trinix.dockerfile.content.sha256`
+            existed, and only ever reached when their recorded byte hash no
+            longer matches the file. Such a stamp names an exact revision of an
+            exact file; if git still holds it, its build-relevant content is
+            knowable, and comparing that to the working copy answers the only
+            question the gate ever asks — did what the build reads change?
+
+            This is what keeps the change from costing what it was written to
+            avoid: without it, redefining the hash would mark every existing
+            stage stale and demand the rebuild chain it exists to prevent. It
+            retires itself — every image built from here on carries the content
+            hash and never comes down this path — and it forgives nothing it
+            cannot prove: a revision git does not have, a build from an
+            uncommitted file, or no git at all all leave the stamp judged on
+            bytes, exactly as before.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$ByteHash
+    )
+
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return $null }
+
+    $root = Get-TrinixRoot
+    $relative = Get-TrinixRelativePath -Path $Path
+    $revisions = & git -C $root log --all --format=%H -- $relative 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $revisions) { return $null }
+
+    $seen = @{}
+    foreach ($revision in $revisions) {
+        $blob = & git -C $root rev-parse --verify --quiet "${revision}:$relative" 2>$null
+        if (-not $blob -or $seen.ContainsKey($blob)) { continue }
+        $seen[$blob] = $true
+
+        $bytes = Get-TrinixGitBlob -Root $root -Blob $blob
+        if ($null -eq $bytes) { continue }
+
+        $digest = 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+        if ($digest -eq $ByteHash) { return Get-TrinixDockerfileContentHash -Bytes $bytes }
+    }
+
+    return $null
 }
 
 function Get-TrinixImageContentId {
@@ -406,7 +589,8 @@ function New-TrinixProvenanceLabel {
     return @(
         '--label', "$($script:ProvenanceLabel.Stage)=$Stage",
         '--label', "$($script:ProvenanceLabel.Dockerfile)=$(Get-TrinixRelativePath -Path $Dockerfile)",
-        '--label', "$($script:ProvenanceLabel.Hash)=$(Get-TrinixDockerfileHash -Path $Dockerfile)",
+        '--label', "$($script:ProvenanceLabel.Hash)=$(Get-TrinixDockerfileByteHash -Path $Dockerfile)",
+        '--label', "$($script:ProvenanceLabel.Content)=$(Get-TrinixDockerfileHash -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.BaseImage)=$BaseImage",
         '--label', "$($script:ProvenanceLabel.BaseContent)=$content"
     )
@@ -448,12 +632,32 @@ function Test-TrinixStageProvenance {
     # the image is not known to be wrong, it is unverifiable, and an
     # unverifiable image is exactly the thing that cost hours twice.
     if (-not $labels.ContainsKey($script:ProvenanceLabel.Hash)) {
-        $reasons.Add("carries no build-provenance labels, so it predates this check and nothing about it can be verified. Rebuild it once to stamp it.")
+        $reasons.Add("carries no build-provenance labels, so it predates this check and nothing about it can be verified. Stamping it means a real rebuild of it and everything below it, not a relabel.")
         return $reasons.ToArray()
     }
 
-    $recordedHash = $labels[$script:ProvenanceLabel.Hash]
-    $currentHash = Get-TrinixDockerfileHash -Path $Dockerfile
+    if ($labels.ContainsKey($script:ProvenanceLabel.Content)) {
+        $recordedHash = $labels[$script:ProvenanceLabel.Content]
+        $currentHash = Get-TrinixDockerfileHash -Path $Dockerfile
+    } else {
+        # Stamped before the comparison stopped being over raw bytes. Bytes are
+        # all this image recorded, so bytes are what it is judged on — and only
+        # if those bytes turn out to be a revision git still holds is the
+        # content hash it *would* carry recoverable. Nothing is assumed: an
+        # unresolvable legacy stamp stays as strict as it was the day it was
+        # made, which for an untouched file is already a match.
+        $recordedHash = $labels[$script:ProvenanceLabel.Hash]
+        $currentHash = Get-TrinixDockerfileByteHash -Path $Dockerfile
+
+        if ($recordedHash -ne $currentHash) {
+            $stamped = Resolve-TrinixLegacyContentHash -Path $Dockerfile -ByteHash $recordedHash
+            if ($stamped) {
+                $recordedHash = $stamped
+                $currentHash = Get-TrinixDockerfileHash -Path $Dockerfile
+            }
+        }
+    }
+
     if ($recordedHash -ne $currentHash) {
         $reasons.Add("$relative has changed since it was built (recorded $recordedHash, current $currentHash).")
     }
@@ -815,7 +1019,8 @@ Export-ModuleMember -Function `
     Get-TrinixRoot, Get-TrinixSourceCache, Get-TrinixArch, `
     Get-TrinixSourceManifestPath, Get-TrinixSource, Resolve-TrinixSourceUrl, Resolve-TrinixSourceFileName, Set-TrinixSourceChecksum, `
     Assert-TrinixDocker, Assert-TrinixDiskSpace, Invoke-TrinixDocker, `
-    Get-TrinixDockerfileHash, Get-TrinixImageContentId, Get-TrinixImageLabel, Get-TrinixRelativePath, `
+    Get-TrinixDockerfileContent, Get-TrinixDockerfileHash, Get-TrinixDockerfileByteHash, `
+    Get-TrinixImageContentId, Get-TrinixImageLabel, Get-TrinixRelativePath, `
     New-TrinixProvenanceLabel, Test-TrinixStageProvenance, `
     Get-TrinixStage, Resolve-TrinixExternalBase, Get-TrinixStageChain, Get-TrinixStageLabelArgs, Assert-TrinixStageCurrent, `
     Get-TrinixSigningDirectory, Get-TrinixSigningIdentity, Assert-TrinixSigningIdentity, Update-TrinixTrustStore

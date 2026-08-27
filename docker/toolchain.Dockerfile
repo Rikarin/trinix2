@@ -18,8 +18,11 @@
 #
 # Long compiles live in cache mounts, not in layers: the image ends up holding
 # the *installed* toolchain and sysroots, not multi-gigabyte object trees. The
-# cache mounts also make an interrupted build resumable — ninja and make pick up
-# where they stopped.
+# cache mounts make an interrupted LLVM build resumable — ninja picks up where it
+# stopped. The sysroot stages deliberately do not resume: each object dir carries
+# a completion stamp, and a tree without one is discarded rather than built on,
+# because resuming into a half-configured GCC is how every later attempt comes to
+# die on `cannot execute 'cc1'`.
 #
 # Build via ./scripts/build.ps1 -Stage llvm,toolchain — it wires up the
 # `sources` build context that seeds the download cache.
