@@ -258,6 +258,15 @@ that reads as a mysterious `mkfs.btrfs: command not found` if nobody wrote it
 down. The order that works from a stale tree is
 `-Stage toolchain`, then `-Stage base`, then `-Stage image`.
 
+Since 2026-08-26 it no longer has to read as a mystery. `Assert-TrinixStageCurrent`
+stamps each stage image with the digest of the Dockerfile that built it, of the files
+that Dockerfile copies in, and of its base image's layers, and refuses a build whose
+cached ancestors no longer match — so the second `btrfs-progs` would stop `-Stage image`
+with the name of the stale stage and that same command order printed, instead of with
+`mkfs.btrfs: command not found` an hour into the build. See
+[docs/plan/16](../docs/plan/16-build-ci-and-testing.md) § The gate that exists for what
+it still does not cover.
+
 Partition GUIDs, filesystem UUIDs and the ext4 hash seed are fixed constants
 rather than values a tool generated from `/dev/urandom` — so two builds of the
 same tree differ only where file timestamps do. Closing that last gap needs

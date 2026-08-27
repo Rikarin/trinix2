@@ -50,6 +50,14 @@ installed on the host, and nothing is built outside a container. PowerShell 7.4+
 needed to run the orchestrator scripts, and ships with macOS via `brew install
 powershell`; the same scripts also run *inside* the build container.
 
+Free disk is the one requirement the scripts enforce rather than assume. `-Stage base`
+and `-Stage image` refuse to start with less than **30 GiB** free on the volume holding
+this repository, measured on the host and not in the container — Docker Desktop's Linux
+VM reports the free space of its own virtual disk, which is not your Mac's, and a build
+that trusts that number will fill the host to zero bytes rather than stop. There is no
+override flag; free the space. ⚠ `llvm` and `toolchain` are not guarded, because no
+threshold has been measured for them, and `llvm` is plausibly the largest stage of all.
+
 Booting the finished image needs QEMU, which also runs from a container — see
 [Boot it](#boot-it). UTM stays the one optional host tool, and is nicer for
 graphical testing once Phase 4 has a compositor.

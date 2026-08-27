@@ -20,6 +20,11 @@ orchestrators in [`scripts/`](../scripts/) and [`.github/workflows/build.yml`](.
 or both; every number in Part 1 came from a command in this working tree, not from a document. Where
 a row is a judgement it says so.
 
+⚠ **Three rows were added 2026-08-27 at `cce201c` without re-running that sweep** — the stage-image
+staleness gate and host disk guard in 1.1, and the sysroot completion stamp in 1.2. They were read
+from the code and from the six commits that built it; the figures they quote are the ones those
+commits measured, and where something has not been measured the row says which part.
+
 ## Legend
 
 | | Meaning |
@@ -59,8 +64,9 @@ engineer-months of work; the tree contains Phases 0–6, which those documents d
 | **UI tier** (`Vixen.Ui.Testing`, headless) | ⛔ | — | The package is not in [`vendor/vixen/`](../vendor/vixen/). See 1.6 |
 | `CheckAot` | ⬜ | — | ⚠ **No project sets `PublishAot`.** [`src/publish.sh`](../src/publish.sh) publishes all five components framework-dependent, and `Trinix.Compositor.csproj`'s own header explains why: NativeAOT cannot cross-compile between architectures, and one container serving both targets is what the tree is organised around. [03](plan/03-shell-and-window-management.md) says the compositor is NativeAOT and that this is "already true" |
 | Screenshot goldens, latency gates, `trinix doctor`, sandbox escape suite | ⬜ | — | [16](plan/16-build-ci-and-testing.md) § The gates. None started |
-| **Stage-image staleness gate** | ⬜ | — | Still owed. `Assert-HostToolsCurrent` ([scripts/build.ps1:173](../scripts/build.ps1)) rebuilds `host-tools`, but `base.Dockerfile` starts `FROM ${TOOLCHAIN_IMAGE}` — so a host-tools fix cannot reach the stage that compiles recipes. Doc 16 documents two incidents; nothing in the tree stops a third |
-| ⚠ Nothing has run on Linux | — | — | Every measurement above, and every one in doc 16, is macOS/arm64. CI has never completed a run |
+| **Stage-image staleness gate** | 🟡 | [scripts/lib/Trinix.Build.psm1](../scripts/lib/Trinix.Build.psm1) | Built 2026-08-26/27, in answer to doc 16's two incidents. `Assert-TrinixStageCurrent` stamps each stage image with four digests and refuses to build on a cached **ancestor** whose stamp no longer matches the tree, naming the stale stage and the command that fixes it — it refuses rather than rebuilds, because the cheapest link in the chain is a 37-minute LLVM build. The four: the Dockerfile hashed with comment lines dropped and parser directives kept significant; every file the Dockerfile COPYs from the build context, honouring `.dockerignore`; the `trust=` named context; and the base image's identity as a hash over its **rootfs layer digests** rather than `.Id`, which three no-op rebuilds proved unstable. `Assert-HostToolsCurrent` ([scripts/build.ps1:207](../scripts/build.ps1)) is kept with a narrower role — it is what makes `host-tools` a trustworthy reference point, not a check for anything downstream — and `Assert-TrinixAppsCurrent`, a one-line passthrough that promised a check it never performed, is gone. **🟡 rather than ✅, on four counts**: build args (`DEBIAN_TAG`, `HOST_TOOLS_IMAGE`, `TOOLCHAIN_IMAGE`) are not recorded; **`app` and `image` are never stamped or checked at all** — `Image` is `$null` in the stage graph, their inputs digests computed and consumed by nothing — and `docker/vm.Dockerfile` is outside the graph entirely; the signing identity is not hashed, only the trust anchors; and no restamp was forced, so **the three cached images on this machine carry only the first version's labels and today's coverage does not reach them until each is next rebuilt for a reason of its own**. ⚠ `trinix/toolchain-arm64:dev` passes today *only* because git still holds the revision its legacy byte stamp names, found by walking `git log --all`; lose that history and it goes stale. See [16](plan/16-build-ci-and-testing.md) § The gate that exists |
+| **Host disk guard** | 🟡 | [scripts/lib/Trinix.Build.psm1](../scripts/lib/Trinix.Build.psm1) | `Assert-TrinixDiskSpace`, at the top of `Build-Base` and `Build-Image`: refuses a build with less than **30 GiB** free on the host volume holding the repository. Measured on the host with `DriveInfo` and never in the container, which is the whole point — Docker Desktop's VM reports its own 814G virtual disk while the file backing that disk fills the Mac, so an in-VM `df` reassures right up until the host is at zero bytes. 30 GiB from one measurement: the image stage peaked at 22 GiB and retains a 5.876 GiB image. No override switch and no environment variable, deliberately. ⚠ **A preflight, not a watchdog.** It would not have prevented the build it comes from, which started with plenty of room and died mid-export. ⚠ `llvm` and `toolchain` are unguarded and llvm is plausibly the largest stage of all — no threshold was ever measured for them, and inventing one is how a guard learns to fail spuriously |
+| ⚠ Nothing has run on Linux | — | — | Every measurement above, and every one in doc 16, is macOS/arm64. CI has never completed a run — including the disk guard, which CI reaches on the `base,image` job |
 
 ## 1.2 Toolchain and base system
 
@@ -68,6 +74,7 @@ engineer-months of work; the tree contains Phases 0–6, which those documents d
 |---|---|---|---|
 | One LLVM/Clang/LLD, both target triples | ✅ | [toolchain/scripts/build-llvm.sh](../toolchain/scripts/build-llvm.sh) | LLVM 21.1.0. `aarch64-trinix-linux-gnu` and `x86_64-trinix-linux-gnu` |
 | Minimal cross-GCC, for glibc only | ✅ | [toolchain/scripts/build-sysroot.sh](../toolchain/scripts/build-sysroot.sh) | glibc 2.41. Rebuilt once to harvest `libgcc_s`/`libstdc++` as compat libraries for Microsoft's .NET binaries |
+| Sysroot object dirs carry a **completion** stamp, not a configuration one | ✅ | [toolchain/scripts/trinix-toolchain-lib.sh](../toolchain/scripts/trinix-toolchain-lib.sh) | `trinix_prepare_objdir` wrote its key *before* the build ran, so the stamp recorded that inputs had been configured rather than that anything had finished. A sysroot build killed mid-flight then left a matching key, `[ -f Makefile ] \|\| configure` skipped reconfiguration, make resumed into rubble, and every retry afterwards died on `xgcc: fatal error: cannot execute 'cc1'` — a message that points at a missing binary rather than at a build tree that was never finished. `trinix_finish_objdir` now writes `.trinix-complete` after a stage's install succeeds, at all six call sites, and a tree without one is discarded on sight. **It trades resumability for correctness**: an interrupted sysroot step restarts from scratch by design, which `docker/toolchain.Dockerfile`'s comment now says. ⚠ The stamp-matched reuse path has never been exercised by a real build — every objdir was wiped the run that proved the fix — and is covered only by a seven-case container unit test |
 | `toolchain-sanity.sh` — static and dynamic C/C++ hello world under `qemu-user`, both arches | ✅ | [toolchain/scripts/toolchain-sanity.sh](../toolchain/scripts/toolchain-sanity.sh) | Also asserts Clang-built C++ uses libc++/libunwind rather than falling back to GCC's |
 | **57 base recipes** | ✅ | [base/recipes/](../base/recipes/) | 58 directories, minus `_template`, which `all_recipes()` skips. [00](plan/00-vision-and-principles.md) says the count is "kept near sixty"; it is |
 | **61 pinned sources**, version + sha256 | ✅ | [base/sources.json](../base/sources.json) | `trinix-fetch` is the only sanctioned download and fails hard on a digest mismatch |
@@ -402,10 +409,8 @@ Judgement throughout, and ordered by what unblocks the most.
    (accessibility and the string catalogue), and it unblocks doc 16's UI tier, doc 07's Files, doc
    11's System Monitor and Text Edit, and every `.vxml` in the plan. It is also the only item in this
    list that resolves register rows — #35 and #46–#48 — with a build rather than an edit.
-5. **The stage-image staleness gate** (doc 16). Two documented incidents, hours each, both invisible
-   until something failed for an unrelated reason. It is a digest in an image label.
-6. **`CheckAot`** (doc 16, inside 1.5 EM). Nothing sets `PublishAot` anywhere, so the AOT decision the
+5. **`CheckAot`** (doc 16, inside 1.5 EM). Nothing sets `PublishAot` anywhere, so the AOT decision the
    compositor is designed around has never been proved by a publish — and doc 03 states it as fact.
-7. **Correcting the register in Part 3.** Fifty-seven entries, most of them a sentence. Doc 21's Btrfs
+6. **Correcting the register in Part 3.** Fifty-seven entries, most of them a sentence. Doc 21's Btrfs
    bullets (#1, #2) are the urgent ones, because they are the load-bearing premise of an audit that
    other documents now cite.

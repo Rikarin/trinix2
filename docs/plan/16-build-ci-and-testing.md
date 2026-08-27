@@ -77,12 +77,18 @@ ritual that moves it across, and from that day a removal is a breaking change ra
 to be rewritten because a case-insensitive filesystem made them pass for the wrong reason. CI is the first
 Linux run and should be read as a first run.
 
-## A gate that does not exist, found the hard way
+## A gate that did not exist, found the hard way — twice — and now does
 
-⚠ **`Assert-HostToolsCurrent` gives confidence it cannot deliver.** It rebuilds `host-tools` on every
+The two incidents below are kept in full, because they are the argument for the gate and the argument
+is the cost of not having had one. What was built out of them, and what it still cannot see, is in
+[the section after](#the-gate-that-exists).
+
+⚠ **`Assert-HostToolsCurrent` gave confidence it could not deliver.** It rebuilds `host-tools` on every
 base build — but `docker/base.Dockerfile` starts `FROM ${TOOLCHAIN_IMAGE}`, so a fix to
 `host-tools.Dockerfile` **cannot reach the stage where recipes actually compile** without a toolchain
-rebuild. There is a staleness check for the image that is not used and none for the image that is.
+rebuild. There was a staleness check for the image that is not used and none for the image that is.
+The function is still there and still runs on every base build; what changed is that it no longer
+pretends to be the check — see below for the narrower and load-bearing job it does now.
 
 Measured 2026-08-25 on a development machine: `trinix/toolchain-arm64:dev` dated 2026-07-30 and
 `trinix/base-arm64:dev` dated 2026-08-02, against `c18da30` of 2026-08-24 — the commit that added
@@ -92,12 +98,16 @@ probe walks candidate interpreters, `continue`s past any that cannot import thos
 then blames the version. Three weeks of a fix sitting in the tree unable to reach the place that needed
 it, and neither image is old enough to look obviously wrong.
 
-The gate: **a stage image must record the digest of the Dockerfile and the base image it was built
-from, and a build must refuse — or rebuild — when either has moved.** Cheap, and it is the difference
-between a slow build and a build that is quietly testing three-week-old inputs.
+The gate this document asked for, in one sentence: **a stage image must record the digest of the
+Dockerfile and the base image it was built from, and a build must refuse — or rebuild — when either
+has moved.** Cheap, and it is the difference between a slow build and a build that is quietly testing
+three-week-old inputs. That requirement was met and then exceeded — a Dockerfile hash alone would not
+have caught the first incident, because `toolchain.Dockerfile` never changed; it was the host-tools
+image underneath it that moved — and the shipped gate records four digests rather than two.
 
 ⚠ It also means a local build and CI can disagree indefinitely without anyone noticing, which is the
-more expensive version of the same fault.
+more expensive version of the same fault. **Still true**: nothing in the gate involves a registry
+digest, and both halves of a comparison are always local.
 
 ⚠️ **It happened a second time, which makes it a pattern rather than an incident.** The Btrfs work put
 `btrfs-progs` into `host-tools.Dockerfile` so that image assembly could call `mkfs.btrfs`. It could
@@ -107,7 +117,136 @@ all. `-Stage base` rebuilds host-tools, which again **looks** sufficient and is 
 assembly meant a full toolchain rebuild, and therefore an LLVM rebuild, for one apt package.
 
 Two independent instances in one week, both costing hours, both invisible until something failed for
-an unrelated-looking reason. The gate below is not a nicety.
+an unrelated-looking reason. The gate that came out of them is not a nicety.
+
+## The gate that exists
+
+Built 2026-08-26/27 in four commits — `186fc92`, `e4896a4`, `e8d9667`, `cce201c` — as
+`Assert-TrinixStageCurrent` in [`scripts/lib/Trinix.Build.psm1`](../../scripts/lib/Trinix.Build.psm1),
+called at the top of every `Build-*` function below `host-tools` in
+[`scripts/build.ps1`](../../scripts/build.ps1). It checks every *ancestor* of the stage being built,
+not only its parent, because `-Stage image` rebuilds nothing below `base` and a host-tools edit three
+links down is exactly the failure it exists for.
+
+A stage image is stamped with eight labels: its stage name, the Dockerfile that built it, the ref of
+its base image, the Dockerfile's raw byte hash — which is what an image stamped before the content
+hash existed is still judged on — and **four digests**, `trinix.dockerfile.content.sha256`,
+`trinix.inputs.sha256`, `trinix.contexts.sha256` and `trinix.base.content`. Before a build, every
+cached image below the requested stage is inspected and compared against the tree; a mismatch names
+each stale stage, what moved, and the exact commands in order.
+
+**It refuses; it does not rebuild.** The cheapest link in this chain is a 37-minute LLVM build, and a
+gate that silently spends that is its own hazard. That choice is also why the *stricter* option was
+rejected everywhere it would have cost time for nothing:
+
+- **The base image's identity is a hash over its rootfs layer digests, not its image ID.** Measured:
+  three no-op rebuilds of one Dockerfile produced three different `.Id` values while `.RootFS.Layers`
+  stayed byte-identical. Recording `.Id` would have marked every stage stale after any no-op rebuild
+  of its parent — a gate that cries wolf until somebody deletes it. Labels are image config, not a
+  layer, so stamping neither invalidates BuildKit's cache nor makes a stage look stale to its own
+  children.
+- **The Dockerfile is hashed semantically, not by its bytes.** Comment lines are dropped, because a
+  five-line prose correction in `docker/toolchain.Dockerfile` demanded a 39-minute LLVM recompile
+  before this existed, and BuildKit — whose cache key comes from parsed instructions — would not have
+  rebuilt anything. Parser directives are *not* comments and are load-bearing: `# syntax=` in the
+  leading block changes the hash, and the same text after an ordinary comment does not, which is
+  exactly what BuildKit does with it. A Dockerfile containing a heredoc is hashed whole instead,
+  because inside a heredoc body a leading `#` is program text.
+- **Everything the Dockerfile COPYs from the build context is hashed**, derived from the Dockerfile's
+  own `COPY`/`ADD` instructions rather than from a list maintained beside it — a parallel list would
+  be correct the day it was written and silently wrong after the next edit, which is the drift this
+  gate exists to catch. `.dockerignore` is honoured, and that is load-bearing rather than tidy: `src`
+  contributes 210 files today and would contribute thousands the first time anyone runs `dotnet build`
+  on the host. Resolved: host-tools 9 files, toolchain 5, app 258, base 333, image 2. Anything the
+  parser cannot read — a `COPY --exclude`, the JSON form, a glob matching nothing — is refused loudly,
+  because under-hashing is the one failure this must never have.
+- **Of the three named contexts, one is hashed and the other two argue their case in the source.**
+  `trust=` is hashed, from `signing/` rather than from the staged output, so adding a trust anchor now
+  marks `base` stale. `sources=` is not: [`docker/scripts/trinix-fetch`](../../docker/scripts/trinix-fetch)
+  re-verifies every archive's sha256 against `base/sources.json` on *every* use rather than only on
+  download, so a swapped tarball fails the build loudly, and `sources.json` itself is already in the
+  inputs hash. `apps=` is not: the `.tdi` bundles are deliberately not reproducible — the signature is
+  randomised ECDSA, which is `check-determinism.ps1`'s whole caveat — and `Build-App` runs immediately
+  after the gate, so hashing them would leave `base` stale the instant it finished building. Both
+  exclusions are written down where they are implemented. A context named in a Dockerfile that the gate
+  does not recognise is refused by name, so a fourth cannot go unnoticed the way these three did.
+
+`Assert-HostToolsCurrent` was kept and its role rewritten rather than deleted. It is no longer a
+staleness check for anything downstream; it is what makes `host-tools` a trustworthy reference point,
+since judging a cached toolchain against a host-tools image that is itself behind the tree is
+meaningless. In `Build-Base` it now runs *before* the gate for that reason. `Assert-TrinixAppsCurrent`
+— a one-line passthrough to `Build-App` whose name promised a check it never performed, the same
+fiction this section criticises one layer down — was deleted, and its comment moved to the call site.
+
+### What the gate still does not cover
+
+⚠ **Build args are not recorded.** `DEBIAN_TAG`, `HOST_TOOLS_IMAGE` and `TOOLCHAIN_IMAGE` change what
+a stage is without changing its Dockerfile, its inputs or its base, so an image built with a non-default
+`--build-arg` is indistinguishable from a default one. Architecture is the exception, and only
+implicitly: `toolchain` and `base` carry it in their tags.
+
+⚠ **The `app` and `image` stages are never stamped or checked at all.** Both end `FROM scratch` with a
+local output, so they have no cached image — `Image` is `$null` in the stage graph — and their inputs
+digests are computed correctly and consumed by nothing. `docker/vm.Dockerfile` is outside the stage
+graph entirely. Both pre-existing, neither closed.
+
+⚠ **The signing identity is not hashed**, only the trust anchors. Re-issuing a developer identity under
+the same root changes `.tdi` bytes but not what the image trusts; re-issuing the root does move the hash.
+
+⚠ **This is metadata, not verification.** It compares labels; it does not prove an image's contents
+match its Dockerfile. A hand-run `docker build` or a `docker tag` carries whatever labels it was given.
+
+⚠ **`llvm` and `toolchain` share one Dockerfile and therefore one inputs digest**, so editing
+`toolchain/scripts/build-sysroot.sh` marks the llvm image stale though the llvm target never reads it.
+Over-coverage rather than a hole, and the same shape the Dockerfile hash already had.
+
+⚠ **No restamp is forced, and that has a cost this machine is currently paying.** Each new digest
+landed in a *new* label, compared only when the image carries it, so that adding a check did not
+mismatch every stamped image at once and demand exactly the full-chain rebuild the gate exists to
+avoid. The consequence is that the three cached images here carry only the labels of the first
+version: **today's coverage does not apply to them until each is next rebuilt for a reason of its
+own.** One `-Stage base -Arch arm64` makes it live for `base`.
+
+⚠ **And one of those legacy stamps is standing on git history.** `trinix/toolchain-arm64:dev` passes
+the gate today *only* because git still holds the revision its recorded byte hash names, which
+`Resolve-TrinixLegacyContentHash` walks `git log --all` to find so it can compare content hashes
+instead. Lose that history — or rebuild from an uncommitted Dockerfile — and the image goes stale.
+
+## A disk guard, and what a preflight cannot do
+
+A build filled this Mac to zero bytes and needed manual recovery, and three agents in a row then
+hand-rolled the same external `df` watchdog, which is the tell that the check belonged in the scripts.
+`Assert-TrinixDiskSpace` (`b09a517`) runs at the top of `Build-Base` and `Build-Image` and refuses a
+build that starts with less than **30 GiB** free.
+
+The measurement is the substance. Docker Desktop's Linux VM reports the size of its virtual disk —
+814G on this machine — while the file backing that disk grows on the host volume, so an in-VM `df`
+reads hundreds of gigabytes free right up until the Mac is at zero. **A check that runs in the
+container is worse than none, because it reassures.** So it measures the host volume containing the
+repository, which is also where Docker's own disk image lives here. The 30 GiB comes from one
+observation rather than an invention: the image stage peaked at 22 GiB and retains a 5.876 GiB image.
+There is deliberately no override switch and no environment variable — bypassing it means editing the
+file, which leaves a diff — because an agent silently disarming its own guard is how the disk reached
+zero in the first place.
+
+⚠ **It is a preflight, not a watchdog, and it would not have prevented the failure it comes from.**
+That build started with plenty of room and died mid-export. A run that starts at 31 GiB and needs 35
+passes this check and fills the disk anyway.
+
+⚠ **`llvm` and `toolchain` are unguarded, and llvm is plausibly the largest stage of all.** No
+threshold was invented for them on purpose: a guard that fails spuriously trains you to work around
+it, which ends where disabling it ends. Measuring their peaks is what closes this — and it is the same
+argument that later forced the Dockerfile hash to ignore comments.
+
+⚠ **22 GiB is a single observation with a warm BuildKit cache**; `-NoCache` or a cold cache will
+exceed it, and `base` shares image's number rather than one of its own on the argument that it
+produces image's input and runs `Build-App` inside itself, so it is at least as large. And the volume
+holding the repository is *assumed* to be the volume Docker writes to — true on this machine and
+verified, false the day the repository moves to an external drive while Docker's data stays internal.
+
+⚠ **Untested off macOS.** CI runs `./scripts/build.ps1 -Stage base,image`, so the same guard runs on a
+GitHub runner against whatever that runner's root volume reports free. Nothing has measured it,
+because — as everywhere else in this document — CI has never completed a run.
 
 ## What is still owed
 
