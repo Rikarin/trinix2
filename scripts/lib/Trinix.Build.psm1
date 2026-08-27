@@ -286,11 +286,19 @@ function Invoke-TrinixDocker {
 # (see Get-TrinixDockerfileHash). Two labels rather than a redefinition of one,
 # so that an image stamped before this existed is recognisable as such instead
 # of silently failing a comparison it was never stamped for.
+#
+# `trinix.inputs.sha256` covers what the Dockerfile COPYs in (see
+# Get-TrinixDockerfileInputsHash), and is a third label for exactly the same
+# reason: folded into the content hash it would mismatch every image already
+# stamped and demand the full host-tools → toolchain → base rebuild that this
+# section exists to avoid. An image without it is judged on the checks it was
+# stamped for, and gains this one when it is next rebuilt for a real reason.
 $script:ProvenanceLabel = [pscustomobject]@{
     Stage       = 'trinix.stage'
     Dockerfile  = 'trinix.dockerfile'
     Hash        = 'trinix.dockerfile.sha256'
     Content     = 'trinix.dockerfile.content.sha256'
+    Inputs      = 'trinix.inputs.sha256'
     BaseImage   = 'trinix.base.image'
     BaseContent = 'trinix.base.content'
 }
@@ -439,6 +447,382 @@ function Get-TrinixDockerfileContentHash {
     # comment this function then dropped.
     $text = [System.Text.Encoding]::UTF8.GetString($Bytes).TrimStart([char]0xFEFF)
     $content = [System.Text.Encoding]::UTF8.GetBytes((Get-TrinixDockerfileContent -Text $text))
+    return 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($content)).ToLowerInvariant()
+}
+
+# --- Build-context inputs ---------------------------------------------------
+
+<#
+    Why hashing the Dockerfile is not enough.
+
+    A Dockerfile hash catches an edit to the Dockerfile. It catches nothing
+    about the files the Dockerfile COPYs in — and those are where the work
+    lives. `toolchain/scripts/build-sysroot.sh`, `base/scripts/build-base.sh`,
+    `base/recipes/*`, `base/sources.json`, `image/scripts/build-image.sh`: edit
+    any of them, run the stage that consumes them, and a cached stage image
+    satisfied the gate and the fix never reached the build. That is the same
+    fault as the two incidents this whole section was written for — a fix
+    sitting in the tree unable to reach the stage that needs it — one level
+    down from where the gate was looking.
+
+    So a second digest is recorded: the contents of every repository file the
+    Dockerfile's own COPY/ADD instructions bring in.
+
+    ⚠ Derived from the Dockerfile, never hand-declared. A list of inputs kept
+    alongside the stage graph would be correct on the day it was written and
+    silently wrong afterwards, because nothing makes editing a Dockerfile also
+    edit the list — which is precisely the drift this gate exists to catch. The
+    Dockerfile is the only statement of what a stage reads that cannot fall out
+    of step with what the stage reads.
+
+    What is deliberately *not* an input:
+
+      • `COPY --from=<stage>` — another build stage, or a named build context
+        (`sources=`, `trust=`, `apps=`, wired up by build.ps1). Neither is a
+        repository path; resolving `*.tdi` or `/` against the repo would look
+        for files that do not exist. Internal stages are covered because they
+        are in the same Dockerfile, whose hash already changed; the tagged
+        images are covered by the base content id.
+      • Anything .dockerignore excludes. BuildKit does not send it, so it
+        cannot change the build — and hashing it would mark `base` stale the
+        first time somebody ran `dotnet build` on the host and left an
+        `src/**/obj` behind. A gate that fires on build droppings is a gate
+        that gets switched off.
+#>
+
+# `COPY`/`ADD`, and a line continuation as BuildKit matches one — trailing
+# whitespace after the escape character included, which its parser allows.
+# Only the default escape character is understood; a `# escape=` directive
+# would need this to follow it, and no Dockerfile here uses one.
+$script:CopyLeader = [regex]::new('^\s*(?<op>COPY|ADD)\s+(?<rest>.*)$', 'IgnoreCase')
+$script:LineContinuation = [regex]::new('\\[ \t]*$')
+
+# Flags that do not change *which* files are read. Anything else — `--from=` is
+# handled separately, `--exclude=` and `--parents` would both change the file
+# set — is refused rather than guessed at, so a flag added later cannot quietly
+# narrow what this hashes.
+$script:CopyInertFlag = @('--chown', '--chmod', '--link', '--keep-git-dir')
+
+function Get-TrinixDockerfileCopyInstruction {
+    <#  .SYNOPSIS  A Dockerfile's COPY/ADD instructions, line continuations joined into one string each. #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path)) { throw "No such Dockerfile: $Path" }
+    $text = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($Path)).TrimStart([char]0xFEFF)
+
+    # Inside a heredoc body a `COPY` is program text, not an instruction, and
+    # telling the two apart means parsing heredocs. Refused instead — loudly,
+    # because the alternative is a stage whose inputs are silently mis-read.
+    # Get-TrinixDockerfileContent bails on the same token for the same reason.
+    if ($script:DockerfileHeredoc.IsMatch($text)) {
+        throw "$(Get-TrinixRelativePath -Path $Path) contains a heredoc, and the COPY inputs of a Dockerfile with one cannot be read without parsing heredoc bodies. Teach Get-TrinixDockerfileCopyInstruction to skip them before using one here."
+    }
+
+    $lines = $text.Split("`n")
+    $instructions = [System.Collections.Generic.List[string]]::new()
+
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        $leader = $script:CopyLeader.Match($lines[$i].TrimEnd("`r"))
+        if (-not $leader.Success) { continue }
+
+        $joined = $leader.Groups['rest'].Value
+        while ($script:LineContinuation.IsMatch($joined)) {
+            $joined = $script:LineContinuation.Replace($joined, '')
+            # BuildKit drops whole-line comments inside a continued instruction,
+            # so a `#` line between two sources does not end the COPY.
+            do {
+                $i++
+                if ($i -ge $lines.Count) { throw "$(Get-TrinixRelativePath -Path $Path) ends inside a continued $($leader.Groups['op'].Value) instruction." }
+                $next = $lines[$i].TrimEnd("`r")
+            } while ($next.TrimStart().StartsWith('#'))
+            $joined += ' ' + $next
+        }
+
+        $instructions.Add("$($leader.Groups['op'].Value.ToUpperInvariant()) $joined")
+    }
+
+    return $instructions.ToArray()
+}
+
+function Get-TrinixDockerfileCopySource {
+    <#
+        .SYNOPSIS  Absolute repository paths a Dockerfile COPYs in; `--from=` instructions contribute none.
+        .DESCRIPTION
+            The last argument of a COPY is its destination and is dropped.
+            Wildcards are expanded against the repository; a source that
+            resolves to nothing is an error, because `docker build` would fail
+            on it too and hashing an empty set would pass instead.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $root = Get-TrinixRoot
+    $relative = Get-TrinixRelativePath -Path $Path
+    $sources = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($instruction in (Get-TrinixDockerfileCopyInstruction -Path $Path)) {
+        # @() on purpose: a one-token result would otherwise be a bare string,
+        # and indexing a string hands back a character.
+        $tokens = @($instruction -split '\s+' | Where-Object { $_ })
+        $operation = $tokens[0]
+        $arguments = [System.Collections.Generic.List[string]]::new()
+        $external = $false
+
+        foreach ($token in @($tokens | Select-Object -Skip 1)) {
+            if (-not $token.StartsWith('--')) { $arguments.Add($token); continue }
+
+            $flag = ($token -split '=', 2)[0]
+            # From another build stage or a named build context. Not a
+            # repository path, and covered elsewhere — see the note above.
+            if ($flag -eq '--from') { $external = $true; break }
+            if ($script:CopyInertFlag -notcontains $flag) {
+                throw "$relative uses $flag on a $operation, and whether that changes which files are copied is not known here. Teach Get-TrinixDockerfileCopySource about it rather than letting a stage's inputs go unhashed."
+            }
+        }
+        if ($external) { continue }
+
+        if ($arguments.Count -lt 2) {
+            throw "$relative has a $operation with fewer than two arguments: $instruction"
+        }
+        if ($arguments[0].StartsWith('[')) {
+            throw "$relative uses the JSON form of $operation, which is not parsed here: $instruction"
+        }
+
+        # Everything but the destination.
+        foreach ($source in $arguments[0..($arguments.Count - 2)]) {
+            if ($source.Contains('$')) {
+                throw "$relative COPYs from `"$source`", whose ARG cannot be resolved here, so the files behind it cannot be hashed."
+            }
+
+            $candidate = Join-Path $root ($source -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+            if ($source.Contains('*') -or $source.Contains('?')) {
+                $matched = @(Get-ChildItem -Path $candidate -Force -ErrorAction SilentlyContinue)
+                if ($matched.Count -eq 0) { throw "$relative COPYs `"$source`", which matches nothing in the repository." }
+                foreach ($item in $matched) { $sources.Add($item.FullName) }
+                continue
+            }
+
+            if (-not (Test-Path -LiteralPath $candidate)) {
+                throw "$relative COPYs `"$source`", which does not exist in the repository."
+            }
+            $sources.Add((Resolve-Path -LiteralPath $candidate).Path)
+        }
+    }
+
+    return $sources.ToArray()
+}
+
+<#
+    .dockerignore, matched the way BuildKit matches it.
+
+    Patterns are relative to the context root, `*` and `?` stop at a separator,
+    `**` spans them, a `!` line takes a path back out, and the last pattern to
+    match wins. A pattern matching a directory excludes everything beneath it,
+    so every ancestor of a path is offered to every pattern.
+
+    Two deliberate narrowings, both of which can only ever *include* a file
+    that BuildKit would have dropped — costing at worst a rebuild that was not
+    needed, never hiding a change:
+      • character classes (`[Dd]ebug`) are literal here, not classes.
+      • an excluded directory is not descended into unless some `!` pattern
+        could plausibly reach inside it.
+#>
+$script:ContextIgnore = $null
+
+function Get-TrinixContextIgnore {
+    <#  .SYNOPSIS  The repository's .dockerignore as ordered {Text, Regex, Negate} patterns. #>
+    [CmdletBinding()]
+    param()
+
+    if ($null -ne $script:ContextIgnore) { return $script:ContextIgnore }
+
+    $patterns = [System.Collections.Generic.List[object]]::new()
+    $file = Join-Path (Get-TrinixRoot) '.dockerignore'
+
+    if (Test-Path -LiteralPath $file) {
+        foreach ($line in ([System.IO.File]::ReadAllText($file).TrimStart([char]0xFEFF) -split "`n")) {
+            $entry = $line.TrimEnd("`r").Trim()
+            if (-not $entry -or $entry.StartsWith('#')) { continue }
+
+            $negate = $entry.StartsWith('!')
+            if ($negate) { $entry = $entry.Substring(1).Trim() }
+
+            $entry = ($entry -replace '\\', '/').Trim('/')
+            if (-not $entry -or $entry -eq '.') { continue }
+
+            $patterns.Add([pscustomobject]@{
+                Text   = $entry
+                Regex  = ConvertTo-TrinixIgnoreRegex -Pattern $entry
+                Negate = $negate
+            })
+        }
+    }
+
+    $script:ContextIgnore = $patterns.ToArray()
+    return $script:ContextIgnore
+}
+
+function ConvertTo-TrinixIgnoreRegex {
+    <#  .SYNOPSIS  One .dockerignore pattern as an anchored regex over a forward-slashed relative path. #>
+    [CmdletBinding()]
+    [OutputType([regex])]
+    param([Parameter(Mandatory)][string]$Pattern)
+
+    $expression = [System.Text.StringBuilder]::new('^')
+    $i = 0
+
+    while ($i -lt $Pattern.Length) {
+        $character = $Pattern[$i]
+
+        if ($character -eq '*') {
+            if ($i + 1 -lt $Pattern.Length -and $Pattern[$i + 1] -eq '*') {
+                $i += 2
+                if ($i -lt $Pattern.Length -and $Pattern[$i] -eq '/') { $i++ }
+                # A trailing `**` takes the rest of the path; otherwise it spans
+                # any number of leading segments, including none.
+                [void]$expression.Append($(if ($i -ge $Pattern.Length) { '.*' } else { '((.*/)|([^/]*))' }))
+                continue
+            }
+            [void]$expression.Append('[^/]*'); $i++; continue
+        }
+
+        if ($character -eq '?') { [void]$expression.Append('[^/]'); $i++; continue }
+
+        [void]$expression.Append([regex]::Escape([string]$character)); $i++
+    }
+
+    return [regex]::new($expression.Append('$').ToString())
+}
+
+function Test-TrinixContextIgnore {
+    <#  .SYNOPSIS  Whether .dockerignore keeps a repository-relative path out of the build context. #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)][string]$RelativePath)
+
+    $patterns = Get-TrinixContextIgnore
+    if ($patterns.Count -eq 0) { return $false }
+
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    $candidates.Add($RelativePath)
+    $cut = $RelativePath.LastIndexOf('/')
+    while ($cut -gt 0) {
+        $candidates.Add($RelativePath.Substring(0, $cut))
+        $cut = $RelativePath.LastIndexOf('/', $cut - 1)
+    }
+
+    $ignored = $false
+    foreach ($pattern in $patterns) {
+        foreach ($candidate in $candidates) {
+            if ($pattern.Regex.IsMatch($candidate)) { $ignored = -not $pattern.Negate; break }
+        }
+    }
+    return $ignored
+}
+
+function Test-TrinixContextIgnoreReentrant {
+    <#  .SYNOPSIS  Whether any `!` pattern could re-include something beneath an excluded directory. #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param([Parameter(Mandatory)][string]$RelativePath)
+
+    foreach ($pattern in (Get-TrinixContextIgnore)) {
+        if (-not $pattern.Negate) { continue }
+        if ($pattern.Text.StartsWith('**') -or $pattern.Text.StartsWith("$RelativePath/")) { return $true }
+    }
+    return $false
+}
+
+function Get-TrinixContextFile {
+    <#
+        .SYNOPSIS  Every repository file a COPY of $Path would send, relative to the root, ordinal-sorted.
+        .DESCRIPTION
+            A directory contributes its whole recursive contents — `base/recipes`
+            is 72 files across 58 recipes, and a gate that hashed only the
+            directory's name would be no gate at all. Symlinks are hashed by the
+            content they resolve
+            to rather than as links, and file modes are not hashed: every script
+            here is `chmod +x`-ed inside the container, so a host mode change
+            cannot alter the build.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $root = Get-TrinixRoot
+    $prefix = $root.TrimEnd([System.IO.Path]::DirectorySeparatorChar).Length + 1
+    $relativeOf = { param($p) $p.Substring($prefix) -replace '\\', '/' }
+
+    $files = [System.Collections.Generic.List[string]]::new()
+
+    if ([System.IO.File]::Exists($Path)) {
+        $relative = & $relativeOf $Path
+        if (-not (Test-TrinixContextIgnore -RelativePath $relative)) { $files.Add($relative) }
+        return $files.ToArray()
+    }
+
+    if (-not [System.IO.Directory]::Exists($Path)) { throw "Not a build-context path: $Path" }
+
+    $pending = [System.Collections.Generic.Stack[string]]::new()
+    $pending.Push($Path)
+
+    while ($pending.Count -gt 0) {
+        foreach ($entry in [System.IO.Directory]::EnumerateFileSystemEntries($pending.Pop())) {
+            $relative = & $relativeOf $entry
+            $isDirectory = [System.IO.Directory]::Exists($entry)
+
+            if (Test-TrinixContextIgnore -RelativePath $relative) {
+                if (-not $isDirectory) { continue }
+                if (-not (Test-TrinixContextIgnoreReentrant -RelativePath $relative)) { continue }
+            }
+
+            if ($isDirectory) { $pending.Push($entry) } else { $files.Add($relative) }
+        }
+    }
+
+    $files.Sort([System.StringComparer]::Ordinal)
+    return $files.ToArray()
+}
+
+function Get-TrinixDockerfileInput {
+    <#  .SYNOPSIS  Every repository file a Dockerfile COPYs in, relative to the root, ordinal-sorted and deduplicated. #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $files = [System.Collections.Generic.SortedSet[string]]::new([System.StringComparer]::Ordinal)
+    foreach ($source in (Get-TrinixDockerfileCopySource -Path $Path)) {
+        foreach ($file in (Get-TrinixContextFile -Path $source)) { [void]$files.Add($file) }
+    }
+    return @($files)
+}
+
+function Get-TrinixDockerfileInputsHash {
+    <#
+        .SYNOPSIS  SHA-256 over the contents of every repository file a Dockerfile COPYs in, as `sha256:<hex>`.
+        .DESCRIPTION
+            Hashed as a manifest of `<digest>  <path>` lines so that a rename,
+            an addition and a deletion all move the result, not only an edit.
+            Line endings are spelled `\n` explicitly: an Environment.NewLine
+            here would make the same tree hash differently on Windows.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param([Parameter(Mandatory)][string]$Path)
+
+    $root = Get-TrinixRoot
+    $manifest = [System.Text.StringBuilder]::new()
+
+    foreach ($file in (Get-TrinixDockerfileInput -Path $Path)) {
+        $bytes = [System.IO.File]::ReadAllBytes((Join-Path $root ($file -replace '/', [System.IO.Path]::DirectorySeparatorChar)))
+        $digest = [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+        [void]$manifest.Append("$digest  $file`n")
+    }
+
+    $content = [System.Text.Encoding]::UTF8.GetBytes($manifest.ToString())
     return 'sha256:' + [System.Convert]::ToHexString([System.Security.Cryptography.SHA256]::HashData($content)).ToLowerInvariant()
 }
 
@@ -591,6 +975,7 @@ function New-TrinixProvenanceLabel {
         '--label', "$($script:ProvenanceLabel.Dockerfile)=$(Get-TrinixRelativePath -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.Hash)=$(Get-TrinixDockerfileByteHash -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.Content)=$(Get-TrinixDockerfileHash -Path $Dockerfile)",
+        '--label', "$($script:ProvenanceLabel.Inputs)=$(Get-TrinixDockerfileInputsHash -Path $Dockerfile)",
         '--label', "$($script:ProvenanceLabel.BaseImage)=$BaseImage",
         '--label', "$($script:ProvenanceLabel.BaseContent)=$content"
     )
@@ -660,6 +1045,20 @@ function Test-TrinixStageProvenance {
 
     if ($recordedHash -ne $currentHash) {
         $reasons.Add("$relative has changed since it was built (recorded $recordedHash, current $currentHash).")
+    }
+
+    # What the Dockerfile COPYs in. Only checked when the image says it recorded
+    # it: an image stamped before this label existed has nothing to compare, and
+    # inventing a comparison for it would fail every one of them at once and
+    # demand the rebuild chain this gate exists to make unnecessary. It is not
+    # forgiveness — the image is still judged on everything it *was* stamped
+    # for, and carries this the next time it is genuinely rebuilt.
+    if ($labels.ContainsKey($script:ProvenanceLabel.Inputs)) {
+        $recordedInputs = $labels[$script:ProvenanceLabel.Inputs]
+        $currentInputs = Get-TrinixDockerfileInputsHash -Path $Dockerfile
+        if ($recordedInputs -ne $currentInputs) {
+            $reasons.Add("was built from older copies of the files $relative COPYs in (recorded $recordedInputs, current $currentInputs).")
+        }
     }
 
     $recordedBase = if ($labels.ContainsKey($script:ProvenanceLabel.BaseImage)) { $labels[$script:ProvenanceLabel.BaseImage] } else { '(unrecorded)' }
@@ -1020,6 +1419,8 @@ Export-ModuleMember -Function `
     Get-TrinixSourceManifestPath, Get-TrinixSource, Resolve-TrinixSourceUrl, Resolve-TrinixSourceFileName, Set-TrinixSourceChecksum, `
     Assert-TrinixDocker, Assert-TrinixDiskSpace, Invoke-TrinixDocker, `
     Get-TrinixDockerfileContent, Get-TrinixDockerfileHash, Get-TrinixDockerfileByteHash, `
+    Get-TrinixDockerfileCopyInstruction, Get-TrinixDockerfileCopySource, `
+    Get-TrinixDockerfileInput, Get-TrinixDockerfileInputsHash, Test-TrinixContextIgnore, `
     Get-TrinixImageContentId, Get-TrinixImageLabel, Get-TrinixRelativePath, `
     New-TrinixProvenanceLabel, Test-TrinixStageProvenance, `
     Get-TrinixStage, Resolve-TrinixExternalBase, Get-TrinixStageChain, Get-TrinixStageLabelArgs, Assert-TrinixStageCurrent, `
